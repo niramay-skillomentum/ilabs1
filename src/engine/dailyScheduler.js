@@ -4,6 +4,7 @@
 // ======================================
 
 const Trade = require("../models/Trade");
+const ageCalculator = require("./ageCalculator");
 
 class DailyScheduler {
 
@@ -11,26 +12,27 @@ class DailyScheduler {
     console.log("Running Daily Cycle...");
 
     try {
-      // Update age for all trades based on value date
+      // Update age for all trades using desk-specific rules
       const now = new Date();
-      const trades = await Trade.find({ assignedTo: { $ne: null } }).lean();
+      const trades = await Trade.find({}).lean();
 
+      let updated = 0;
       for (const trade of trades) {
-        if (trade.valueDate) {
-          const vd = new Date(trade.valueDate);
-          const diffTime = now - vd;
-          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        if (trade.tradeDate) {
+          const desk = trade.nextDesk || "MO";
+          const newAge = ageCalculator.calculateAge(trade.tradeDate, now, desk);
 
-          if (diffDays !== trade.age) {
+          if (newAge !== trade.age) {
             await Trade.updateOne(
               { tradeRef: trade.tradeRef },
-              { $set: { age: diffDays } }
+              { $set: { age: newAge } }
             );
+            updated++;
           }
         }
       }
 
-      console.log("Daily evaluation complete");
+      console.log(`Daily evaluation complete — ${updated} trade(s) age-updated`);
     } catch (err) {
       console.error("Daily cycle error:", err.message);
     }
