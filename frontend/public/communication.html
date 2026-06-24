@@ -1688,28 +1688,6 @@ function sendCompose() {
     return;
   }
 
-  const composeAction = urlParams.get("composeAction");
-
-  if (composeAction) {
-    fetch("/api/trade/action", {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({
-        trade: { tradeRef },
-        action: composeAction,
-        comment: message
-      })
-    })
-    .then(() => {
-      closeComposeModal();
-      selectedTradeRef = tradeRef;
-      if (currentFolder === "inbox") loadPersonalInbox();
-      else if (currentFolder === "group" && channel !== "FO") loadGroupInbox();
-      setTimeout(() => loadConversation(tradeRef, true), 500);
-    });
-    return;
-  }
-
   const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
 
   fetch(endpoint, {
@@ -1804,8 +1782,8 @@ if (composeForTrade) {
         select.value = composeForTrade;
 
         // Set recipient
-        if (composeToRecipient) {
-          document.getElementById("composeTo").value = composeToRecipient;
+        if (composeToRecipient === "FO") {
+          document.getElementById("composeTo").value = "FO";
         }
 
         updateComposeSubject();

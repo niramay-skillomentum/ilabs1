@@ -4,6 +4,7 @@
 <title>Operations Workstation</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
 <style>
 body {
     font-family: 'Inter', sans-serif;
@@ -357,18 +358,45 @@ if(!userId || !getToken()){
     window.location.href = "/";
 }
 
-/* CLOCK */
-setInterval(async () => {
+/* SOCKET.IO INIT */
+const socket = io({
+    auth: { token: getToken() }
+});
 
-    const res = await fetch("/api/clock");
-    const data = await res.json();
+socket.emit("join_desk", desk);
 
+/* CLOCK (Real-time Push) */
+socket.on("clock_tick", (data) => {
     document.getElementById("clock").innerText = data.simTime;
-
     handleAlerts(data);
+});
 
-}, 1000);
+/* REAL-TIME UPDATES */
+socket.on("trade_update", (data) => {
+    console.log("Real-time trade update received:", data);
+    refreshQueueSilent(); // Background refresh
+});
 
+socket.on("new_email", (data) => {
+    console.log("New email received:", data);
+    // Optional: show a toast or highlight inbox icon
+});
+
+async function refreshQueueSilent(){
+    try {
+        const res = await fetch("/api/queue/my?desk=" + encodeURIComponent(desk), {
+            headers: { "Authorization": "Bearer " + getToken() }
+        });
+        const data = await res.json();
+        if(data.success){
+            queue = data.trades || [];
+            if (data.sessionExpiry) sessionExpiry = data.sessionExpiry;
+            render();
+        }
+    } catch (e) {
+        // silent fail
+    }
+}
 /* SESSION TIMER */
 setInterval(() => {
     if (!sessionExpiry) return;
@@ -426,7 +454,7 @@ renderDeskActions();
 
 /* REFRESH */
 async function refreshQueue(){
-    const res = await fetch("/api/queue/my", {
+    const res = await fetch("/api/queue/my?desk=" + encodeURIComponent(desk), {
         headers: { "Authorization": "Bearer " + getToken() }
     });
     const data = await res.json();
@@ -492,10 +520,7 @@ function renderDeskActions(){
         <button class="btn primary" onclick="openAction('CONFIRM_TRADE')">Confirm Trade</button>
         <button class="btn primary" onclick="openAction('CONFIRM_RAISE_BREAK')">Confirmation Break</button>
         <button class="btn primary" onclick="startCptyFlow()">Send to CPTY</button>
-        <button class="btn primary" onclick="openAction('CONFIRM_REJECT_CLAIM')">Reject Claim</button>
-        <button class="btn primary" onclick="openAction('CONFIRM_REQUEST_EVIDENCE')">Request Evidence</button>
         <button class="btn primary" onclick="openFOChatMailbox()">Escalate to FO</button>
-        <button class="btn primary" onclick="openAction('CONFIRM_RESEND')">Resend Confirmation</button>
         `;
     }
 
@@ -583,14 +608,14 @@ async function sendToFO(){
         return;
     }
 
-    // Redirect to mailbox in compose mode without transitioning state yet
+    // Redirect to mailbox in compose mode
     const mailParams = new URLSearchParams({
         userId: userId,
         desk: desk,
         tradeRef: selectedTrade.tradeRef,
-        channel: "FO",
         composeFor: selectedTrade.tradeRef,
-        composeTo: "FO"
+        composeTo: "FO",
+        composeAction: "MO_SEND_TO_FO"
     });
     window.open("/communication.html?" + mailParams.toString(), "_blank");
 }
@@ -599,18 +624,19 @@ async function sendToFO(){
 // 🔒 STRICT FLOW: SEND TO CPTY (EMAIL REQUIRED)
 // =====================================================
 function startCptyFlow(){
-
     if(!selectedTrade){
         alert("Select trade first");
         return;
     }
-
-    currentAction = "CONFIRM_SEND_TO_CPTY";
-
-    document.getElementById("overlay").style.display="block";
-    document.getElementById("emailPopup").style.display="block";
-
-    document.getElementById("emailText").value = "";
+    const mailParams = new URLSearchParams({
+        userId: userId,
+        desk: desk,
+        tradeRef: selectedTrade.tradeRef,
+        composeFor: selectedTrade.tradeRef,
+        composeTo: "COUNTERPARTY",
+        composeAction: "CONFIRM_SEND_TO_CPTY"
+    });
+    window.open("/communication.html?" + mailParams.toString(), "_blank");
 }
 
 function openAction(action){
@@ -693,9 +719,7 @@ function openMailboxGeneral(){
     if(selectedTrade){
         mailParams.set("tradeRef", selectedTrade.tradeRef);
     }
-    if (desk === "MO") {
-        mailParams.set("channel", "FO");
-    }
+
 
     window.open("/communication.html?" + mailParams.toString(), "_blank");
 }
@@ -771,8 +795,7 @@ function openTermsheet(){
 
 function openMailbox(){
     if(!selectedTrade) return alert("Select a trade first");
-    const channelParam = desk === "MO" ? "&channel=FO" : "";
-    window.open(`/communication.html?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}${channelParam}`, '_blank');
+    window.open(`/communication.html?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}`, '_blank');
 }
 
 function openFOChatMailbox() {
@@ -979,7 +1002,7 @@ function handleAlerts(data){
 // On page load, try to refresh existing queue
 (async function initLoad() {
     try {
-        const res = await fetch("/api/queue/my", {
+        const res = await fetch("/api/queue/my?desk=" + encodeURIComponent(desk), {
             headers: { "Authorization": "Bearer " + getToken() }
         });
         const data = await res.json();

@@ -3,6 +3,8 @@
 // ======================================
 
 const Conversation = require("../models/Conversation");
+const Trade = require("../models/Trade");
+const { getIo } = require("./socketEngine");
 
 // In-memory cache for fast access during active sessions
 const cache = {};
@@ -46,6 +48,22 @@ async function createMessage(tradeRef, sender, body, subject, desk) {
       timestamp: m.timestamp
     }))
   };
+
+  // Broadcast WebSocket event
+  try {
+    const io = getIo();
+    const trade = await Trade.findOne({ tradeRef }).lean();
+    if (trade && trade.assignedTo) {
+      io.to(`user_${trade.assignedTo}`).emit("new_email", {
+        tradeRef,
+        sender,
+        subject: subject || `Trade ${tradeRef}`,
+        preview: body.substring(0, 50) + "..."
+      });
+    }
+  } catch (err) {
+    // Socket.io not initialized
+  }
 
   return cache[tradeRef];
 }

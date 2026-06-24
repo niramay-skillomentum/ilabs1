@@ -1,3 +1,5 @@
+const { getIo } = require("./socketEngine");
+
 class SimulationClock {
   constructor() {
     this.interval = null;
@@ -28,6 +30,21 @@ class SimulationClock {
       this.simulatedTime = new Date(
         this.simulatedTime.getTime() + this.simulatedMsPerTick
       );
+
+      // Broadcast the clock via websockets
+      try {
+        const io = getIo();
+        const hours = this.simulatedTime.getHours();
+        const minutes = this.simulatedTime.getMinutes();
+        const totalMinutesLeft = (18 * 60) - (hours * 60 + minutes);
+
+        io.emit("clock_tick", {
+          simTime: this.getFormattedTime(),
+          timeLeftMinutes: totalMinutesLeft
+        });
+      } catch (err) {
+        // Socket.io might not be initialized yet, silently ignore
+      }
 
       // Stop at 6PM
       if (this.simulatedTime.getHours() >= 18) {

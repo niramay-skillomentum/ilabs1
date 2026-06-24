@@ -3,6 +3,7 @@
 
 <head>
 <title>Trade Workstation</title>
+<script src="/socket.io/socket.io.js"></script>
 
 <style>
 body{
@@ -146,21 +147,33 @@ function getDesk(){
   return currentDesk;
 }
 
-/* ===== CLOCK ===== */
-function startClock(){
-    setInterval(async ()=>{
-        try{
-            const res = await fetch("/api/clock");
-            const data = await res.json();
+/* ===== SOCKET.IO ===== */
+let socket;
+function initSocket() {
+    socket = io({
+        auth: { token: getToken() }
+    });
 
-            const el = document.getElementById("clock");
-            if(el){
-                el.innerText = "Sim Time: " + data.simTime;
-            }
-        }catch(err){
-            console.error("Clock error:", err);
+    socket.emit("join_desk", currentDesk);
+
+    socket.on("clock_tick", (data) => {
+        const el = document.getElementById("clock");
+        if(el) {
+            el.innerText = "Sim Time: " + data.simTime;
         }
-    },1000);
+    });
+
+    socket.on("trade_update", (data) => {
+        if(data.tradeRef === tradeRefParam) {
+            loadTrade(); // Reload to get fresh audit and current status
+        }
+    });
+
+    socket.on("new_email", (data) => {
+        if(data.tradeRef === tradeRefParam) {
+            loadConversation();
+        }
+    });
 }
 
 /* ===== NAV ===== */
@@ -421,7 +434,7 @@ async function sendEmail(){
 
 /* ===== INIT ===== */
 window.onload=()=>{
-    startClock();
+    initSocket();
     loadTrade();
 };
 
