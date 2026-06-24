@@ -8,6 +8,7 @@
 
 const Trade = require("../models/Trade");
 const AuditLog = require("../models/AuditLog");
+const ageCalculator = require("./ageCalculator");
 
 // ============================
 // REFERENCE DATA
@@ -290,8 +291,12 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   const now = new Date();
   const tradeDate = new Date(now);
 
-  // Randomize trade date to be within last 3 days for realism
-  tradeDate.setDate(tradeDate.getDate() - Math.floor(Math.random() * 3));
+  // Constrain tradeDate so that the desk-specific age is at most 1:
+  //   MO Desk:           age = days(now - tradeDate),          so tradeDate = today or yesterday (0-1 days ago)
+  //   Confirmation Desk:  age = days(now - (tradeDate + 1)),   so tradeDate up to 2 days ago still yields age ≤ 1
+  //   Other desks:        default to MO-style (0-1 days ago)
+  const maxDaysAgo = desk === "CONFIRMATION" ? 2 : 1;
+  tradeDate.setDate(tradeDate.getDate() - Math.floor(Math.random() * (maxDaysAgo + 1)));
 
   const currency = pick(CURRENCIES);
   const product = pick(PRODUCTS);
@@ -453,7 +458,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
     tradeType: pick(TRADE_TYPES),
     settlementType: pick(SETTLEMENT_TYPES),
 
-    age: Math.floor(Math.random() * 5),
+    age: ageCalculator.calculateAge(tradeDate, now, desk),
     assignedTo: null,
     auditXml: null
   };
