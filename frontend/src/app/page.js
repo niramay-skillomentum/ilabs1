@@ -66,117 +66,94 @@ export default function LoginPage() {
   };
 
   return (
-    <>
-      <style dangerouslySetInnerHTML={{__html: `
-        body {
-            font-family: Arial;
-            background: #F5F7FA;
-            margin: 0;
-        }
-        .topbar {
-            background: #0B1F3A;
-            color: white;
-            padding: 24px 35px;
-        }
-        .topbar-inner {
-            display: flex;
-            align-items: center;
-            gap: 22px;
-        }
-        .title { font-size: 26px; font-weight: 600; }
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 font-sans px-4">
+      
+      {/* Header / Logo Area */}
+      <div className="mb-10 text-center">
+        <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white tracking-tight drop-shadow-md">
+          Skillomentum Global Bank
+        </h1>
+        <p className="text-blue-200 mt-2 text-sm md:text-base font-medium tracking-wide">
+          Operations Simulator
+        </p>
+      </div>
 
-        .login-box {
-            width: 340px;
-            margin: 100px auto;
-            background: white;
-            padding: 30px;
-            border-radius: 6px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-
-        .login-box input {
-            width: 100%;
-            padding: 10px;
-            margin-top: 12px;
-            box-sizing: border-box;
-        }
-
-        .login-box button {
-            width: 100%;
-            padding: 12px;
-            margin-top: 16px;
-            background: #FFC107;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .toggle-link {
-            display: block;
-            text-align: center;
-            margin-top: 15px;
-            color: #0B1F3A;
-            text-decoration: underline;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .error-msg {
-            color: red;
-            font-size: 14px;
-            margin-top: 10px;
-            text-align: center;
-        }
-      `}} />
-
-      <div className="topbar">
-          <div className="topbar-inner">
-              <div className="title">Skillomentum Global Bank Operations Simulator</div>
+      {/* Login Card */}
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-8 md:p-10 transform transition-all hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+        <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">
+          {isLoginMode ? "Welcome Back" : "Create Account"}
+        </h2>
+        
+        {errorMsg && (
+          <div className="mb-6 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm text-center font-medium animate-pulse">
+            {errorMsg}
           </div>
-      </div>
+        )}
 
-      <div className="login-box">
-          <h2>{isLoginMode ? "Login" : "Register"}</h2>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {!isLoginMode && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Full Name</label>
+              <input 
+                type="text" 
+                placeholder="John Doe" 
+                required 
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
+              />
+            </div>
+          )}
           
-          {errorMsg && <div className="error-msg">{errorMsg}</div>}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
+            <input 
+              type="email" 
+              placeholder="name@example.com" 
+              required 
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
+            />
+          </div>
 
-          <form onSubmit={handleSubmit}>
-              {!isLoginMode && (
-                  <div>
-                      <input 
-                        type="text" 
-                        placeholder="Full Name" 
-                        required 
-                        value={fullName}
-                        onChange={e => setFullName(e.target.value)}
-                      />
-                  </div>
-              )}
-              <input 
-                type="email" 
-                placeholder="Email Address" 
-                required 
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-              <input 
-                type="password" 
-                placeholder="Password" 
-                required 
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
-              
-              <button type="submit">{isLoginMode ? "Login" : "Register"}</button>
-          </form>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              required 
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
+            />
+          </div>
+          
+          <button 
+            type="submit"
+            className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transform transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0"
+          >
+            {isLoginMode ? "Sign In" : "Register"}
+          </button>
+        </form>
 
-          <a className="toggle-link" onClick={() => {
-            setIsLoginMode(!isLoginMode);
-            setErrorMsg("");
-          }}>
-              {isLoginMode ? "Need an account? Register here" : "Already have an account? Login here"}
-          </a>
+        <div className="mt-8 text-center">
+          <button 
+            type="button"
+            onClick={() => {
+              setIsLoginMode(!isLoginMode);
+              setErrorMsg("");
+            }}
+            className="text-sm font-semibold text-slate-500 hover:text-blue-600 transition-colors duration-200"
+          >
+            {isLoginMode ? "Need an account? Register here" : "Already have an account? Sign in"}
+          </button>
+        </div>
       </div>
-    </>
+      
+      <div className="mt-8 text-slate-400 text-xs font-medium">
+        © {new Date().getFullYear()} Niramay Skillomentum. All rights reserved.
+      </div>
+    </div>
   );
 }
