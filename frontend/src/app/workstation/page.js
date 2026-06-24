@@ -108,6 +108,16 @@ function WorkstationComponent() {
     return () => clearInterval(interval);
   }, [sessionExpiry]);
 
+  // Keep selectedTrade in sync with the latest queue updates
+  useEffect(() => {
+    if (selectedTrade && queue.length > 0) {
+      const updatedTrade = queue.find(t => t.tradeRef === selectedTrade.tradeRef);
+      if (updatedTrade && JSON.stringify(updatedTrade) !== JSON.stringify(selectedTrade)) {
+        setSelectedTrade(updatedTrade);
+      }
+    }
+  }, [queue, selectedTrade]);
+
   const handleAlerts = (mins) => {
     if (mins <= 60 && !alert1hrShown.current) {
       alert("⚠️ 1 hour remaining in simulation day");
