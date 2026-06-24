@@ -460,22 +460,24 @@ function WorkstationComponent() {
 
       {popupState.type === "action" && (
         <div className="popup" style={{display: 'block'}}>
-          <h3>{popupState.action}</h3>
-          <div>Proceed?</div>
+          <h3 style={{marginBottom: '10px'}}>{popupState.action?.replace(/_/g, ' ')}</h3>
+          <div style={{color: '#475569', fontSize: '14px', marginBottom: '15px'}}>Are you sure you want to proceed with this action?</div>
           <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add comment (recommended for audit & scoring)"></textarea>
-          <br/><br/>
-          <button onClick={submitAction}>Submit</button>
-          <button onClick={() => setPopupState({type: null})}>Cancel</button>
+          <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
+            <button className="btn secondary" onClick={() => setPopupState({type: null})}>Cancel</button>
+            <button className="btn primary" onClick={submitAction}>Submit</button>
+          </div>
         </div>
       )}
 
       {popupState.type === "email" && (
         <div className="popup" style={{display: 'block'}}>
-          <h3>Send Email</h3>
-          <textarea value={emailText} onChange={e => setEmailText(e.target.value)}></textarea>
-          <br/><br/>
-          <button onClick={sendEmail}>Send</button>
-          <button onClick={() => setPopupState({type: null})}>Cancel</button>
+          <h3 style={{marginBottom: '15px'}}>Send Email</h3>
+          <textarea value={emailText} onChange={e => setEmailText(e.target.value)} placeholder="Type your email body here..."></textarea>
+          <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
+            <button className="btn secondary" onClick={() => setPopupState({type: null})}>Cancel</button>
+            <button className="btn primary" onClick={sendEmail}>Send</button>
+          </div>
         </div>
       )}
 
