@@ -14,6 +14,7 @@ function WorkstationComponent() {
   const [queue, setQueue] = useState([]);
   const [selectedTrade, setSelectedTrade] = useState(null);
   const [sessionExpiry, setSessionExpiry] = useState(null);
+  const [sessionStart, setSessionStart] = useState(null);
   const [simTime, setSimTime] = useState("");
   const [sessionTimerStr, setSessionTimerStr] = useState("");
 
@@ -56,7 +57,10 @@ function WorkstationComponent() {
       .then(data => {
         if (data.success) {
           setQueue(data.trades || []);
-          if (data.sessionExpiry) setSessionExpiry(data.sessionExpiry);
+          if (data.sessionExpiry) {
+            setSessionExpiry(data.sessionExpiry);
+            if (data.sessionStart) setSessionStart(data.sessionStart);
+          }
 
           if (sessionStorage.getItem("justLoggedIn") === "true") {
             sessionStorage.removeItem("justLoggedIn");
@@ -76,10 +80,8 @@ function WorkstationComponent() {
     socketRef.current = socket;
     socket.emit("join_desk", dsk);
 
-    socket.on("clock_tick", (data) => {
-      setSimTime(data.simTime);
-      handleAlerts(data.timeLeftMinutes);
-    });
+    // Clock is now calculated locally per-user using sessionStart
+    // socket.on("clock_tick", ... ) is no longer needed
 
     socket.on("trade_update", () => {
       refreshQueueSilent(dsk);
@@ -93,11 +95,11 @@ function WorkstationComponent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!sessionExpiry) return;
+    if (!sessionExpiry || !sessionStart) return;
     const interval = setInterval(() => {
       const diff = new Date(sessionExpiry) - new Date();
       if (diff <= 0) {
-        alert("⏰ Session expired (3 hours). Logging off.");
+        alert("🚨 Session expired (3 hours). Logging off.");
         logout();
         return;
       }
@@ -105,9 +107,21 @@ function WorkstationComponent() {
       const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const secs = Math.floor((diff % (1000 * 60)) / 1000);
       setSessionTimerStr(`Session: ${hrs}h ${mins}m ${secs}s remaining`);
+
+      // 1 real hour = 1 simulated hour. Sim time starts at 9:00 AM on sessionStart.
+      const elapsedMs = new Date() - new Date(sessionStart);
+      const currentSimTime = new Date();
+      currentSimTime.setHours(9, 0, 0, 0); // Start at 9:00 AM
+      currentSimTime.setTime(currentSimTime.getTime() + elapsedMs);
+      
+      const pad = (n) => String(n).padStart(2, "0");
+      setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth()+1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
+
+      const totalMinutesLeft = Math.floor(diff / (1000 * 60));
+      handleAlerts(totalMinutesLeft);
     }, 1000);
     return () => clearInterval(interval);
-  }, [sessionExpiry]);
+  }, [sessionExpiry, sessionStart]);
 
   // Keep selectedTrade in sync with the latest queue updates
   useEffect(() => {
@@ -140,7 +154,10 @@ function WorkstationComponent() {
       const data = await res.json();
       if (data.success) {
         setQueue(data.trades || []);
-        if (data.sessionExpiry) setSessionExpiry(data.sessionExpiry);
+        if (data.sessionExpiry) {
+          setSessionExpiry(data.sessionExpiry);
+          if (data.sessionStart) setSessionStart(data.sessionStart);
+        }
       }
     } catch (e) {}
   };
@@ -159,7 +176,10 @@ function WorkstationComponent() {
     const data = await res.json();
     if (!data.success) return alert(data.error || "Complete Your Current Trades First");
     setQueue(data.trades || []);
-    if (data.sessionExpiry) setSessionExpiry(data.sessionExpiry);
+    if (data.sessionExpiry) {
+      setSessionExpiry(data.sessionExpiry);
+      if (data.sessionStart) setSessionStart(data.sessionStart);
+    }
   };
 
   const refreshQueue = async () => {
@@ -167,7 +187,10 @@ function WorkstationComponent() {
     const data = await res.json();
     if (!data.success) return alert(data.error || "Unable to refresh queue");
     setQueue(data.trades || []);
-    if (data.sessionExpiry) setSessionExpiry(data.sessionExpiry);
+    if (data.sessionExpiry) {
+      setSessionExpiry(data.sessionExpiry);
+      if (data.sessionStart) setSessionStart(data.sessionStart);
+    }
     alert("Queue refreshed");
   };
 
