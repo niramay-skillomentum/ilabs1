@@ -65,6 +65,7 @@ router.post("/send", authenticateToken, async (req, res) => {
       const tradeObj = trade.toObject ? trade.toObject() : trade;
       const updatedTrade = LifecycleEngine.transition(tradeObj, "LIASING_WITH_CPTY");
       trade.currentStatus = updatedTrade.currentStatus;
+      trade.cptyContactCount = (trade.cptyContactCount || 0) + 1;
     }
 
     await trade.save();
