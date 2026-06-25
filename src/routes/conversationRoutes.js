@@ -70,6 +70,15 @@ router.post("/send", authenticateToken, async (req, res) => {
 
     await trade.save();
 
+    try {
+      const { getIo } = require("../engine/socketEngine");
+      const io = getIo();
+      io.to(`user_${req.user.userId}`).emit("trade_update", {
+        tradeRef: tradeRef,
+        currentStatus: trade.currentStatus
+      });
+    } catch (err) {}
+
     communicationEngine.scheduleReply(
       tradeRef,
       subject,

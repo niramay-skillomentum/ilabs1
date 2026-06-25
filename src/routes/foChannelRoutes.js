@@ -69,6 +69,14 @@ router.post("/send", authenticateToken, express.json(), async (req, res) => {
       trade.foEscalation.escalatedAt = new Date();
       trade.foContactCount = (trade.foContactCount || 0) + 1;
       await trade.save();
+      try {
+        const { getIo } = require("../engine/socketEngine");
+        const io = getIo();
+        io.to(`user_${req.user.userId}`).emit("trade_update", {
+          tradeRef: tradeRef,
+          currentStatus: trade.currentStatus
+        });
+      } catch (err) {}
     }
 
     const deskContext = trade.currentStatus === "PENDING_FO_RESPONSE" ? "MO" : "CONFIRMATION";
