@@ -3,7 +3,7 @@
 <head>
   <title>SGB OpsMail — Mailbox</title>
   <meta name="description" content="SGB Operations Mailbox - Outlook-style email interface for trade communication">
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <style>
     /* ========================================
        OUTLOOK-STYLE MAILBOX — DESIGN SYSTEM
@@ -1201,7 +1201,7 @@ function loadPersonalInbox(showLoader = false) {
     ? `/api/fo-channel/list?desk=${encodeURIComponent(desk)}` 
     : `/api/conversations/personal?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`;
     
-  return fetch(endpoint, {
+  fetch(endpoint, {
     headers: { "Authorization": "Bearer " + getToken() }
   })
     .then(res => res.json())
@@ -1220,7 +1220,7 @@ function loadGroupInbox(showLoader = false) {
   if (showLoader) {
     document.getElementById("emailList").innerHTML = '<div style="padding:20px;text-align:center;color:#605e5c;font-size:13px;">⏳ Loading conversations...</div>';
   }
-  return fetch(`/api/conversations/shared?desk=${encodeURIComponent(desk)}`, {
+  fetch(`/api/conversations/shared?desk=${encodeURIComponent(desk)}`, {
     headers: { "Authorization": "Bearer " + getToken() }
   })
     .then(res => res.json())
@@ -1593,13 +1593,7 @@ function sendReply() {
   })
   .then(() => {
     closeReplyModal();
-    let refreshPromise = Promise.resolve();
-    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
-    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
-    
-    refreshPromise.then(() => {
-        loadConversation(selectedTradeRef, true);
-    });
+    loadConversation(selectedTradeRef, true);
   });
 }
 
@@ -1627,13 +1621,7 @@ function resolveConversation() {
       return;
     }
     alert("✅ " + data.message);
-    let refreshPromise = Promise.resolve();
-    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
-    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
-    
-    refreshPromise.then(() => {
-        loadConversation(selectedTradeRef, false);
-    });
+    loadConversation(selectedTradeRef, false);
   });
 }
 
@@ -1645,6 +1633,13 @@ function openNewCompose() {
   document.getElementById("composeFrom").innerText =
     userId + " <" + userSender.email + ">";
 
+  if (desk === "CONFIRMATION") {
+    document.getElementById("composeTo").value = "COUNTERPARTY";
+  } else {
+    document.getElementById("composeTo").value = "FO";
+  }
+  document.getElementById("composeTo").disabled = false;
+
   // Load trades
   fetch(`/api/queue/my?userId=${encodeURIComponent(userId)}`, {
     headers: { "Authorization": "Bearer " + getToken() }
@@ -1655,6 +1650,7 @@ function openNewCompose() {
       select.innerHTML = "";
 
       if (data.success && data.trades) {
+        window.cachedComposeTrades = data.trades;
         data.trades.forEach(t => {
           const opt = document.createElement("option");
           opt.value = t.tradeRef;
@@ -1666,9 +1662,20 @@ function openNewCompose() {
       updateComposeSubject();
     });
 
-  document.getElementById("composeBody").value = "";
   document.getElementById("modalOverlay").style.display = "block";
   document.getElementById("composeModal").style.display = "flex";
+}
+
+function generatePreDraftMsg(tradeRef) {
+  if (!window.cachedComposeTrades) return "";
+  const trade = window.cachedComposeTrades.find(t => t.tradeRef === tradeRef);
+  if (!trade) return "";
+  
+  const to = document.getElementById("composeTo").value;
+  if (desk === "CONFIRMATION" && to === "COUNTERPARTY") {
+    return `Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.buySell}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`;
+  }
+  return "";
 }
 
 function updateComposeSubject() {
@@ -1676,6 +1683,7 @@ function updateComposeSubject() {
   const to = document.getElementById("composeTo").value;
   const toLabel = to === "FO" ? "FO Clarification Request" : "Trade Inquiry";
   document.getElementById("composeSubject").value = `${tradeRef} — ${toLabel}`;
+  document.getElementById("composeBody").value = generatePreDraftMsg(tradeRef);
 }
 
 document.getElementById("composeTrade").addEventListener("change", updateComposeSubject);
@@ -1700,6 +1708,28 @@ function sendCompose() {
     return;
   }
 
+  const composeAction = urlParams.get("composeAction");
+
+  if (composeAction) {
+    fetch("/api/trade/action", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        trade: { tradeRef },
+        action: composeAction,
+        comment: message
+      })
+    })
+    .then(() => {
+      closeComposeModal();
+      selectedTradeRef = tradeRef;
+      if (currentFolder === "inbox") loadPersonalInbox();
+      else if (currentFolder === "group" && channel !== "FO") loadGroupInbox();
+      setTimeout(() => loadConversation(tradeRef, true), 500);
+    });
+    return;
+  }
+
   const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
 
   fetch(endpoint, {
@@ -1716,13 +1746,10 @@ function sendCompose() {
     closeComposeModal();
     selectedTradeRef = tradeRef;
 
-    let refreshPromise = Promise.resolve();
-    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
-    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
+    if (currentFolder === "inbox") loadPersonalInbox();
+    else if (currentFolder === "group" && channel !== "FO") loadGroupInbox();
 
-    refreshPromise.then(() => {
-        loadConversation(tradeRef, true);
-    });
+    setTimeout(() => loadConversation(tradeRef, true), 500);
   });
 }
 
@@ -1785,6 +1812,7 @@ if (composeForTrade) {
         select.innerHTML = "";
 
         if (data.success && data.trades) {
+          window.cachedComposeTrades = data.trades;
           data.trades.forEach(t => {
             const opt = document.createElement("option");
             opt.value = t.tradeRef;
@@ -1797,8 +1825,11 @@ if (composeForTrade) {
         select.value = composeForTrade;
 
         // Set recipient
-        if (composeToRecipient === "FO") {
-          document.getElementById("composeTo").value = "FO";
+        if (composeToRecipient) {
+          document.getElementById("composeTo").value = composeToRecipient;
+          document.getElementById("composeTo").disabled = true;
+        } else {
+          document.getElementById("composeTo").disabled = false;
         }
 
         updateComposeSubject();
@@ -1823,8 +1854,7 @@ if (composeForTrade) {
 // ========================================
 // SOCKET.IO (Real-time updates)
 // ========================================
-const backendUrl = urlParams.get("backendUrl") || "http://localhost:3002";
-const socket = io(backendUrl, {
+const socket = io({
     auth: { token: getToken() }
 });
 
@@ -1833,16 +1863,14 @@ socket.emit("join_desk", desk);
 socket.on("new_email", (data) => {
     console.log("New email via websocket:", data);
     
-    let refreshPromise = Promise.resolve();
-    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
-    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
+    // Refresh inbox lists
+    if (currentFolder === "inbox") loadPersonalInbox(false);
+    else if (currentFolder === "group" && channel !== "FO") loadGroupInbox(false);
 
-    refreshPromise.then(() => {
-        // Refresh active conversation if it matches
-        if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
-            loadConversation(selectedTradeRef, false);
-        }
-    });
+    // Refresh active conversation if it matches
+    if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
+        loadConversation(selectedTradeRef, false);
+    }
 });
 
 // Close modals on overlay click

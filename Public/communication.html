@@ -1633,6 +1633,13 @@ function openNewCompose() {
   document.getElementById("composeFrom").innerText =
     userId + " <" + userSender.email + ">";
 
+  if (desk === "CONFIRMATION") {
+    document.getElementById("composeTo").value = "COUNTERPARTY";
+  } else {
+    document.getElementById("composeTo").value = "FO";
+  }
+  document.getElementById("composeTo").disabled = false;
+
   // Load trades
   fetch(`/api/queue/my?userId=${encodeURIComponent(userId)}`, {
     headers: { "Authorization": "Bearer " + getToken() }
@@ -1820,6 +1827,9 @@ if (composeForTrade) {
         // Set recipient
         if (composeToRecipient) {
           document.getElementById("composeTo").value = composeToRecipient;
+          document.getElementById("composeTo").disabled = true;
+        } else {
+          document.getElementById("composeTo").disabled = false;
         }
 
         updateComposeSubject();
