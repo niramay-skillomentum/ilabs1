@@ -1627,7 +1627,13 @@ function resolveConversation() {
       return;
     }
     alert("✅ " + data.message);
-    loadConversation(selectedTradeRef, false);
+    let refreshPromise = Promise.resolve();
+    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
+    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
+    
+    refreshPromise.then(() => {
+        loadConversation(selectedTradeRef, false);
+    });
   });
 }
 
