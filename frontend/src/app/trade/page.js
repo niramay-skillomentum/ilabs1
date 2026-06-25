@@ -49,7 +49,8 @@ function TradeComponent() {
     }
 
     // Socket Initialization
-    const socket = io({ auth: { token: getToken() } });
+    const socketUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002';
+    const socket = io(socketUrl, { auth: { token: getToken() } });
     socketRef.current = socket;
     socket.emit("join_desk", dsk);
 

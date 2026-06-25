@@ -71,7 +71,8 @@ function WorkstationComponent() {
       }).catch(console.error);
 
     // Socket Setup
-    const socket = io({ auth: { token: getToken() } });
+    const socketUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002';
+    const socket = io(socketUrl, { auth: { token: getToken() } });
     socketRef.current = socket;
     socket.emit("join_desk", dsk);
 
@@ -259,6 +260,7 @@ function WorkstationComponent() {
     const mailParams = new URLSearchParams({ userId, desk });
     if (selectedTrade) mailParams.set("tradeRef", selectedTrade.tradeRef);
     if (forceChannel) mailParams.set("channel", forceChannel);
+    mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
     window.open("/communication.html?" + mailParams.toString(), "_blank");
   };
 
@@ -268,6 +270,7 @@ function WorkstationComponent() {
     const mailParams = new URLSearchParams({
       userId, desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO", composeAction: "MO_SEND_TO_FO"
     });
+    mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
     window.open("/communication.html?" + mailParams.toString(), "_blank");
   };
 
@@ -281,6 +284,7 @@ function WorkstationComponent() {
       composeTo: "COUNTERPARTY",
       composeAction: "CONFIRM_SEND_TO_CPTY"
     });
+    mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
     window.open("/communication.html?" + mailParams.toString(), "_blank");
   };
 
@@ -436,6 +440,7 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => {
                   if(!selectedTrade) return alert("Select a trade first");
                   const mailParams = new URLSearchParams({userId, desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
+                  mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
                   window.open("/communication.html?" + mailParams.toString(), "_blank");
                 }}>Escalate to FO</button>
               </>

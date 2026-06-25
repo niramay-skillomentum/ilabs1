@@ -3,7 +3,7 @@
 <head>
   <title>SGB OpsMail — Mailbox</title>
   <meta name="description" content="SGB Operations Mailbox - Outlook-style email interface for trade communication">
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="http://localhost:3002/socket.io/socket.io.js"></script>
   <style>
     /* ========================================
        OUTLOOK-STYLE MAILBOX — DESIGN SYSTEM
@@ -1201,7 +1201,7 @@ function loadPersonalInbox(showLoader = false) {
     ? `/api/fo-channel/list?desk=${encodeURIComponent(desk)}` 
     : `/api/conversations/personal?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`;
     
-  fetch(endpoint, {
+  return fetch(endpoint, {
     headers: { "Authorization": "Bearer " + getToken() }
   })
     .then(res => res.json())
@@ -1220,7 +1220,7 @@ function loadGroupInbox(showLoader = false) {
   if (showLoader) {
     document.getElementById("emailList").innerHTML = '<div style="padding:20px;text-align:center;color:#605e5c;font-size:13px;">⏳ Loading conversations...</div>';
   }
-  fetch(`/api/conversations/shared?desk=${encodeURIComponent(desk)}`, {
+  return fetch(`/api/conversations/shared?desk=${encodeURIComponent(desk)}`, {
     headers: { "Authorization": "Bearer " + getToken() }
   })
     .then(res => res.json())
@@ -1593,7 +1593,13 @@ function sendReply() {
   })
   .then(() => {
     closeReplyModal();
-    loadConversation(selectedTradeRef, true);
+    let refreshPromise = Promise.resolve();
+    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
+    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
+    
+    refreshPromise.then(() => {
+        loadConversation(selectedTradeRef, true);
+    });
   });
 }
 
@@ -1704,10 +1710,13 @@ function sendCompose() {
     closeComposeModal();
     selectedTradeRef = tradeRef;
 
-    if (currentFolder === "inbox") loadPersonalInbox();
-    else if (currentFolder === "group" && channel !== "FO") loadGroupInbox();
+    let refreshPromise = Promise.resolve();
+    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
+    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
 
-    setTimeout(() => loadConversation(tradeRef, true), 500);
+    refreshPromise.then(() => {
+        loadConversation(tradeRef, true);
+    });
   });
 }
 
@@ -1808,7 +1817,8 @@ if (composeForTrade) {
 // ========================================
 // SOCKET.IO (Real-time updates)
 // ========================================
-const socket = io({
+const backendUrl = urlParams.get("backendUrl") || "http://localhost:3002";
+const socket = io(backendUrl, {
     auth: { token: getToken() }
 });
 
@@ -1817,14 +1827,16 @@ socket.emit("join_desk", desk);
 socket.on("new_email", (data) => {
     console.log("New email via websocket:", data);
     
-    // Refresh inbox lists
-    if (currentFolder === "inbox") loadPersonalInbox(false);
-    else if (currentFolder === "group" && channel !== "FO") loadGroupInbox(false);
+    let refreshPromise = Promise.resolve();
+    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
+    else if (currentFolder === "group" && channel !== "FO") refreshPromise = loadGroupInbox(false);
 
-    // Refresh active conversation if it matches
-    if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
-        loadConversation(selectedTradeRef, false);
-    }
+    refreshPromise.then(() => {
+        // Refresh active conversation if it matches
+        if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
+            loadConversation(selectedTradeRef, false);
+        }
+    });
 });
 
 // Close modals on overlay click
