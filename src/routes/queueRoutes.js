@@ -27,6 +27,7 @@ router.post("/generate", authenticateToken, async (req, res) => {
       desk,
       queueSize: result.trades.length,
       trades: result.trades,
+      sessionStart: result.sessionStart,
       sessionExpiry: result.sessionExpiry
     });
 
@@ -73,6 +74,7 @@ router.get("/my", authenticateToken, async (req, res) => {
       desk: activeQueue.desk,
       queueSize: activeQueue.trades.length,
       trades: activeQueue.trades,
+      sessionStart: activeQueue.sessionStart,
       sessionExpiry: activeQueue.sessionExpiry
     });
 
