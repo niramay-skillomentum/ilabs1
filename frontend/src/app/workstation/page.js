@@ -291,7 +291,11 @@ function WorkstationComponent() {
   const openMailboxGeneral = (forceChannel) => {
     const mailParams = new URLSearchParams({ userId, desk });
     if (selectedTrade) mailParams.set("tradeRef", selectedTrade.tradeRef);
-    if (forceChannel) mailParams.set("channel", forceChannel);
+    if (forceChannel) {
+      mailParams.set("channel", forceChannel);
+    } else if (desk === "MO") {
+      mailParams.set("channel", "FO");
+    }
     mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
     window.open("/communication.html?" + mailParams.toString(), "_blank");
   };
