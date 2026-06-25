@@ -1643,6 +1643,7 @@ function openNewCompose() {
       select.innerHTML = "";
 
       if (data.success && data.trades) {
+        window.cachedComposeTrades = data.trades;
         data.trades.forEach(t => {
           const opt = document.createElement("option");
           opt.value = t.tradeRef;
@@ -1654,9 +1655,20 @@ function openNewCompose() {
       updateComposeSubject();
     });
 
-  document.getElementById("composeBody").value = "";
   document.getElementById("modalOverlay").style.display = "block";
   document.getElementById("composeModal").style.display = "flex";
+}
+
+function generatePreDraftMsg(tradeRef) {
+  if (!window.cachedComposeTrades) return "";
+  const trade = window.cachedComposeTrades.find(t => t.tradeRef === tradeRef);
+  if (!trade) return "";
+  
+  const to = document.getElementById("composeTo").value;
+  if (desk === "CONFIRMATION" && to === "COUNTERPARTY") {
+    return `Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.buySell}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`;
+  }
+  return "";
 }
 
 function updateComposeSubject() {
@@ -1664,6 +1676,7 @@ function updateComposeSubject() {
   const to = document.getElementById("composeTo").value;
   const toLabel = to === "FO" ? "FO Clarification Request" : "Trade Inquiry";
   document.getElementById("composeSubject").value = `${tradeRef} — ${toLabel}`;
+  document.getElementById("composeBody").value = generatePreDraftMsg(tradeRef);
 }
 
 document.getElementById("composeTrade").addEventListener("change", updateComposeSubject);
@@ -1792,6 +1805,7 @@ if (composeForTrade) {
         select.innerHTML = "";
 
         if (data.success && data.trades) {
+          window.cachedComposeTrades = data.trades;
           data.trades.forEach(t => {
             const opt = document.createElement("option");
             opt.value = t.tradeRef;
