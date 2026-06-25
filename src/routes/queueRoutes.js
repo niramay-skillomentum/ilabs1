@@ -17,6 +17,7 @@ router.post("/generate", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Invalid desk specified. Must be MO, CONFIRMATION, or SETTLEMENT" });
     }
 
+    simulationClock.reset();
     simulationClock.start();
 
     const result = await queueComposer.buildQueue(desk, userId);

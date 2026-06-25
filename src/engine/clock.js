@@ -61,6 +61,11 @@ class SimulationClock {
     }
   }
 
+  reset() {
+    this.stop();
+    this.simulatedTime = this.getToday9AM();
+  }
+
   getTime() {
     return this.simulatedTime;
   }
