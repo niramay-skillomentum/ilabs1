@@ -88,7 +88,7 @@ function WorkstationComponent() {
     });
 
     socket.on("new_email", () => {
-      // Background update or toast
+      refreshQueueSilent(dsk);
     });
 
     return () => socket.disconnect();
@@ -132,6 +132,15 @@ function WorkstationComponent() {
       }
     }
   }, [queue, selectedTrade]);
+
+  // Sturdy Background Polling Fallback (ensures UI is never stale)
+  useEffect(() => {
+    if (!desk) return;
+    const pollInterval = setInterval(() => {
+      refreshQueueSilent(desk);
+    }, 15000); // Poll every 15 seconds silently
+    return () => clearInterval(pollInterval);
+  }, [desk]);
 
   const handleAlerts = (mins) => {
     if (mins <= 60 && !alert1hrShown.current) {
