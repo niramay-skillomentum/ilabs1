@@ -195,10 +195,15 @@ router.get("/shared", authenticateToken, async (req, res) => {
       }
     }
 
-    // Resolve trades for all collected conversations
+    // Resolve trades for all collected conversations via a single bulk query
+    const tradeRefs = results.map(item => item.tradeRef);
+    const tradesList = await Trade.find({ tradeRef: { $in: tradeRefs } }).lean();
+    const tradeMap = {};
+    tradesList.forEach(t => { tradeMap[t.tradeRef] = t; });
+
     const finalResults = [];
     for (const item of results) {
-      let trade = await Trade.findOne({ tradeRef: item.tradeRef }).lean();
+      let trade = tradeMap[item.tradeRef];
 
       if (!trade) {
         trade = {
@@ -251,8 +256,14 @@ router.get("/personal", authenticateToken, async (req, res) => {
 
     const results = [];
 
+    // Resolve trades for all conversations via a single bulk query
+    const tradeRefs = conversations.map(c => c.tradeRef);
+    const tradesList = await Trade.find({ tradeRef: { $in: tradeRefs } }).lean();
+    const tradeMap = {};
+    tradesList.forEach(t => { tradeMap[t.tradeRef] = t; });
+
     for (const conv of conversations) {
-      let trade = await Trade.findOne({ tradeRef: conv.tradeRef }).lean();
+      let trade = tradeMap[conv.tradeRef];
 
       if (!trade) {
         trade = {
