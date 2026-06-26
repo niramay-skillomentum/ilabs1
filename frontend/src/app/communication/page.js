@@ -23,6 +23,7 @@ function CommunicationComponent() {
   const [currentMessages, setCurrentMessages] = useState([]);
   const [todayDate, setTodayDate] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   // Reply modal state
   const [replyModalOpen, setReplyModalOpen] = useState(false);
@@ -210,9 +211,9 @@ function CommunicationComponent() {
     if (composeForTrade) {
       // Compose mode: load inbox + open compose modal
       if (ch === "FO") {
-        loadPersonalInbox(dsk, uid, ch);
+        loadPersonalInbox(dsk, uid, ch).finally(() => setIsLoading(false));
       } else {
-        loadGroupInbox(dsk);
+        loadGroupInbox(dsk).finally(() => setIsLoading(false));
       }
 
       // Load compose trades
@@ -248,7 +249,9 @@ function CommunicationComponent() {
         });
     } else {
       // Normal load
+      setIsLoading(true);
       loadPersonalInbox(dsk, uid, ch).then(() => {
+        setIsLoading(false);
         if (tRef) {
           setTimeout(() => loadConversation(tRef, ch, null, true), 300);
         }
@@ -314,17 +317,20 @@ function CommunicationComponent() {
     setCurrentTrade(null);
     setCurrentMessages([]);
     lastRenderedInboxDataStr.current = "";
+    setIsLoading(true);
 
     if (folder === "inbox") {
-      loadPersonalInbox(desk, userId, channel);
+      loadPersonalInbox(desk, userId, channel).finally(() => setIsLoading(false));
     } else if (folder === "group") {
       if (channel === "FO") {
         setInboxData([]);
+        setIsLoading(false);
       } else {
-        loadGroupInbox(desk);
+        loadGroupInbox(desk).finally(() => setIsLoading(false));
       }
     } else {
       setInboxData([]);
+      setIsLoading(false);
     }
   };
 
@@ -600,7 +606,9 @@ function CommunicationComponent() {
             <span className="toolbar-title">{folderTitle()}</span>
           </div>
           <div className="email-list">
-            {(currentFolder === "inbox" || currentFolder === "group") ? (
+            {isLoading ? (
+              <div className="empty-state"><div className="empty-icon">⏳</div><div>Loading emails...</div></div>
+            ) : (currentFolder === "inbox" || currentFolder === "group") ? (
               filteredInbox.length === 0 ? (
                 <div className="empty-state"><div className="empty-icon">📭</div><div>No emails in this folder</div></div>
               ) : (
