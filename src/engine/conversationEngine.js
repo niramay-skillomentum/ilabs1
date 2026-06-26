@@ -12,7 +12,7 @@ const cache = {};
 /**
  * Create or add message to conversation
  */
-async function createMessage(tradeRef, sender, body, subject, desk) {
+async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = false) {
 
   const updateDoc = {
     $setOnInsert: { tradeRef, status: "OPEN" },
@@ -49,19 +49,20 @@ async function createMessage(tradeRef, sender, body, subject, desk) {
     }))
   };
 
-  // Broadcast WebSocket event
-  try {
-    const io = getIo();
-    if (io) {
-      io.emit("new_email", {
-        tradeRef,
-        sender,
-        subject: subject || `Trade ${tradeRef}`,
-        timestamp: new Date()
-      });
+  if (!skipEmit) {
+    try {
+      const io = getIo();
+      if (io) {
+        io.emit("new_email", {
+          tradeRef,
+          sender,
+          subject: subject || `Trade ${tradeRef}`,
+          timestamp: new Date()
+        });
+      }
+    } catch (err) {
+      console.log("Socket emit failed", err.message);
     }
-  } catch (err) {
-    console.log("Socket emit failed", err.message);
   }
 
   return cache[tradeRef];

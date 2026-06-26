@@ -92,7 +92,6 @@ setInterval(async () => {
 // EXPRESS CONFIG & ROUTES
 // ======================================
 app.use(express.json());
-app.use(express.static("public"));
 
 app.use("/api/auth", require("./src/routes/authRoutes"));
 app.use("/api/session", require("./src/routes/sessionRoutes"));

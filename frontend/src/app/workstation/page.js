@@ -294,8 +294,7 @@ function WorkstationComponent() {
     if (forceChannel) {
       mailParams.set("channel", forceChannel);
     }
-    mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
-    window.open("/communication.html?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "_blank");
   };
 
   const sendToFO = () => {
@@ -304,8 +303,7 @@ function WorkstationComponent() {
     const mailParams = new URLSearchParams({
       userId, desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO"
     });
-    mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
-    window.open("/communication.html?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "_blank");
   };
 
   const startCptyFlow = () => {
@@ -318,8 +316,7 @@ function WorkstationComponent() {
       composeTo: "COUNTERPARTY",
       composeAction: "CONFIRM_SEND_TO_CPTY"
     });
-    mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
-    window.open("/communication.html?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "_blank");
   };
 
   const sendEmail = async () => {
@@ -360,7 +357,7 @@ function WorkstationComponent() {
   };
 
   const openTermsheet = () => {
-    window.open(`/mo-risk.html?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`, "_blank");
+    window.open(`/mo-risk?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`, "_blank");
   };
 
   if (!userId) return null;
@@ -474,8 +471,7 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => {
                   if(!selectedTrade) return alert("Select a trade first");
                   const mailParams = new URLSearchParams({userId, desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
-                  mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
-                  window.open("/communication.html?" + mailParams.toString(), "_blank");
+                  window.open("/communication?" + mailParams.toString(), "_blank");
                 }}>Escalate to FO</button>
               </>
             )}

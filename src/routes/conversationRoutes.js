@@ -14,13 +14,13 @@ router.post("/send", authenticateToken, async (req, res) => {
 
   const subject = `Trade ${tradeRef} - Break Investigation`;
 
-  // Save message to MongoDB
   await conversationEngine.createMessage(
     tradeRef,
     sender,
     message,
     subject,
-    desk
+    desk,
+    true // skipEmit
   );
 
   // Parse user message
@@ -47,6 +47,19 @@ router.post("/send", authenticateToken, async (req, res) => {
       message
     );
     auditDetails = "Sent mail to FO";
+
+    try {
+      const { getIo } = require("../engine/socketEngine");
+      const io = getIo();
+      if (io) {
+        io.emit("new_email", {
+          tradeRef,
+          sender,
+          subject: subject || `Trade ${tradeRef}`,
+          timestamp: new Date()
+        });
+      }
+    } catch (err) {}
   } else {
     // Schedule CPTY reply (for confirmation/settlement desk communication)
 
@@ -73,7 +86,14 @@ router.post("/send", authenticateToken, async (req, res) => {
     try {
       const { getIo } = require("../engine/socketEngine");
       const io = getIo();
-      if (io) io.emit("new_email", { tradeRef: tradeRef });
+      if (io) {
+        io.emit("new_email", {
+          tradeRef,
+          sender,
+          subject: subject || `Trade ${tradeRef}`,
+          timestamp: new Date()
+        });
+      }
     } catch (err) {}
 
     communicationEngine.scheduleReply(

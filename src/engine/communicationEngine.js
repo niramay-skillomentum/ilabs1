@@ -83,7 +83,9 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
         reply.tradeRef,
         "COUNTERPARTY",
         finalBody,
-        reply.cptyResponse.followUpSubject || "RE: Trade Clarification"
+        reply.cptyResponse.followUpSubject || "RE: Trade Clarification",
+        null, // desk
+        true  // skipEmit
       );
 
     } else {
@@ -103,7 +105,9 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
             reply.tradeRef,
             "COUNTERPARTY",
             body,
-            aiResponse.subject
+            aiResponse.subject,
+            null, // desk
+            true  // skipEmit
           );
           scheduleCPTYFinalReply(reply.tradeRef, trade, aiResponse);
         } else {
@@ -131,7 +135,9 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
             reply.tradeRef,
             "COUNTERPARTY",
             body,
-            aiResponse.subject
+            aiResponse.subject,
+            null, // desk
+            true  // skipEmit
           );
         }
       } else {
@@ -224,7 +230,9 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
           reply.tradeRef,
           "FO",
           finalBody,
-          reply.foResponse.followUpSubject || "RE: Trade Clarification"
+          reply.foResponse.followUpSubject || "RE: Trade Clarification",
+          null, // desk
+          true  // skipEmit
         );
 
         trade.foResponseReceived = true;
@@ -271,7 +279,9 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
             reply.tradeRef,
             "FO",
             body,
-            foResponse.subject
+            foResponse.subject,
+            null, // desk
+            true  // skipEmit
           );
 
           if (foResponse.action === "HOLDING_MESSAGE") {
