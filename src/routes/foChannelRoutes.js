@@ -72,10 +72,7 @@ router.post("/send", authenticateToken, express.json(), async (req, res) => {
       try {
         const { getIo } = require("../engine/socketEngine");
         const io = getIo();
-        io.to(`user_${req.user.userId}`).emit("trade_update", {
-          tradeRef: tradeRef,
-          currentStatus: trade.currentStatus
-        });
+        if (io) io.emit("new_email", { tradeRef: tradeRef });
       } catch (err) {}
     }
 
