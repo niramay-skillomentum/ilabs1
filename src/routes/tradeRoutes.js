@@ -126,16 +126,6 @@ router.post("/action", authenticateToken, async (req, res) => {
         nextStatus = "PENDING_FO_RESPONSE";
         sessionTrade.foResponseReceived = false;
         nextDesk = "MO";
-
-        sessionTrade.foContactCount = (sessionTrade.foContactCount || 0) + 1;
-        await foInternalChannel.openChannel(sessionTrade.tradeRef, userId, "MO");
-        await foInternalChannel.sendMessage(sessionTrade.tradeRef, userId, comment, "USER");
-        foInternalChannel.scheduleFOInternalReply(
-          sessionTrade.tradeRef,
-          sessionTrade,
-          comment,
-          "MO"
-        );
         break;
 
       case "CONFIRM_TRADE":
