@@ -1328,11 +1328,26 @@ function loadConversation(tradeRef, forceScroll) {
     ? `/api/fo-channel/${tradeRef}` 
     : `/api/conversation/${tradeRef}`;
 
-  fetch(endpoint, {
-    headers: { "Authorization": "Bearer " + getToken() }
-  })
-    .then(res => res.json())
-    .then(data => {
+  // Fetch conversation messages AND fresh trade data in parallel
+  Promise.all([
+    fetch(endpoint, {
+      headers: { "Authorization": "Bearer " + getToken() }
+    }).then(res => res.json()),
+    fetch("/api/trades/all", {
+      headers: { "Authorization": "Bearer " + getToken() }
+    }).then(res => res.json()).catch(() => ({ trades: [] }))
+  ]).then(([data, tradesData]) => {
+
+      // Update currentTrade with fresh server data
+      if (tradesData.trades && tradesData.trades.length > 0) {
+        const freshTrade = tradesData.trades.find(t => t.tradeRef === tradeRef);
+        if (freshTrade) {
+          currentTrade = freshTrade;
+          // Also update inboxData cache so sidebar badges refresh
+          const cachedItem = inboxData.find(i => i.trade.tradeRef === tradeRef);
+          if (cachedItem) cachedItem.trade = freshTrade;
+        }
+      }
 
       showReadingPane();
       
