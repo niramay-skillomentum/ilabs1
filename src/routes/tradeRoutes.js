@@ -16,7 +16,7 @@ const { getIo } = require("../engine/socketEngine");
 // ======================================
 router.get("/all", authenticateToken, async (req, res) => {
   try {
-    const trades = await Trade.find({});
+    const trades = await Trade.find({}).select('tradeRef tradeDate valueDate currentStatus nextDesk amount currency counterparty direction entity foRegion product tradeType settlementType age truths pendingAmendments').sort({ _id: -1 });
     res.json({
       success: true,
       trades: trades

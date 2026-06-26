@@ -13,6 +13,7 @@ function MoRiskComponent() {
   const [allTrades, setAllTrades] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTrade, setSelectedTrade] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const getToken = () => sessionStorage.getItem("auth_token") || Cookies.get("auth_token");
 
@@ -50,6 +51,11 @@ function MoRiskComponent() {
       .then(res => res.json())
       .then(data => {
         setAllTrades(data.trades || []);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to load trades:", err);
+        setIsLoading(false);
       });
   }, [searchParams]);
 
@@ -64,7 +70,7 @@ function MoRiskComponent() {
   if (!userId) return null;
 
   return (
-    <div style={{ margin:0, fontFamily:"Segoe UI, Arial", background:"#f5f7fa", height:"100vh", display:"flex", flexDirection:"column" }}>
+    <div style={{ margin:0, fontFamily:"Segoe UI, Arial", background:"#f5f7fa", color:"#333", height:"100vh", display:"flex", flexDirection:"column" }}>
       {/* TOP BAR */}
       <div style={{ height:"48px", background:"#0B1F3A", color:"white", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px", fontSize:"14px", flexShrink:0 }}>
         <div style={{ fontWeight:600 }}>MO Risk Management System</div>
@@ -78,24 +84,36 @@ function MoRiskComponent() {
           <div style={{ padding:"10px", borderBottom:"1px solid #eee" }}>
             <input 
               placeholder="Search trades..."
-              style={{ width:"100%", padding:"8px", border:"1px solid #ddd", borderRadius:"4px" }}
+              style={{ width:"100%", padding:"8px", border:"1px solid #ddd", borderRadius:"4px", color:"#333", backgroundColor:"#fff" }}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
 
           <div style={{ flex:1, overflowY:"auto" }}>
-            {filteredTrades.map(trade => (
-              <div 
-                key={trade.tradeRef}
-                style={{ padding:"12px", borderBottom:"1px solid #eee", cursor:"pointer", background: selectedTrade?.tradeRef === trade.tradeRef ? "#f0f8ff" : "white" }}
-                onClick={() => setSelectedTrade(trade)}
-              >
-                <div style={{ fontWeight:600 }}>Termsheet - {trade.counterparty || "Unknown"}</div>
-                <div style={{ fontSize:"12px", color:"#555" }}>{trade.tradeRef}</div>
-                <div style={{ fontSize:"12px", color:"#777" }}>{trade.currency} {Number(trade.amount).toLocaleString()}</div>
+            {isLoading ? (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "#555" }}>
+                <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>Loading Trades...</div>
+                <div style={{ fontSize: "14px" }}>Fetching data from the server, please wait.</div>
+                {/* A simple CSS spinner */}
+                <div style={{ margin: "20px auto", width: "30px", height: "30px", border: "3px solid #f3f3f3", borderTop: "3px solid #3498db", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
               </div>
-            ))}
+            ) : filteredTrades.length === 0 ? (
+              <div style={{ padding: "20px", textAlign: "center", color: "#777" }}>No trades found</div>
+            ) : (
+              filteredTrades.map(trade => (
+                <div 
+                  key={trade.tradeRef}
+                  style={{ padding:"12px", borderBottom:"1px solid #eee", cursor:"pointer", background: selectedTrade?.tradeRef === trade.tradeRef ? "#f0f8ff" : "white" }}
+                  onClick={() => setSelectedTrade(trade)}
+                >
+                  <div style={{ fontWeight:600 }}>Termsheet - {trade.counterparty || "Unknown"}</div>
+                  <div style={{ fontSize:"12px", color:"#555" }}>{trade.tradeRef}</div>
+                  <div style={{ fontSize:"12px", color:"#777" }}>{trade.currency} {Number(trade.amount).toLocaleString()}</div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
