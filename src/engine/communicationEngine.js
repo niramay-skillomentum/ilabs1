@@ -66,6 +66,12 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
         const amendments = amendmentEngine.extractAmendments(reply.cptyResponse.followUpBody, trade);
         amendmentEngine.attachAmendments(trade, amendments);
         if (saveTrade) await saveTrade(trade);
+        // Emit after trade save so UI gets fresh cptyResponseReceived
+        try {
+          const { getIo } = require("./socketEngine");
+          const io = getIo();
+          if (io) io.emit("new_email", { tradeRef: reply.tradeRef });
+        } catch (err) {}
       }
 
       let finalBody = reply.cptyResponse.followUpBody;
@@ -113,6 +119,12 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
             const amendments = amendmentEngine.extractAmendments(aiResponse.body, trade);
             amendmentEngine.attachAmendments(trade, amendments);
             if (saveTrade) await saveTrade(trade);
+            // Emit after trade save so UI gets fresh cptyResponseReceived
+            try {
+              const { getIo } = require("./socketEngine");
+              const io = getIo();
+              if (io) io.emit("new_email", { tradeRef: reply.tradeRef });
+            } catch (err) {}
           }
 
           conversationEngine.createMessage(
@@ -235,6 +247,13 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
         
         if (saveTrade) await saveTrade(trade);
 
+        // Emit websocket AFTER trade is saved so UI gets fresh foResponseReceived
+        try {
+          const { getIo } = require("./socketEngine");
+          const io = getIo();
+          if (io) io.emit("new_email", { tradeRef: reply.tradeRef });
+        } catch (err) {}
+
         console.log("FO FINAL REPLY SENT:", reply.tradeRef);
 
       } else {
@@ -293,6 +312,13 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
              }
 
              if (saveTrade) await saveTrade(trade);
+
+             // Emit websocket AFTER trade is saved so UI gets fresh foResponseReceived
+             try {
+               const { getIo } = require("./socketEngine");
+               const io = getIo();
+               if (io) io.emit("new_email", { tradeRef: reply.tradeRef });
+             } catch (err) {}
 
              console.log("FO REPLY SENT:", reply.tradeRef);
           }
