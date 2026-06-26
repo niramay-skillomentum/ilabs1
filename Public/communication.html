@@ -1201,7 +1201,7 @@ function loadPersonalInbox(showLoader = false) {
     ? `/api/fo-channel/list?desk=${encodeURIComponent(desk)}` 
     : `/api/conversations/personal?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`;
     
-  fetch(endpoint, {
+  return fetch(endpoint, {
     headers: { "Authorization": "Bearer " + getToken() }
   })
     .then(res => res.json())
@@ -1220,7 +1220,7 @@ function loadGroupInbox(showLoader = false) {
   if (showLoader) {
     document.getElementById("emailList").innerHTML = '<div style="padding:20px;text-align:center;color:#605e5c;font-size:13px;">⏳ Loading conversations...</div>';
   }
-  fetch(`/api/conversations/shared?desk=${encodeURIComponent(desk)}`, {
+  return fetch(`/api/conversations/shared?desk=${encodeURIComponent(desk)}`, {
     headers: { "Authorization": "Bearer " + getToken() }
   })
     .then(res => res.json())
@@ -1328,29 +1328,12 @@ function loadConversation(tradeRef, forceScroll) {
     ? `/api/fo-channel/${tradeRef}` 
     : `/api/conversation/${tradeRef}`;
 
-  const bUrl = urlParams.get("backendUrl") || "";
-  const tradeEndpoint = bUrl ? `${bUrl}/api/trades/all` : `/api/trades/all`;
-
-  // Fetch conversation messages AND fresh trade data in parallel
-  Promise.all([
-    fetch(endpoint, {
-      headers: { "Authorization": "Bearer " + getToken() }
-    }).then(res => res.json()),
-    fetch(tradeEndpoint, {
-      headers: { "Authorization": "Bearer " + getToken() }
-    }).then(res => res.json()).catch(() => ({ trades: [] }))
-  ]).then(([data, tradesData]) => {
-
-      // Update currentTrade with fresh server data
-      if (tradesData.trades && tradesData.trades.length > 0) {
-        const freshTrade = tradesData.trades.find(t => t.tradeRef === tradeRef);
-        if (freshTrade) {
-          currentTrade = freshTrade;
-          // Also update inboxData cache so sidebar badges refresh
-          const cachedItem = inboxData.find(i => i.trade.tradeRef === tradeRef);
-          if (cachedItem) cachedItem.trade = freshTrade;
-        }
-      }
+  // Fetch conversation messages
+  fetch(endpoint, {
+    headers: { "Authorization": "Bearer " + getToken() }
+  })
+  .then(res => res.json())
+  .then(data => {
 
       showReadingPane();
       
@@ -1883,27 +1866,33 @@ socket.on("new_email", (data) => {
     console.log("New email via websocket:", data);
     
     // Refresh inbox lists (all folders)
-    if (currentFolder === "inbox") loadPersonalInbox(false);
-    else if (currentFolder === "group") loadGroupInbox(false);
+    let refreshPromise = Promise.resolve();
+    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
+    else if (currentFolder === "group") refreshPromise = loadGroupInbox(false);
 
-    // Refresh active conversation if it matches
-    if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
-        loadConversation(selectedTradeRef, false);
-    }
+    refreshPromise.then(() => {
+        // Refresh active conversation if it matches
+        if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
+            loadConversation(selectedTradeRef, false);
+        }
+    });
 });
 
 // ========================================
 // POLLING FALLBACK (ensures status, badges, resolve button stay fresh)
 // ========================================
 setInterval(() => {
+    let refreshPromise = Promise.resolve();
     // Refresh inbox list silently
-    if (currentFolder === "inbox") loadPersonalInbox(false);
-    else if (currentFolder === "group") loadGroupInbox(false);
+    if (currentFolder === "inbox") refreshPromise = loadPersonalInbox(false);
+    else if (currentFolder === "group") refreshPromise = loadGroupInbox(false);
 
-    // Refresh active conversation to pick up trade state changes
-    if (selectedTradeRef && document.getElementById("replyModal").style.display !== "flex") {
-        loadConversation(selectedTradeRef, false);
-    }
+    refreshPromise.then(() => {
+        // Refresh active conversation to pick up trade state changes
+        if (selectedTradeRef && document.getElementById("replyModal").style.display !== "flex") {
+            loadConversation(selectedTradeRef, false);
+        }
+    });
 }, 5000);
 
 // Close modals on overlay click
