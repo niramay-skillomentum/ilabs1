@@ -304,7 +304,7 @@ function WorkstationComponent() {
     if (!selectedTrade) return alert("Select trade first");
     if (!allowed['MO_SEND_TO_FO'] || !allowed['MO_SEND_TO_FO'].includes(selectedTrade.currentStatus)) return alert("Invalid action for current state");
     const mailParams = new URLSearchParams({
-      userId, desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO", composeAction: "MO_SEND_TO_FO"
+      userId, desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO", composeAction: "MO_SEND_TO_FO"
     });
     mailParams.set("backendUrl", process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3002');
     window.open("/communication.html?" + mailParams.toString(), "_blank");
