@@ -47,6 +47,13 @@ async function sendMessage(tradeRef, sender, message, senderRole = "USER") {
 
   channel.messages.push(msg);
   await channel.save();
+  
+  try {
+    const { getIo } = require("./socketEngine");
+    const io = getIo();
+    if (io) io.emit("new_email", { tradeRef });
+  } catch (err) {}
+
   return msg;
 }
 
@@ -106,11 +113,11 @@ async function processFOInternalReplies(saveTrade) {
     if (moMismatches.length === 0) {
       // FO sees no issue with their local truth (Round 1) or Universal truth (Round 2)
       foPosition = "FO_SUPPORTS_US";
-      foResponseText = generateFOSupportsUsResponse(trade, targetDeskTruth);
+      foResponseText = generateFOSupportsUsResponse(trade, targetDeskTruth, reply.deskContext);
     } else {
       // FO sees an issue, they admit mistake and we should generate pending amendments
       foPosition = "FO_ADMITS_MISTAKE";
-      foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth);
+      foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth, reply.deskContext);
     }
 
     // Send FO's response on the internal channel
@@ -186,19 +193,31 @@ async function closeChannel(tradeRef) {
 // FO RESPONSE GENERATORS
 // ======================================
 
-function generateFOSupportsUsResponse(trade, truthType = "fo") {
-  const intro = truthType === "universal" ? "After re-checking our execution system and speaking with the counterparty's trading desk directly (Universal Truth)," : "We've checked our records";
-  const responses = [
-    `${intro} we can confirm that the booking is correct as per our trading system. The trade was executed at ${trade.currency} ${trade.amount} with value date ${new Date(trade.valueDate).toISOString().split("T")[0]}. The counterparty may be referencing outdated information. Please proceed with our figures.`,
-    `${intro} FO confirms: our records match the current booking. No amendment required from our side. Please push back on the counterparty's claim.`,
-    `After reviewing the trade ticket and execution log, we confirm our booking is accurate. The counterparty's claim appears to be based on a misunderstanding. You are good to proceed.`,
-    `Verified against our execution system — the trade details are correct. Please reject the counterparty's dispute and reconfirm with our current values.`
-  ];
+function generateFOSupportsUsResponse(trade, truthType = "fo", deskContext = "CONFIRMATION") {
+  const intro = truthType === "universal" ? "After re-checking our execution system and speaking with the trading desk directly (Universal Truth)," : "We've checked our records";
+  let responses = [];
+  if (deskContext === "MO") {
+    responses = [
+      `${intro} we can confirm that the booking is correct as per our trading system. The trade was executed at ${trade.currency} ${trade.amount} with value date ${new Date(trade.valueDate).toISOString().split("T")[0]}. Please proceed to validate.`,
+      `FO confirms: our records match the current booking. No amendment required. You are good to pass validation.`,
+      `After reviewing the trade ticket and execution log, we confirm our booking is accurate. You can proceed with the trade.`,
+      `Verified against our execution system — the trade details are correct.`
+    ];
+  } else {
+    responses = [
+      `${intro} we can confirm that the booking is correct as per our trading system. The trade was executed at ${trade.currency} ${trade.amount} with value date ${new Date(trade.valueDate).toISOString().split("T")[0]}. The counterparty may be referencing outdated information. Please proceed with our figures.`,
+      `${intro} FO confirms: our records match the current booking. No amendment required from our side. Please push back on the counterparty's claim.`,
+      `After reviewing the trade ticket and execution log, we confirm our booking is accurate. The counterparty's claim appears to be based on a misunderstanding. You are good to proceed.`,
+      `Verified against our execution system — the trade details are correct. Please reject the counterparty's dispute and reconfirm with our current values.`
+    ];
+  }
   return responses[Math.floor(Math.random() * responses.length)];
 }
 
-function generateFOSupportsCptyResponse(trade, mismatches, truthType = "fo") {
-  const intro = truthType === "universal" ? "We ran a deep dive using the universal exchange truth" : "We've reviewed the trade";
+function generateFOSupportsCptyResponse(trade, mismatches, truthType = "fo", deskContext = "CONFIRMATION") {
+  const introMO = truthType === "universal" ? "We ran a deep dive using the universal exchange truth" : "We've reviewed the trade";
+  const introCpty = truthType === "universal" ? "We ran a deep dive using the universal exchange truth" : "We've reviewed the trade";
+
   const mismatchDesc = mismatches.map(m => {
     let field = typeof m === "string" ? m : m.field;
     let targetTruth = trade.truths?.[truthType] || trade.truths?.mo;
@@ -210,20 +229,38 @@ function generateFOSupportsCptyResponse(trade, mismatches, truthType = "fo") {
     return `${field} needs correction`;
   }).join(", ");
 
-  const responses = [
-    `${intro} and the counterparty is correct. Our booking has an error — ${mismatchDesc}. Please raise an amendment to correct this.`,
-    `FO acknowledges the discrepancy. The counterparty's figures are accurate: ${mismatchDesc}. Please amend accordingly and resend confirmation.`,
-    `After checking our execution records, we can confirm the counterparty is right. The ${mismatchDesc}. An amendment should be raised to match their expectations.`
-  ];
+  let responses = [];
+  if (deskContext === "MO") {
+    responses = [
+      `${introMO} and noticed an error in our booking. Our booking has an error — ${mismatchDesc}. Please raise an amendment to correct this.`,
+      `FO acknowledges the discrepancy in our internal booking. ${mismatchDesc}. Please amend accordingly.`,
+      `After checking our execution records, we can confirm there is a booking mistake. The ${mismatchDesc}. An amendment should be raised to correct it.`
+    ];
+  } else {
+    responses = [
+      `${introCpty} and the counterparty is correct. Our booking has an error — ${mismatchDesc}. Please raise an amendment to correct this.`,
+      `FO acknowledges the discrepancy. The counterparty's figures are accurate: ${mismatchDesc}. Please amend accordingly and resend confirmation.`,
+      `After checking our execution records, we can confirm the counterparty is right. The ${mismatchDesc}. An amendment should be raised to match their expectations.`
+    ];
+  }
   return responses[Math.floor(Math.random() * responses.length)];
 }
 
-function generateFOInvestigatingResponse(trade, mismatches) {
-  const responses = [
-    `We're looking into this. The discrepancy is being escalated to the trading desk for review. We'll get back to you shortly with a resolution.`,
-    `This needs further investigation. We've flagged it with the trader who executed this deal. Please hold off on any amendments until we confirm.`,
-    `We acknowledge the counterparty's claim but need to verify with our trading system. Investigation is underway — expect an update within the hour.`
-  ];
+function generateFOInvestigatingResponse(trade, mismatches, deskContext = "CONFIRMATION") {
+  let responses = [];
+  if (deskContext === "MO") {
+    responses = [
+      `We're looking into this internal booking discrepancy. The issue is being escalated to the trading desk for review. We'll get back to you shortly with a resolution.`,
+      `This booking discrepancy needs further investigation. We've flagged it with the trader who executed this deal. Please hold off on any amendments until we confirm.`,
+      `We acknowledge the discrepancy but need to verify with our trading system. Investigation is underway — expect an update within the hour.`
+    ];
+  } else {
+    responses = [
+      `We're looking into this. The counterparty's claim is being escalated to the trading desk for review. We'll get back to you shortly with a resolution.`,
+      `This needs further investigation. We've flagged the counterparty's dispute with the trader who executed this deal. Please hold off on any amendments until we confirm.`,
+      `We acknowledge the counterparty's claim but need to verify with our trading system. Investigation is underway — expect an update within the hour.`
+    ];
+  }
   return responses[Math.floor(Math.random() * responses.length)];
 }
 

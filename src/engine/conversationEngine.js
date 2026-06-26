@@ -52,17 +52,16 @@ async function createMessage(tradeRef, sender, body, subject, desk) {
   // Broadcast WebSocket event
   try {
     const io = getIo();
-    const trade = await Trade.findOne({ tradeRef }).lean();
-    if (trade && trade.assignedTo) {
-      io.to(`user_${trade.assignedTo}`).emit("new_email", {
+    if (io) {
+      io.emit("new_email", {
         tradeRef,
         sender,
         subject: subject || `Trade ${tradeRef}`,
-        preview: body.substring(0, 50) + "..."
+        timestamp: new Date()
       });
     }
   } catch (err) {
-    // Socket.io not initialized
+    console.log("Socket emit failed", err.message);
   }
 
   return cache[tradeRef];
