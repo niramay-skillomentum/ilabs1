@@ -1328,12 +1328,15 @@ function loadConversation(tradeRef, forceScroll) {
     ? `/api/fo-channel/${tradeRef}` 
     : `/api/conversation/${tradeRef}`;
 
+  const bUrl = urlParams.get("backendUrl") || "";
+  const tradeEndpoint = bUrl ? `${bUrl}/api/trades/all` : `/api/trades/all`;
+
   // Fetch conversation messages AND fresh trade data in parallel
   Promise.all([
     fetch(endpoint, {
       headers: { "Authorization": "Bearer " + getToken() }
     }).then(res => res.json()),
-    fetch("/api/trades/all", {
+    fetch(tradeEndpoint, {
       headers: { "Authorization": "Bearer " + getToken() }
     }).then(res => res.json()).catch(() => ({ trades: [] }))
   ]).then(([data, tradesData]) => {
@@ -1879,15 +1882,29 @@ socket.emit("join_desk", desk);
 socket.on("new_email", (data) => {
     console.log("New email via websocket:", data);
     
-    // Refresh inbox lists
+    // Refresh inbox lists (all folders)
     if (currentFolder === "inbox") loadPersonalInbox(false);
-    else if (currentFolder === "group" && channel !== "FO") loadGroupInbox(false);
+    else if (currentFolder === "group") loadGroupInbox(false);
 
     // Refresh active conversation if it matches
     if (selectedTradeRef === data.tradeRef && document.getElementById("replyModal").style.display !== "flex") {
         loadConversation(selectedTradeRef, false);
     }
 });
+
+// ========================================
+// POLLING FALLBACK (ensures status, badges, resolve button stay fresh)
+// ========================================
+setInterval(() => {
+    // Refresh inbox list silently
+    if (currentFolder === "inbox") loadPersonalInbox(false);
+    else if (currentFolder === "group") loadGroupInbox(false);
+
+    // Refresh active conversation to pick up trade state changes
+    if (selectedTradeRef && document.getElementById("replyModal").style.display !== "flex") {
+        loadConversation(selectedTradeRef, false);
+    }
+}, 5000);
 
 // Close modals on overlay click
 document.getElementById("modalOverlay").addEventListener("click", function() {
@@ -1896,6 +1913,7 @@ document.getElementById("modalOverlay").addEventListener("click", function() {
 });
 
 </script>
+
 
 </body>
 </html>
