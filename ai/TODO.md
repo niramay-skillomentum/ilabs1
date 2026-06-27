@@ -1,58 +1,105 @@
-# TODO
+content: # TODO
 
-> Last updated: 2026-06-26
+> Last updated: 2026-06-27
 
-## 🔴 Critical (Bugs / Blocking)
+---
 
-- [x] **KI-001** Add rate limiting to auth endpoints (`/register`, `/login`)
-- [x] **KI-002** Remove user email from URL query params — use opaque session refs
-- [x] **KI-003** Remove JWT secret hardcoded fallback
+## ✅ Completed
 
-## 🟡 Important (Security / Quality)
-
-- [x] **KI-004** Make `auth_token` cookie HttpOnly + Secure
-- [x] **KI-005** Restrict Socket.io CORS to known origins
-- [x] **KI-006** Delete `src/routes/uiRoutes.js` (legacy, unauthenticated, unused)
-- [ ] **KI-007** Persist CPTY/FO reply queue to DB (or migrate to Agenda) — currently lost on restart
-- [x] **KI-008** Remove unused `DATABASE_URL` (PostgreSQL) from `.env`
-
-## 🟢 Improvements (UX / Code Quality)
-
-- [x] **KI-009** Fix or remove `frontend/src/app/trade/page.js` — uses non-existent actions
+- [x] **KI-001** Rate limiting on `/register` and `/login` — `express-rate-limit` (15 req/15 min)
+- [x] **KI-002** Remove email from URL query params — `auth.js` module + sessionStorage
+- [x] **KI-003** Remove JWT hardcoded fallback secret — fatal startup exit if unset
+- [x] **KI-004** `auth_token` cookie set with `HttpOnly` flag
+- [x] **KI-005** Socket.io CORS restricted via `ALLOWED_ORIGINS` env var
+- [x] **KI-006** Delete `src/routes/uiRoutes.js` (legacy, unauthenticated)
+- [x] **KI-008** Remove `DATABASE_URL` (PostgreSQL legacy) from `.env`
+- [x] **KI-009** Delete `frontend/src/app/trade/page.js` (legacy page)
 - [x] **KI-010** Update `layout.js` metadata title and description
-- [ ] **KI-011** Write frontend component tests
-- [ ] **KI-012** Write backend integration tests for queue, trade actions, conversations
 - [x] **KI-013** Delete `scratch.js` from root
-- [x] **KI-014** Replace `alert()` / `window.alert()` with toast notification system
-- [ ] **KI-015** Decompose `communication/page.js` (855 lines) into sub-components
+- [x] **KI-014** Replace all `alert()` / `window.alert()` with `react-hot-toast`
+- [x] **KP-005** Replace `JSON.stringify` deep-compare in `selectedTrade` sync with targeted field comparison
+
+---
+
+## 🔴 Critical / Bugs
+
+- [ ] **KI-007** Persist pending CPTY/FO reply queue to DB (or migrate to Agenda jobs) — lost on server restart
+  - *File*: `src/engine/communicationEngine.js`
+  - *Fix*: Add `PendingReply` collection or use Agenda for all delayed AI tasks
+
+---
+
+## 🟡 Security & Quality
+
+- [ ] **KI-016** Add `Secure` flag to `auth_token` cookie when `NODE_ENV === "production"`
+  - *File*: `src/routes/authRoutes.js`
+
+- [ ] **KI-017** Sanitize email message bodies before storage/rendering (prevent XSS)
+  - *Files*: `src/engine/conversationEngine.js`, `frontend/src/app/communication/page.js`
+  - *Fix*: Use `sanitize-html` on server or `DOMPurify` on client
+
+- [ ] **KI-011** Write frontend component tests
+  - *File*: `frontend/__tests__/`
+  - Framework already configured: Jest + React Testing Library + jsdom
+
+- [ ] **KI-012** Write backend integration tests for queue, trade actions, conversations, FO channel
+  - *File*: `tests/backend/`
+  - Framework already configured: Jest + Supertest
+
+---
+
+## 🟢 Improvements (Code Quality / UX)
+
+- [ ] **KI-015** Decompose `communication/page.js` (850 lines) into sub-components
+  - Extract: `InboxList`, `MessageThread`, `ComposeModal`, `ReplyModal`, `FolderNav`
+
+- [ ] **KI-018** Consolidate duplicate route mount (`/api/conversation` + `/api/conversations`)
+  - *File*: `server.js`
+
+- [ ] **KI-019** Add pagination to `GET /api/trade/all`
+  - *File*: `src/routes/tradeRoutes.js`
+  - Add `?page=&limit=` query params
+
+- [ ] **KI-020** Replace full trade cache rebuild with targeted invalidation
+  - *File*: `server.js` cache refresh loop
+  - Update `_cachedTrades[tradeRef]` on action instead of full `Trade.find()` every 2s
+
+- [ ] **KP-001** Fix N+1 query in `/api/conversation/shared`
+  - *File*: `src/routes/conversationRoutes.js`
+  - Batch all tradeRefs → single `Conversation.find({ tradeRef: { $in: refs } })`
+
+---
 
 ## 🚀 New Features
 
 ### Scoring & Results
-- [ ] Build scoring summary page (post-session results)
-- [ ] Show leaderboard / ranking across users
-- [ ] Score breakdown by trade and action
+- [ ] Build scoring summary page (`/results`) — show points, penalties, trades resolved
+- [ ] Per-trade action breakdown with correct/incorrect decision indicators
+- [ ] Leaderboard across all users (`GET /api/scores/leaderboard`)
 
 ### Admin / Trainer
-- [ ] Trainer admin dashboard (view all users, sessions, scores)
-- [ ] Session replay mode (review what a user did)
-- [ ] Admin: manually generate/seed trades to DB pool
+- [ ] Trainer login with elevated role (RBAC needed)
+- [ ] Admin dashboard — view all active sessions, user scores, trade pool size
+- [ ] Session replay mode — review each action a trainee took, in order
+- [ ] Admin: manually seed/generate trades to DB pool
 
 ### User Experience
-- [ ] Loading states on all async operations (currently instant or alert())
-- [ ] Trade status history / timeline view in workstation
-- [ ] Inline help / glossary for ops terminology
-- [ ] Mobile-responsive workstation layout
-
-### Technical Debt
-- [ ] Migrate legacy in-memory engines to DB-backed equivalents (`queue.js`, `lifecycle.js` old versions)
-- [ ] Consolidate duplicate route definitions (`/api/conversation` and `/api/conversations` both registered)
-- [ ] Add TypeScript / JSDoc to engine files
-- [ ] Production nginx reverse proxy config
-- [ ] GitHub Actions CI/CD pipeline
+- [ ] Loading spinners on all async operations (queue generation, action submission)
+- [ ] Trade status history / timeline in workstation popup
+- [ ] Inline ops glossary — hover tooltips on trade fields and actions
+- [ ] Mobile-responsive layout for workstation and communication pages
+- [ ] Dark mode for workstation
 
 ### Infrastructure
-- [x] `.env.example` file with all required variables (no secrets)
-- [ ] Health check endpoint (`GET /health`)
-- [ ] Graceful shutdown handler (process `SIGTERM`)
-- [ ] Log aggregation (currently `console.log` only)
+- [ ] `GET /health` endpoint — returns `{ status: "ok", db: true/false, uptime: N }`
+- [ ] Graceful shutdown — `process.on("SIGTERM")` → close server → close DB
+- [ ] Structured JSON logging (replace `console.log` with a logger like `pino`)
+- [ ] GitHub Actions CI/CD — test → build → push Docker images on `main` push
+- [ ] Staging environment (separate Atlas cluster + env vars)
+- [ ] Recommended DB indexes: `currentStatus`, compound `isAutoGenerated+assignedTo`, compound `desk+isActive`
+
+### Technical Debt
+- [ ] JSDoc / TypeScript definitions for engine functions
+- [ ] Extract trade status constants to a shared constants file (currently duplicated in routes and engines)
+- [ ] Production nginx reverse proxy configuration example
+ file_path: /workspace/ilabs1/ai/TODO.md

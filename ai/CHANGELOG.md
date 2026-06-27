@@ -1,95 +1,85 @@
-# Changelog
+content: # Changelog
 
-All notable changes to this project — reverse chronological order.
+All notable changes — reverse chronological order.
 
 ---
 
-## [Unreleased] — 2026-06-26
+## [Unreleased] — 2026-06-27
 
-### Security Hardening
-- **KI-001**: Added rate limiting (`express-rate-limit`, 15 req/15min per IP) to `/api/auth/register` and `/api/auth/login`
-- **KI-003**: Removed hardcoded JWT secret fallback; `server.js` now exits with FATAL if `JWT_SECRET` is unset
-- **KI-004**: `auth_token` cookie now set with `HttpOnly` flag; frontend uses `sessionStorage` exclusively
-- **KI-005**: Socket.io CORS restricted to `ALLOWED_ORIGINS` env var (defaults to `http://localhost:3000`); `credentials: true` enabled
+*(Documentation refresh — no code changes)*
 
-### Privacy
-- **KI-002**: Removed user email from URL query params across all pages. New shared `frontend/src/lib/auth.js` module manages session via `sessionStorage` (`saveSession`, `loadUserId`, `loadFullName`, `getToken`, `authHeaders`, `clearSession`). Updated login, dashboard, workstation, communication, and mo-risk pages.
+---
 
-### Cleanup
-- **KI-006**: Deleted legacy `src/routes/uiRoutes.js` (151 lines, unauthenticated, unused)
-- **KI-008**: Removed unused `DATABASE_URL` (PostgreSQL) from `.env`
-- **KI-009**: Deleted legacy `frontend/src/app/trade/page.js` (referenced non-existent actions)
-- **KI-013**: Deleted root `scratch.js` dev scratch file
+## [Security Hardening Batch] — 2026-06-26
 
-### Improvements
-- **KI-010**: Updated `layout.js` metadata title to `"SGB Operations Simulator | Niramay Skillomentum"`
-- **KP-005**: Replaced `JSON.stringify` deep-compare with targeted field comparison in workstation `selectedTrade` sync effect
+A complete security hardening pass resolving all known high and medium priority security issues.
 
-### Infrastructure
-- Added `.env.example` template with all required env vars (no real secrets)
+### Fixed
+- **KI-001** | Auth rate limiting: Added `express-rate-limit` (15 req / 15 min per IP) to `POST /api/auth/register` and `POST /api/auth/login`
+- **KI-003** | JWT secret: Removed hardcoded fallback from `src/middleware/auth.js`. `server.js` now exits with `FATAL` error at startup if `JWT_SECRET` is unset
+- **KI-004** | HttpOnly cookie: `auth_token` now set with `HttpOnly` flag. Frontend switched to `sessionStorage` exclusively via new `frontend/src/lib/auth.js` module
+- **KI-005** | Socket.io CORS: Restricted origin to `ALLOWED_ORIGINS` env var (defaults to `http://localhost:3000`); `credentials: true` enabled
+
+### Removed
+- **KI-006** | Deleted `src/routes/uiRoutes.js` — 151 lines of legacy, unauthenticated, in-memory v1 routes not used anywhere
+- **KI-008** | Removed `DATABASE_URL` (PostgreSQL legacy) from `.env`
+- **KI-009** | Deleted `frontend/src/app/trade/page.js` — legacy page using non-existent API actions
+- **KI-013** | Deleted `scratch.js` from repo root
+
+### Changed
+- **KI-002** | Privacy: Email no longer appears in URL query params. New shared module `frontend/src/lib/auth.js` provides `saveSession()`, `loadUserId()`, `loadFullName()`, `getToken()`, `authHeaders()`, `clearSession()`. All five pages (login, dashboard, workstation, communication, mo-risk) updated.
+- **KI-010** | Metadata: `frontend/src/app/layout.js` title updated to `"SGB Operations Simulator | Niramay Skillomentum"`
+- **KI-014** | UX: Replaced all `alert()` and `window.alert()` calls in workstation page with `react-hot-toast` notifications (`react-hot-toast` dependency added)
+- **KP-005** | Performance: Replaced `JSON.stringify(updatedTrade) !== JSON.stringify(selectedTrade)` deep-compare in workstation `useEffect` with targeted field comparison on `currentStatus` and `pendingAmendments`
+
+### Added
+- `.env.example` — template file documenting all required environment variables with no real secrets
 
 ---
 
 ## [AI Knowledge Base Initialized] — 2026-06-26
 
 ### Added
-- Full AI knowledge base documentation initialized for the first time:
-  - `PROJECT_OVERVIEW.md`
-  - `ARCHITECTURE.md`
-  - `DATABASE.md`
-  - `API.md`
-  - `BUSINESS_RULES.md`
-  - `CURRENT_PROGRESS.md`
-  - `DECISIONS.md`
-  - `KNOWN_ISSUES.md`
-  - `TODO.md`
-  - `ROADMAP.md`
-  - `CHANGELOG.md`
-  - `SECURITY.md`
-  - `PERFORMANCE.md`
-  - `CODING_STANDARDS.md`
-  - `UI_GUIDELINES.md`
-  - `COMPONENT_GUIDELINES.md`
-  - `DEPLOYMENT.md`
-  - `TESTING.md`
+Full `ai/` documentation directory created with 18 markdown files covering architecture, API, business rules, database schema, coding standards, deployment, security, testing, performance, decisions, and roadmap.
 
 ---
 
 ## [Prior History — Reconstructed from Source]
 
-### Backend
-- Express server with Socket.io, MongoDB Atlas, JWT authentication
-- Queue Composer with graduated exponential decay DB/generated allocation
-- Trade Generator V2 with desk-specific truths (MO, Confirmation, Settlement) and XML audit trails
-- Full trade lifecycle engine (MO → Confirmation → Settlement)
-- Amendment engine (extract, attach, apply amendments)
-- CPTY AI pipeline (Gemini → Cerebras → offline fallback)
-- FO AI pipeline for internal channel responses
-- FO Internal Channel (separate from CPTY email threads)
-- Agenda job scheduler integration
-- 3-second background reply processors (CPTY, FO, FO internal)
-- 2-second trade cache refresh
-- Truth Engine for mismatch detection (MO and Confirmation levels)
-- Conversation Engine (DB-backed email threads)
-- Audit Engine (DB-backed audit logs + XML audit on trade)
-- Scoring Engine (points and penalties)
-- Age Calculator
-- Simulation Clock
+### Backend (Node.js + Express + MongoDB)
+- Express v5 server bootstrapped with Socket.io v4, JWT auth, bcrypt password hashing
+- MongoDB Atlas connection with memory-only fallback mode
+- **Queue Composer V2** — `QueueComposer` class with graduated exponential-decay DB/generated allocation (`20 * (1 - e^(-0.003 * pool))`)
+- **Trade Generator V2** — desk-specific truths (mo, confirmation, settlement, universal), three-scenario truth distribution (40% clean / 30% FO error / 30% CPTY error), XML audit trail generation
+- **Trade Lifecycle Engine** — `LifecycleEngine` class with `transitions.js` state machine; all MO / Confirmation / Settlement statuses and valid transitions
+- **Amendment Engine** — extract amendments from AI responses, attach to trade, apply on accept
+- **Truth Engine** — `getMismatchFields()` for universal comparison, `getConfirmationMismatches()` for CPTY level
+- **CPTY AI Pipeline** — `cptyAI.js` → `llmService.js` (Gemini → Cerebras) → `offlineResponseEngine.js`
+- **FO AI Pipeline** — `foAI.js` → `llmService.js` → offline fallback
+- **FO Internal Channel** — `FOCommunication` model, separate from CPTY email threads
+- **Conversation Engine** — `Conversation` model, CPTY/FO thread CRUD
+- **Audit Engine** — `AuditLog` model, fire-and-forget logging, XML content storage
+- **Scoring Engine** — points and penalties per action in `UserScore` collection
+- **Age Calculator** — desk-specific trade age calculation
+- **Simulation Clock** — maps real session elapsed time to 9 AM–6 PM trading day
+- **Agenda** job scheduler for periodic/scheduled background tasks
+- **Background processors** — three `setInterval(3s)` loops for CPTY, FO, and FO internal replies
+- **Trade cache** — `setInterval(2s)` rebuilding `_cachedTrades` for fast reply processing
+- Session management — `Queue` model with `isActive`, `sessionExpiry`, `lastActivity`
 
-### Frontend (Next.js 16 / React 19)
-- Login/Register page
-- Dashboard (desk selector)
-- Workstation (trade queue table, action panel, audit popup, truth viewer, CSV export)
-- Communication page (full email-style mailbox with inbox/FO channel, compose, reply)
-- MO Risk / Termsheet viewer
-- Trade detail page (legacy)
-- Session timer (client-side countdown using sessionStart/sessionExpiry)
-- Simulation clock (client-side calculation, no backend clock dependency)
+### Frontend (Next.js 16 + React 19)
+- Login/Register page with JWT-based auth
+- Dashboard — desk selector
+- Workstation — trade queue table, action panel, audit popup (XML + structured), truth viewer, CSV export, session timer, simulation clock
+- Communication — full email mailbox with CPTY inbox, FO internal channel, compose, reply
+- MO Risk / Termsheet reference viewer
 - Socket.io real-time trade and email notifications
-- Background polling fallback (15s)
-- Webpack mode forced (Turbopack disabled for Windows compatibility)
+- Background 15s polling fallback for queue refresh
+- Webpack mode forced (`next dev --webpack`) — Turbopack disabled for Windows compatibility
+- `react-hot-toast` for non-blocking notifications
 
 ### Infrastructure
-- Docker support (backend + frontend Dockerfiles)
-- docker-compose configuration
-- MongoDB Atlas connection with memory-only fallback
+- Docker — `Dockerfile` (backend) and `frontend/Dockerfile`
+- `docker-compose.yml` — orchestrates both services
+- MongoDB Atlas with SSL/TLS replica set connection
+ file_path: /workspace/ilabs1/ai/CHANGELOG.md

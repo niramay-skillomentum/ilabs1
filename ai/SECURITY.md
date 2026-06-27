@@ -1,99 +1,165 @@
-# Security
+content: # Security
+
+> Last updated: 2026-06-27
+
+---
 
 ## Authentication
 
-### JWT Authentication
-- Algorithm: HS256
-- Secret: `JWT_SECRET` env var (fallback: `sgb_ops_simulator_fallback_secret`)
-- Token lifetime: **3 hours** (matches session duration)
-- Token payload: `{ userId, fullName }`
-- Token delivery: HTTP response body + `auth_token` cookie
+### JWT
+
+- **Algorithm**: HS256
+- **Secret**: `JWT_SECRET` env var — **no fallback**. Server exits with `FATAL` at startup if unset.
+- **Token lifetime**: 3 hours (matches session duration)
+- **Payload**: `{ userId, fullName }`
+- **Delivery**: HTTP response body JSON + `auth_token` HttpOnly cookie
 
 ### Cookie Settings
-```
-auth_token=<jwt>; Path=/; Max-Age=10800; SameSite=Lax
-```
-- **Not HttpOnly** — token is accessible from JS (used by `js-cookie` and `sessionStorage`)
-- **No Secure flag** — only HTTP in development; must add in production
 
-### Auth Middleware (`src/middleware/auth.js`)
+```
+auth_token=<JWT>; Path=/; Max-Age=10800; SameSite=Lax; HttpOnly
+```
+
+- `HttpOnly` ✅ — cookie is **not** accessible from JavaScript
+- `SameSite=Lax` ✅ — protects against CSRF for cross-site navigations
+- `Secure` ❌ — not set in development; **must add in production** (HTTPS only)
+- Frontend reads token from `sessionStorage` exclusively (set via `saveSession()` in `auth.js`)
+
+### Auth Middleware — `src/middleware/auth.js`
+
 Token resolution order:
 1. `Authorization: Bearer <token>` header
 2. `auth_token` cookie (fallback)
 
 Returns:
-- `401` — no token
-- `403` — invalid/expired token
+- `401` — no token present
+- `403` — token invalid or expired (`JsonWebTokenError`, `TokenExpiredError`)
 
 ---
 
 ## Authorization
 
 - Every protected route uses `authenticateToken` middleware
-- Server re-fetches trade from DB with `assignedTo: userId` check — client cannot spoof trade ownership
-- Session integrity enforced server-side: action fails if trade not in user's active queue
-- No role-based access control (RBAC) yet — all authenticated users have the same access level
+- Backend **always re-fetches the trade from DB** with ownership check (`{ tradeRef, assignedTo: req.user.userId }`) — client cannot spoof trade ownership
+- No role-based access control (RBAC) exists currently — all authenticated users have identical access
 
 ---
 
 ## Password Security
 
-- Passwords hashed with **bcryptjs** (10 rounds salt)
+- Hashed with **bcryptjs**, 10 salt rounds
 - Passwords never stored in plaintext
-- Login uses `bcrypt.compare()` — constant-time comparison
+- Login uses `bcrypt.compare()` (constant-time, resistant to timing attacks)
+- No password complexity requirements enforced yet
+
+---
+
+## Rate Limiting
+
+Implemented via `express-rate-limit` v8.5.2:
+
+```js
+// Applied to /api/auth/register and /api/auth/login
+windowMs: 15 * 60 * 1000  // 15 minutes
+limit: 15                   // 15 requests per window per IP
+```
+
+Returns `429 Too Many Requests` when exceeded.
+
+---
+
+## CORS
+
+**Socket.io CORS**:
+```js
+cors: {
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+  credentials: true
+}
+```
+
+Configured via `ALLOWED_ORIGINS` env var (comma-separated). Defaults to `http://localhost:3000`.
+
+**Express CORS**: Not currently configured — Express does not set CORS headers. This is acceptable because the frontend proxies all requests through Next.js rewrites (same-origin from browser perspective).
 
 ---
 
 ## Input Validation
 
-- Email normalized to lowercase on register/login
-- Missing fields return `400` errors (register: fullName, email, password; login: email, password)
-- Action comment validated server-side (400 if empty)
-- Desk parameter validated against whitelist: `["MO", "CONFIRMATION", "SETTLEMENT"]`
-- Trade ownership verified before any action
+| Input | Validation |
+|-------|-----------|
+| Register fields | `fullName`, `email`, `password` required; returns 400 if missing |
+| Login fields | `email`, `password` required |
+| Email normalization | `email.toLowerCase()` on register and login |
+| Trade action comment | Server-side required check; 400 if empty or missing |
+| Desk parameter | Whitelisted against `["MO", "CONFIRMATION", "SETTLEMENT"]` |
+| Trade ownership | `trade.assignedTo === req.user.userId` enforced on every action |
+| Email body | Stored as-is — no HTML sanitization yet (XSS risk in email rendering) |
 
 ---
 
-## Known Security Gaps (to address)
+## Environment Variables Security
 
-| Issue | Severity | Description |
-|-------|---------|-------------|
-| No rate limiting | High | Auth endpoints (`/register`, `/login`) have no rate limit → brute force possible |
-| Credentials in `.env` not gitignored properly | High | `.env` contains live MongoDB URI, API keys — must be in `.gitignore` |
-| No HttpOnly cookie | Medium | `auth_token` cookie readable by JS — XSS risk |
-| No Secure cookie flag | Medium | Cookie transmitted over HTTP — should be HTTPS-only in prod |
-| JWT secret fallback | Low | Has a hardcoded fallback secret in `auth.js` — must remove for production |
-| Socket.io CORS `*` | Low | `origin: "*"` in socketEngine — should be locked down to known origins in prod |
-| No input sanitization | Low | User message bodies stored as-is — potential XSS in email rendering |
-| Legacy `uiRoutes.js` | Low | Unauthenticated routes still registered (no `authenticateToken`) |
+| Variable | Sensitivity | Notes |
+|----------|------------|-------|
+| `MONGO_URI` | 🔴 Critical | Contains MongoDB Atlas credentials — never commit |
+| `JWT_SECRET` | 🔴 Critical | Long, random string required; server refuses to start without it |
+| `GEMINI_API_KEY` | 🔴 High | Google AI API key — never commit |
+| `CEREBRAS_API_KEY` | 🔴 High | Cerebras SDK key — never commit |
+| `GROQ_API_KEY` | 🟡 Medium | Optional; not in active provider chain |
+| `ALLOWED_ORIGINS` | 🟢 Low | Comma-separated frontend origins |
+| `PORT` | 🟢 Low | Backend server port (default 3002) |
 
----
+Frontend-specific (in `frontend/.env.local`):
 
-## Environment Variables
+| Variable | Sensitivity | Notes |
+|----------|------------|-------|
+| `NEXT_PUBLIC_BACKEND_URL` | 🟢 Low | Public — safe to expose; used in browser-side socket connection |
+| `BACKEND_URL` | 🟢 Low | Server-side only (used in Next.js rewrites config) |
 
-| Variable | Purpose | Notes |
-|----------|---------|-------|
-| `MONGO_URI` | MongoDB Atlas connection string | Contains credentials — never commit |
-| `JWT_SECRET` | JWT signing secret | Use a strong, random value in prod |
-| `GEMINI_API_KEY` | Google Gemini AI key | Never commit |
-| `CEREBRAS_API_KEY` | Cerebras AI key | Never commit |
-| `GROQ_API_KEY` | Groq AI key (commented out) | Never commit |
-| `DATABASE_URL` | PostgreSQL URL (legacy, unused) | Should be removed |
-| `PORT` | Backend server port (default: 3002) | Optional |
-
----
-
-## Secrets Management
-
-- All secrets in `.env` at repo root
-- `.gitignore` should exclude `.env` — verify this is enforced
-- Production: use environment-level secrets injection (Docker secrets, cloud env vars)
-- Frontend: `NEXT_PUBLIC_BACKEND_URL` is public (safe to expose); `BACKEND_URL` is server-side only
+**`.env`** should be in `.gitignore`. **`.env.example`** at the repo root provides a safe template with no real credentials.
 
 ---
 
 ## Data Privacy
 
-- User email is used as `userId` throughout — exposed in URL query params on frontend (`?userId=user@email.com`)
-- This means emails are visible in browser history and logs — consider using opaque IDs in a future revision
-- Trade data contains realistic-looking but synthetic financial data — no PII
+| Issue | Status | Detail |
+|-------|--------|--------|
+| Email in URL params | ✅ Fixed | Email was previously exposed as `?userId=user@email.com` in URL; now stored in `sessionStorage` via `auth.js` |
+| Email as userId | 🟡 Acceptable | `user.email` is used as primary identifier throughout; not exposed in URLs now |
+| Trade data | 🟢 Safe | All trade data is synthetic; no real PII |
+| Audit logs | 🟢 Safe | Contain userId (email) + actions — stored in private DB only |
+
+---
+
+## Security Issues Status
+
+| ID | Issue | Severity | Status |
+|----|-------|---------|--------|
+| KI-001 | No rate limiting on auth | High | ✅ Fixed — `express-rate-limit` added |
+| KI-002 | Email in URL query params | High | ✅ Fixed — `auth.js` module, sessionStorage |
+| KI-003 | JWT hardcoded fallback secret | High | ✅ Fixed — fatal error if `JWT_SECRET` unset |
+| KI-004 | `auth_token` not HttpOnly | Medium | ✅ Fixed — `HttpOnly` flag added |
+| KI-005 | Socket.io CORS `*` | Medium | ✅ Fixed — `ALLOWED_ORIGINS` env var |
+| KI-006 | Legacy `uiRoutes.js` unauthenticated | Medium | ✅ Fixed — file deleted |
+| — | Email body XSS | Low | ❌ Open — user messages stored/rendered as-is |
+| — | No `Secure` cookie flag | Low | ❌ Open — needed for HTTPS in production |
+| — | No RBAC | Low | ❌ Open — all users have equal access |
+| — | No input sanitization on email bodies | Low | ❌ Open — potential XSS in message rendering |
+
+---
+
+## Production Security Checklist
+
+Before deploying publicly:
+
+- [ ] Set `NODE_ENV=production`
+- [ ] Configure HTTPS (TLS termination via nginx or cloud load balancer)
+- [ ] Add `Secure` flag to auth cookie in `authRoutes.js`
+- [ ] Set `ALLOWED_ORIGINS` to production frontend URL
+- [ ] Rotate `JWT_SECRET` to a cryptographically random 64-char+ string
+- [ ] Sanitize email message bodies before rendering (DOMPurify or equivalent)
+- [ ] Verify `.env` is in `.gitignore` and not in any Docker layer
+- [ ] Review audit logs to ensure no secrets are being logged
+- [ ] Consider opaque UUID-based user IDs instead of email as `userId`
+ file_path: /workspace/ilabs1/ai/SECURITY.md
