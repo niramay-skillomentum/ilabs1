@@ -280,13 +280,10 @@ function WorkstationComponent() {
     
     const trail = data.trail || data;
     const auditArray = Array.isArray(trail) ? trail : [];
-    const hasManualEntries = auditArray.some(a => a.action !== "SYSTEM_GENERATED");
-
-    if (!hasManualEntries && data.xmlAudit) {
-      setAuditData({ xml: data.xmlAudit, trail: [] });
-    } else {
-      setAuditData({ xml: null, trail: auditArray.filter(a => a.action !== "SYSTEM_GENERATED") });
-    }
+    setAuditData({ 
+      xml: data.xmlAudit || null, 
+      trail: auditArray.filter(a => a.action !== "SYSTEM_GENERATED") 
+    });
     setPopupState({ type: "audit" });
   };
 
@@ -518,9 +515,10 @@ function WorkstationComponent() {
         <div className="popup" style={{display: 'block', width: '550px'}}>
           <h3>{popupState.type === "truth" ? "Underlying Truths (Testing Only)" : "Audit Trail"}</h3>
           <div id="auditContent">
-            {auditData.xml ? (
-              <pre className="xml-section">{auditData.xml}</pre>
-            ) : auditData.trail.length > 0 ? (
+            {auditData.xml && (
+              <pre className="xml-section" style={{marginBottom: "15px"}}>{auditData.xml}</pre>
+            )}
+            {auditData.trail.length > 0 ? (
               auditData.trail.map((a, i) => (
                 <div key={i} className={`audit-card ${a.isAutomated ? "system" : ""}`}>
                   <div className="audit-header">
@@ -532,7 +530,7 @@ function WorkstationComponent() {
                 </div>
               ))
             ) : (
-              <p style={{color:'#94a3b8'}}>No audit entries yet.</p>
+              !auditData.xml && <p style={{color:'#94a3b8'}}>No audit entries yet.</p>
             )}
           </div>
           <button onClick={() => setPopupState({type: null})}>Close</button>
