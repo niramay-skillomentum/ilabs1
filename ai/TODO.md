@@ -18,6 +18,7 @@ content: # TODO
 - [x] **KI-013** Delete `scratch.js` from root
 - [x] **KI-014** Replace all `alert()` / `window.alert()` with `react-hot-toast`
 - [x] **KP-005** Replace `JSON.stringify` deep-compare in `selectedTrade` sync with targeted field comparison
+- [x] **KI-015** Decompose `communication/page.js` (850 lines) into sub-components
 
 ---
 
@@ -50,9 +51,6 @@ content: # TODO
 
 ## 🟢 Improvements (Code Quality / UX)
 
-- [ ] **KI-015** Decompose `communication/page.js` (850 lines) into sub-components
-  - Extract: `InboxList`, `MessageThread`, `ComposeModal`, `ReplyModal`, `FolderNav`
-
 - [ ] **KI-018** Consolidate duplicate route mount (`/api/conversation` + `/api/conversations`)
   - *File*: `server.js`
 
@@ -84,7 +82,7 @@ content: # TODO
 - [ ] Admin: manually seed/generate trades to DB pool
 
 ### User Experience
-- [ ] Loading spinners on all async operations (queue generation, action submission)
+- [x] Loading spinners on all async operations (queue generation, action submission)
 - [ ] Trade status history / timeline in workstation popup
 - [ ] Inline ops glossary — hover tooltips on trade fields and actions
 - [ ] Mobile-responsive layout for workstation and communication pages

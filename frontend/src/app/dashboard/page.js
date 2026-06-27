@@ -77,6 +77,8 @@ function DashboardComponent() {
           <button onClick={() => goDesk('MO')}>MO Desk</button>
           <button onClick={() => goDesk('CONFIRMATION')}>Confirmation Desk</button>
           <button onClick={() => goDesk('SETTLEMENT')}>Settlement Desk</button>
+          <button onClick={() => goDesk('TLM')}>TLM</button>
+          <button onClick={() => goDesk('REPORTING')}>Reporting</button>
       </div>
     </>
   );

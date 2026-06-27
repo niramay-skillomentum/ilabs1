@@ -49,12 +49,12 @@ content: # Roadmap
 **Milestone**: The platform feels production-grade for real training cohorts.
 
 ### To Build
-- [ ] Loading states on all async operations (queue generation, action submission, email send)
+- [x] Loading states on all async operations (queue generation, action submission, email send)
 - [ ] Trade status history / timeline in workstation action panel
 - [ ] Inline ops glossary — hover tooltips on trade fields, actions, and statuses
 - [ ] Mobile-responsive workstation layout
 - [ ] Dark mode for workstation and communication pages
-- [ ] Decompose `communication/page.js` into sub-components (KI-015)
+- [x] Decompose `communication/page.js` into sub-components (KI-015)
 - [ ] Error boundary components for graceful UI error handling
 
 ---

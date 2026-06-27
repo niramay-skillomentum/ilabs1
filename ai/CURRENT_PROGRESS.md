@@ -77,7 +77,8 @@ content: # Current Progress
 - [ ] **KI-007** Pending CPTY/FO replies lost on server restart — `pendingReplies` is in-memory only
 - [ ] **KI-011** Frontend component tests — `frontend/__tests__/` directory exists but is empty
 - [ ] **KI-012** Backend integration tests — only 1 auth test exists; queue/trade/conversation routes untested
-- [ ] **KI-015** `communication/page.js` decomposition — 850 lines, single monolithic component
+- [x] **KI-015** `communication/page.js` decomposition — 850 lines, single monolithic component
+- [ ] **KI-017** Lack of sanitization on email content payloads
 
 ---
 
@@ -94,7 +95,7 @@ content: # Current Progress
 - [ ] Admin: manually seed/generate trades to DB pool
 
 ### User Experience
-- [ ] Loading states on all async operations
+- [x] Loading states on all async operations
 - [ ] Trade status history / timeline view
 - [ ] Inline help / ops glossary tooltips
 - [ ] Mobile-responsive workstation layout

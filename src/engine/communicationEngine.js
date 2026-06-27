@@ -300,24 +300,49 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
                  trade.foResponseReceived = true;
                  if (trade.currentStatus === "PENDING_FO_RESPONSE") {
                      trade.currentStatus = "MO_PENDING";
+                 } else if (trade.currentStatus === "LIASING_WITH_FO") {
+                     trade.currentStatus = "CONFIRMATION_BREAK";
+                     if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_US";
                  }
              } else if (breakCategories.includes(foResponse.category)) {
                  trade.foResponseReceived = true;
+                 if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_CPTY";
+                 
+                 if (trade.currentStatus === "LIASING_WITH_FO" || trade.currentStatus === "CONFIRMATION_BREAK") {
+                     trade.currentStatus = "CONFIRMATION_PENDING";
+                 }
              }
 
-             if (trade.truths?.mo && trade.booking) {
-               const mismatches = truthEngine.getMismatchFields(trade, "mo");
+             // Determine which truth to use for mismatches
+             const isConfirmationDesk = trade.currentStatus === "CONFIRMATION_PENDING" || trade.currentStatus === "CONFIRMATION_BREAK" || trade.currentStatus === "LIASING_WITH_FO";
+             const deskForMismatches = isConfirmationDesk ? "universal" : "mo";
+             
+             const truthData = truthEngine.getDeskTruth(trade, deskForMismatches);
+             if (truthData && trade.booking) {
+               const mismatches = truthEngine.getMismatchFields(trade, deskForMismatches);
                const amendmentsToAttach = [];
                for (const field of mismatches) {
-                 const amendment = amendmentEngine.createAmendmentFromInput(
+                 const amendment = amendmentEngine.createAmendment(
                    trade,
                    field,
-                   trade.truths.mo[field]
+                   truthData[field],
+                   isConfirmationDesk ? "CONFIRMATION" : "MO",
+                   "FO"
                  );
-                 if (amendment) amendmentsToAttach.push(amendment);
+                 if (amendment) {
+                   // If FO supports CPTY at Confirmation, FO auto-accepts
+                   if (isConfirmationDesk && breakCategories.includes(foResponse.category)) {
+                     amendment.status = "ACCEPTED";
+                   }
+                   amendmentsToAttach.push(amendment);
+                 }
                }
                if (amendmentsToAttach.length > 0) {
                  amendmentEngine.attachAmendments(trade, amendmentsToAttach);
+                 // Auto-apply if FO supports CPTY at Confirmation
+                 if (isConfirmationDesk && breakCategories.includes(foResponse.category)) {
+                   amendmentEngine.applyAllAccepted(trade, "SYSTEM_FO");
+                 }
                }
              }
 

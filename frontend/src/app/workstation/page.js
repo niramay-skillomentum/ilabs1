@@ -24,6 +24,11 @@ function WorkstationComponent() {
   const [emailText, setEmailText] = useState("");
   const [auditData, setAuditData] = useState({ xml: null, trail: [] });
 
+  const [isGeneratingQueue, setIsGeneratingQueue] = useState(false);
+  const [isRefreshingQueue, setIsRefreshingQueue] = useState(false);
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   const alert1hrShown = useRef(false);
   const alert10minShown = useRef(false);
   const socketRef = useRef(null);
@@ -181,10 +186,12 @@ function WorkstationComponent() {
   };
 
   const generateQueue = async () => {
+    setIsGeneratingQueue(true);
     const res = await fetch("/api/queue/generate", {
       method: "POST", headers: authHeaders(), body: JSON.stringify({ desk })
     });
     const data = await res.json();
+    setIsGeneratingQueue(false);
     if (!data.success) return toast.error(data.error || "Complete Your Current Trades First");
     setQueue(data.trades || []);
     if (data.sessionExpiry) {
@@ -194,8 +201,10 @@ function WorkstationComponent() {
   };
 
   const refreshQueue = async () => {
+    setIsRefreshingQueue(true);
     const res = await fetch("/api/queue/my?desk=" + encodeURIComponent(desk), { headers: authHeaders() });
     const data = await res.json();
+    setIsRefreshingQueue(false);
     if (!data.success) return toast.error(data.error || "Unable to refresh queue");
     setQueue(data.trades || []);
     if (data.sessionExpiry) {
@@ -244,11 +253,13 @@ function WorkstationComponent() {
 
   const submitAction = async () => {
     if (!comment || comment.trim() === "") console.warn("No comment provided - will be penalized in scoring");
+    setIsSubmittingAction(true);
     const res = await fetch("/api/trade/action", {
       method: "POST", headers: authHeaders(),
       body: JSON.stringify({ trade: selectedTrade, action: popupState.action, comment })
     });
     const data = await res.json();
+    setIsSubmittingAction(false);
     if (!data.success) return toast.error(data.error || "Action failed");
     setQueue(data.trades || []);
     setPopupState({ type: null });
@@ -318,12 +329,14 @@ function WorkstationComponent() {
     if (!selectedTrade) return toast.error("Select trade first");
     if (!emailText || emailText.trim() === "") return toast.error("Email content required");
     
+    setIsSendingEmail(true);
     if (popupState.action === "CONFIRM_SEND_TO_CPTY") {
       const res = await fetch("/api/trade/action", {
         method: "POST", headers: authHeaders(),
         body: JSON.stringify({ trade: selectedTrade, action: popupState.action, comment: emailText })
       });
       const data = await res.json();
+      setIsSendingEmail(false);
       if (!data.success) return toast.error(data.error || "Email send failed");
       toast.success("Email sent successfully");
       setPopupState({ type: null });
@@ -337,6 +350,7 @@ function WorkstationComponent() {
       body: JSON.stringify({ tradeRef: selectedTrade.tradeRef, sender: userId, message: emailText, desk })
     });
     const data = await res.json();
+    setIsSendingEmail(false);
     if (!data.success) return toast.error(data.error || "Email send failed");
     toast.success("Email sent successfully");
     setPopupState({ type: null });
@@ -405,14 +419,18 @@ function WorkstationComponent() {
           {desk === "MO" && <button className="btn" onClick={openTermsheet} style={{background:"#f59e0b", color:"white", marginRight: "10px"}}>📄 View Termsheet</button>}
           <button className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
           <span className="session-timer">{sessionTimerStr}</span>
-          <button className="btn warning" onClick={refreshQueue}>Refresh</button>
+          <button className="btn warning" onClick={refreshQueue} disabled={isRefreshingQueue}>
+            {isRefreshingQueue ? "Refreshing..." : "Refresh"}
+          </button>
           <span className="clock">{simTime}</span>
           <button className="btn secondary" onClick={logout}>Logoff</button>
         </div>
       </div>
 
       <div className="container">
-        <button className="btn warning" onClick={generateQueue}>Generate Queue</button>
+        <button className="btn warning" onClick={generateQueue} disabled={isGeneratingQueue}>
+          {isGeneratingQueue ? "Generating..." : "Generate Queue"}
+        </button>
         
         <div className="table-container">
           <table>
@@ -494,8 +512,10 @@ function WorkstationComponent() {
           <div style={{color: '#475569', fontSize: '14px', marginBottom: '15px'}}>Are you sure you want to proceed with this action?</div>
           <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add comment (recommended for audit & scoring)"></textarea>
           <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
-            <button className="btn secondary" onClick={() => setPopupState({type: null})}>Cancel</button>
-            <button className="btn primary" onClick={submitAction}>Submit</button>
+            <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSubmittingAction}>Cancel</button>
+            <button className="btn primary" onClick={submitAction} disabled={isSubmittingAction}>
+              {isSubmittingAction ? "Submitting..." : "Submit"}
+            </button>
           </div>
         </div>
       )}
@@ -505,8 +525,10 @@ function WorkstationComponent() {
           <h3 style={{marginBottom: '15px'}}>Send Email</h3>
           <textarea value={emailText} onChange={e => setEmailText(e.target.value)} placeholder="Type your email body here..."></textarea>
           <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
-            <button className="btn secondary" onClick={() => setPopupState({type: null})}>Cancel</button>
-            <button className="btn primary" onClick={sendEmail}>Send</button>
+            <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSendingEmail}>Cancel</button>
+            <button className="btn primary" onClick={sendEmail} disabled={isSendingEmail}>
+              {isSendingEmail ? "Sending..." : "Send"}
+            </button>
           </div>
         </div>
       )}

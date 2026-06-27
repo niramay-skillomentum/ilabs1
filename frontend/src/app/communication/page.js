@@ -6,6 +6,12 @@ import { loadUserId, getToken, authHeaders } from "../../lib/auth";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 import "./page.css";
+import FolderNav from "./components/FolderNav";
+import InboxList from "./components/InboxList";
+import MessageThread from "./components/MessageThread";
+import ComposeModal from "./components/ComposeModal";
+import ReplyModal from "./components/ReplyModal";
+import { formatDate, formatDateFull, formatAmount, buildSubject, getSenderInfo, getRecipientLabel, getStatusBadge } from "./components/utils";
 
 function CommunicationComponent() {
   const router = useRouter();
@@ -39,6 +45,11 @@ function CommunicationComponent() {
   const [composeBody, setComposeBody] = useState("");
   const [composeTrades, setComposeTrades] = useState([]);
 
+  // Loading states
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [isSendingCompose, setIsSendingCompose] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+
   // Refs for latest values in callbacks
   const socketRef = useRef(null);
   const inboxDataRef = useRef([]);
@@ -53,50 +64,7 @@ function CommunicationComponent() {
   // ========================================
   // FORMATTERS (identical to original)
   // ========================================
-  const formatDate = (ts) => new Date(ts).toLocaleString("en-GB", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
-  const formatDateFull = (ts) => new Date(ts).toLocaleString("en-GB", { weekday:"long", day:"2-digit", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit" });
-  const formatAmount = (amount) => Number(amount).toLocaleString();
-  
-  const buildSubject = (trade) => {
-    if (!trade) return "";
-    const vd = new Date(trade.valueDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short" });
-    return `${trade.tradeRef} | ${trade.currency} ${formatAmount(trade.amount)} | ${vd}`;
-  };
-
-  const getSenderInfo = useCallback((sender, trade) => {
-    if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#c4314b" };
-    if (sender === "COUNTERPARTY" || sender === "CPTY") {
-      const cpName = trade ? trade.counterparty : "Counterparty";
-      return { name: cpName + " Operations", email: `operations@${(cpName||"cpty").toLowerCase()}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#107c10" };
-    }
-    return { name: sender, email: sender, initials: (sender||"").substring(0,2).toUpperCase(), color: "#0f6cbd" };
-  }, []);
-
-  const getRecipientLabel = useCallback((sender, trade, dsk, ch, uid, msgMoUser) => {
-    const targetUser = msgMoUser || uid;
-    if (sender !== "FO" && sender !== "CPTY" && sender !== "COUNTERPARTY") {
-      if (trade) {
-        if (trade.currentStatus && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE" || trade.currentStatus === "LIASING_WITH_FO")) {
-          return "Front Office Trading Desk <fo.trading@sgb.com>";
-        }
-        return trade.counterparty + " Operations <operations@" + trade.counterparty.toLowerCase() + ".com>";
-      }
-      if (ch === "FO") return "Front Office Trading Desk <fo.trading@sgb.com>";
-      return dsk + " Desk";
-    }
-    return targetUser + " <" + targetUser + ">";
-  }, []);
-
-  const getStatusBadge = useCallback((trade) => {
-    const status = trade.currentStatus;
-    const isFoPendingState = status === "PENDING_FO_RESPONSE" || status === "LIASING_WITH_FO";
-    if (trade.conversation && trade.conversation.status === "RESOLVED") return <span className="status-badge badge-resolved">Resolved</span>;
-    if (isFoPendingState && trade.foResponseReceived) return <span className="status-badge badge-responded">FO Responded</span>;
-    if (status === "MO_PENDING" && trade.foResponseReceived) return <span className="status-badge badge-responded">FO Responded (Clean)</span>;
-    if (isFoPendingState && !trade.foResponseReceived) return <span className="status-badge badge-awaiting">Awaiting FO</span>;
-    if (status === "LIASING_WITH_CPTY") return <span className="status-badge badge-awaiting">Awaiting CPTY</span>;
-    return null;
-  }, []);
+  // Imported from ./components/utils.js
 
   // ========================================
   // MAP CONVERSATIONS (identical to original)
@@ -382,6 +350,7 @@ function CommunicationComponent() {
 
   const resolveConversation = () => {
     if (!selectedTradeRef) return toast.error("No trade selected");
+    setIsResolving(true);
     fetch("/api/conversation/resolve", {
       method: "POST",
       headers: authHeaders(),
@@ -389,6 +358,7 @@ function CommunicationComponent() {
     })
     .then(res => res.json())
     .then(data => {
+      setIsResolving(false);
       if (!data.success) return toast.error(data.error || "Resolve failed");
       toast.success("✅ " + data.message);
       loadConversation(selectedTradeRef, channel, null, false);
@@ -407,12 +377,14 @@ function CommunicationComponent() {
   const sendReply = () => {
     if (!replyBody.trim()) return toast.error("Email content cannot be empty");
     if (!selectedTradeRef) return toast.error("No trade selected");
+    setIsSendingReply(true);
     const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk })
     }).then(() => {
+      setIsSendingReply(false);
       setReplyModalOpen(false);
       setReplyBody("");
       loadConversation(selectedTradeRef, channel, null, true);
@@ -486,11 +458,13 @@ function CommunicationComponent() {
     const composeAction = searchParams.get("composeAction");
 
     if (composeAction) {
+      setIsSendingCompose(true);
       fetch("/api/trade/action", {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({ trade: { tradeRef: composeTrade }, action: composeAction, comment: composeBody })
       }).then(() => {
+        setIsSendingCompose(false);
         setComposeModalOpen(false);
         setSelectedTradeRef(composeTrade);
         selectedTradeRefRef.current = composeTrade;
@@ -502,12 +476,14 @@ function CommunicationComponent() {
       return;
     }
 
+    setIsSendingCompose(true);
     const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ tradeRef: composeTrade, sender: userId, message: composeBody, desk })
     }).then(() => {
+      setIsSendingCompose(false);
       setComposeModalOpen(false);
       setSelectedTradeRef(composeTrade);
       selectedTradeRefRef.current = composeTrade;
@@ -547,7 +523,6 @@ function CommunicationComponent() {
 
   return (
     <div style={{fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", background:"#f3f2f1", color:"#323130", overflow:"hidden", height:"100vh"}}>
-
       {/* ========== HEADER ========== */}
       <div className="header">
         <div className="header-left">
@@ -564,279 +539,41 @@ function CommunicationComponent() {
 
       {/* ========== MAIN 3-PANEL LAYOUT ========== */}
       <div className="main">
+        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} />
+        
+        <InboxList
+          searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}
+          isLoading={isLoading} currentFolder={currentFolder} filteredInbox={filteredInbox}
+          userId={userId} formatDate={formatDate} getStatusBadge={getStatusBadge}
+          selectedTradeRef={selectedTradeRef} channel={channel} loadConversation={loadConversation}
+        />
 
-        {/* LEFT: FOLDER NAV */}
-        <div className="folder-nav">
-          {[
-            { key: "inbox", icon: "📥", label: "Inbox" },
-            { key: "group", icon: "👥", label: "Group Inbox" },
-          ].map(f => (
-            <div key={f.key} className={`folder-item ${currentFolder === f.key ? "active" : ""}`} onClick={() => switchFolder(f.key)}>
-              <span className="folder-icon">{f.icon}</span>
-              <span>{f.label}</span>
-            </div>
-          ))}
-          <div className="folder-divider" />
-          {[
-            { key: "sent", icon: "📤", label: "Sent" },
-            { key: "drafts", icon: "📝", label: "Drafts" },
-            { key: "deleted", icon: "🗑️", label: "Deleted Items" },
-          ].map(f => (
-            <div key={f.key} className={`folder-item ${currentFolder === f.key ? "active" : ""}`} onClick={() => switchFolder(f.key)}>
-              <span className="folder-icon">{f.icon}</span>
-              <span>{f.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* MIDDLE: EMAIL LIST */}
-        <div className="email-list-panel">
-          <div className="search-bar">
-            <div className="search-input-wrapper">
-              <span className="search-icon">🔍</span>
-              <input type="text" className="search-input" placeholder="Search mail (subject, sender, content...)"
-                value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-            </div>
-          </div>
-          <div className="email-list-toolbar">
-            <span className="toolbar-title">{folderTitle()}</span>
-          </div>
-          <div className="email-list">
-            {isLoading ? (
-              <div className="empty-state"><div className="empty-icon">⏳</div><div>Loading emails...</div></div>
-            ) : (currentFolder === "inbox" || currentFolder === "group") ? (
-              filteredInbox.length === 0 ? (
-                <div className="empty-state"><div className="empty-icon">📭</div><div>No emails in this folder</div></div>
-              ) : (
-                filteredInbox.map(item => {
-                  const senderInfo = (() => {
-                    if (item.lastMsg.sender === userId) return { name: "You" };
-                    if (item.lastMsg.sender === "FO") return { name: "Front Office" };
-                    if (item.lastMsg.sender === "COUNTERPARTY" || item.lastMsg.sender === "CPTY") return { name: (item.trade.counterparty || "Cpty") + " Ops" };
-                    return { name: item.lastMsg.sender };
-                  })();
-                  const time = formatDate(item.lastMsg.timestamp);
-                  const badge = getStatusBadge(item.trade);
-                  const preview = item.lastMsg.body.substring(0, 80).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
-                  const isUnread = item.lastMsg.sender !== userId;
-                  return (
-                    <div key={item.trade.tradeRef}
-                      className={`email-item ${selectedTradeRef === item.trade.tradeRef ? "selected" : ""} ${isUnread ? "unread" : ""}`}
-                      onClick={() => loadConversation(item.trade.tradeRef, channel, null, true)}>
-                      <div className="email-item-top">
-                        <span className="email-sender">{senderInfo.name}</span>
-                        <span className="email-time">{time}</span>
-                      </div>
-                      <div className="email-subject-row">
-                        <span className="email-subject">{item.subject}</span>
-                        {badge}
-                      </div>
-                      <div className="email-preview">{preview}</div>
-                    </div>
-                  );
-                })
-              )
-            ) : (
-              <div className="empty-state">
-                <div className="empty-icon">{currentFolder === "sent" ? "📤" : currentFolder === "drafts" ? "📝" : "🗑️"}</div>
-                <div>{currentFolder === "sent" ? "No sent items" : currentFolder === "drafts" ? "No drafts" : "No deleted items"}</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: READING PANE */}
-        <div className="reading-pane">
-          {!selectedTradeRef || !currentTrade ? (
-            <div className="reading-pane-empty">
-              <div className="rp-icon">✉</div>
-              <div className="rp-text">Select an email to read</div>
-            </div>
-          ) : (
-            <div style={{display:"flex", flexDirection:"column", height:"100%"}}>
-              {/* Subject Header */}
-              <div className="email-header">
-                <div className="email-header-subject">{buildSubject(currentTrade)}</div>
-                <div className="email-header-meta">
-                  <div className="meta-item"><span className="meta-label">Status:</span> {currentTrade.currentStatus || "N/A"}</div>
-                  <div className="meta-item"><span className="meta-label">Messages:</span> {currentMessages.length}</div>
-                  {currentTrade.counterparty && <div className="meta-item"><span className="meta-label">Counterparty:</span> {currentTrade.counterparty}</div>}
-                </div>
-              </div>
-
-              {/* Actions Bar */}
-              <div className="email-actions-bar">
-                <button className="btn-action primary" onClick={openReplyModal}>↩ Reply</button>
-                <button className="btn-action resolve" disabled={resolveState.disabled}
-                  onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
-                  {resolveState.text}
-                </button>
-                <span className="resolve-status">{resolveState.statusText}</span>
-              </div>
-
-              {/* Email Thread */}
-              <div className="email-thread">
-                {currentMessages.length === 0 ? (
-                  <div className="empty-state" style={{padding:"40px"}}><div className="empty-icon">💬</div><div>No messages yet</div></div>
-                ) : (
-                  currentMessages.map((msg, idx) => {
-                    const isLatest = idx === currentMessages.length - 1;
-                    const sender = getSenderInfo(msg.sender, currentTrade);
-                    let msgMoUser = userId;
-                    for (let i = idx; i >= 0; i--) {
-                      const pastMsg = currentMessages[i];
-                      if (pastMsg.sender !== "FO" && pastMsg.sender !== "CPTY" && pastMsg.sender !== "COUNTERPARTY") {
-                        msgMoUser = pastMsg.sender;
-                        break;
-                      }
-                    }
-                    const toLabel = getRecipientLabel(msg.sender, currentTrade, desk, channel, userId, msgMoUser);
-                    const snippet = msg.body.substring(0, 60).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
-                    const [collapsed, setCollapsed] = [!isLatest, null]; // Default collapsed state
-                    return (
-                      <ThreadEmail key={idx} msg={msg} sender={sender} toLabel={toLabel} isLatest={isLatest} snippet={snippet} formatDateFull={formatDateFull} />
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <MessageThread
+          selectedTradeRef={selectedTradeRef} currentTrade={currentTrade} buildSubject={buildSubject}
+          currentMessages={currentMessages} openReplyModal={openReplyModal} resolveState={resolveState}
+          resolveConversation={resolveConversation} getSenderInfo={getSenderInfo} userId={userId}
+          desk={desk} channel={channel} getRecipientLabel={getRecipientLabel} formatDateFull={formatDateFull}
+          isResolving={isResolving}
+        />
       </div>
 
-      {/* ========== REPLY MODAL ========== */}
-      {replyModalOpen && (
-        <>
-          <div className="modal-overlay" onClick={() => setReplyModalOpen(false)} />
-          <div className="compose-modal" style={{display:"flex"}}>
-            <div className="compose-titlebar">
-              <span className="compose-titlebar-text">↩ Reply — {currentTrade?.tradeRef}</span>
-              <button className="compose-close" onClick={() => setReplyModalOpen(false)}>✕</button>
-            </div>
-            <div className="compose-fields">
-              <div className="compose-field-row">
-                <span className="compose-label">From:</span>
-                <span className="compose-value-text">{userId} &lt;{getSenderInfo(userId, currentTrade).email}&gt;</span>
-              </div>
-              <div className="compose-field-row">
-                <span className="compose-label">To:</span>
-                <span className="compose-value-text">
-                  {(() => {
-                    const lastMsg = currentMessages.length ? currentMessages[currentMessages.length - 1] : null;
-                    if (lastMsg && (lastMsg.sender === "FO" || lastMsg.sender === "CPTY" || lastMsg.sender === "COUNTERPARTY")) {
-                      const s = getSenderInfo(lastMsg.sender, currentTrade);
-                      return `${s.name} <${s.email}>`;
-                    }
-                    return getRecipientLabel(userId, currentTrade, desk, channel, userId, null);
-                  })()}
-                </span>
-              </div>
-              <div className="compose-field-row">
-                <span className="compose-label">Subject:</span>
-                <input type="text" className="compose-value" readOnly value={"RE: " + buildSubject(currentTrade)} />
-              </div>
-            </div>
-            <div className="compose-body-area">
-              <textarea className="compose-textarea" placeholder="Type your reply here..."
-                value={replyBody} onChange={e => setReplyBody(e.target.value)} autoFocus />
-              {currentMessages.length > 0 && (
-                <div className="compose-quoted">
-                  <div className="quoted-header">— Previous messages —</div>
-                  {[...currentMessages].reverse().map((msg, i) => {
-                    const s = getSenderInfo(msg.sender, currentTrade);
-                    return (
-                      <div key={i} className="quoted-message">
-                        <span className="qm-from">{s.name}</span>
-                        <span className="qm-date">{formatDateFull(msg.timestamp)}</span>
-                        <div className="qm-body">{msg.body.replace(/<[^>]*>/g, "")}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <div className="compose-footer">
-              <button className="btn-send" onClick={sendReply}>Send</button>
-              <button className="btn-discard" onClick={() => setReplyModalOpen(false)}>Discard</button>
-            </div>
-          </div>
-        </>
-      )}
+      <ReplyModal
+        replyModalOpen={replyModalOpen} setReplyModalOpen={setReplyModalOpen} currentTrade={currentTrade}
+        userId={userId} getSenderInfo={getSenderInfo} currentMessages={currentMessages}
+        getRecipientLabel={getRecipientLabel} desk={desk} channel={channel} buildSubject={buildSubject}
+        replyBody={replyBody} setReplyBody={setReplyBody} formatDateFull={formatDateFull}
+        sendReply={sendReply} isSendingReply={isSendingReply}
+      />
 
-      {/* ========== COMPOSE MODAL ========== */}
-      {composeModalOpen && (
-        <>
-          <div className="modal-overlay" onClick={() => setComposeModalOpen(false)} />
-          <div className="compose-modal" style={{display:"flex"}}>
-            <div className="compose-titlebar">
-              <span className="compose-titlebar-text">✏️ New Email</span>
-              <button className="compose-close" onClick={() => setComposeModalOpen(false)}>✕</button>
-            </div>
-            <div className="compose-fields">
-              <div className="compose-field-row">
-                <span className="compose-label">From:</span>
-                <span className="compose-value-text">{userId} &lt;{getSenderInfo(userId, currentTrade).email}&gt;</span>
-              </div>
-              <div className="compose-field-row">
-                <span className="compose-label">To:</span>
-                <select className="compose-value" value={composeTo} disabled={composeToDisabled}
-                  onChange={e => handleComposeToChange(e.target.value)}>
-                  <option value="FO">Front Office Trading Desk &lt;fo.trading@sgb.com&gt;</option>
-                  <option value="COUNTERPARTY">Counterparty Operations</option>
-                </select>
-              </div>
-              <div className="compose-field-row">
-                <span className="compose-label">Trade:</span>
-                <select className="compose-value" value={composeTrade}
-                  onChange={e => handleComposeTradeChange(e.target.value)}>
-                  {composeTrades.map(t => (
-                    <option key={t.tradeRef} value={t.tradeRef}>
-                      {t.tradeRef} — {t.counterparty} — {t.currency} {formatAmount(t.amount)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="compose-field-row">
-                <span className="compose-label">Subject:</span>
-                <input type="text" className="compose-value" value={composeSubject}
-                  onChange={e => setComposeSubject(e.target.value)} placeholder="Enter subject..." />
-              </div>
-            </div>
-            <div className="compose-body-area">
-              <textarea className="compose-textarea" placeholder="Compose your email..."
-                value={composeBody} onChange={e => setComposeBody(e.target.value)} autoFocus />
-            </div>
-            <div className="compose-footer">
-              <button className="btn-send" onClick={sendCompose}>Send</button>
-              <button className="btn-discard" onClick={() => setComposeModalOpen(false)}>Discard</button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ========================================
-// Thread Email Sub-Component (handles collapse toggle)
-// ========================================
-function ThreadEmail({ msg, sender, toLabel, isLatest, snippet, formatDateFull }) {
-  const [collapsed, setCollapsed] = useState(!isLatest);
-  return (
-    <div className={`thread-email ${isLatest ? "latest" : ""} ${collapsed ? "collapsed" : ""}`}>
-      <div className="thread-email-header" onClick={() => setCollapsed(!collapsed)}>
-        <div className="thread-avatar" style={{background: sender.color}}>{sender.initials}</div>
-        <div className="thread-meta">
-          <div className="thread-from-row">
-            <span className="thread-sender">{sender.name}</span>
-            <span className="thread-date">{formatDateFull(msg.timestamp)}</span>
-          </div>
-          <div className="thread-to">To: {toLabel}</div>
-          {collapsed && <div className="thread-snippet">{snippet}...</div>}
-        </div>
-        <span className="collapse-arrow">▶</span>
-      </div>
-      <div className="thread-email-body" dangerouslySetInnerHTML={{__html: msg.body}} />
+      <ComposeModal
+        composeModalOpen={composeModalOpen} setComposeModalOpen={setComposeModalOpen} userId={userId}
+        getSenderInfo={getSenderInfo} currentTrade={currentTrade} composeTo={composeTo}
+        composeToDisabled={composeToDisabled} handleComposeToChange={handleComposeToChange}
+        composeTrade={composeTrade} handleComposeTradeChange={handleComposeTradeChange}
+        composeTrades={composeTrades} formatAmount={formatAmount} composeSubject={composeSubject}
+        setComposeSubject={setComposeSubject} composeBody={composeBody} setComposeBody={setComposeBody}
+        sendCompose={sendCompose} isSendingCompose={isSendingCompose}
+      />
     </div>
   );
 }
