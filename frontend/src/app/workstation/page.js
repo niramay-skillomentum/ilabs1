@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Cookies from "js-cookie";
 import { io } from "socket.io-client";
+import { loadUserId, getToken, authHeaders, clearSession } from "../../lib/auth";
+import toast from "react-hot-toast";
 
 function WorkstationComponent() {
   const router = useRouter();
@@ -27,23 +28,17 @@ function WorkstationComponent() {
   const alert10minShown = useRef(false);
   const socketRef = useRef(null);
 
-  const getToken = () => sessionStorage.getItem("auth_token") || Cookies.get("auth_token");
-  const authHeaders = () => ({
-    "Content-Type": "application/json",
-    "Authorization": "Bearer " + getToken()
-  });
-
   useEffect(() => {
-    const uid = searchParams.get("userId");
+    const uid = loadUserId();
     const dsk = searchParams.get("desk");
     
     if (!dsk) {
-      alert("Select desk first");
-      router.push(`/dashboard${uid ? `?userId=${encodeURIComponent(uid)}` : ""}`);
+      toast.error("Select desk first");
+      router.push("/dashboard");
       return;
     }
     if (!uid || !getToken()) {
-      alert("Session expired. Login again.");
+      toast.error("Session expired. Login again.");
       router.push("/");
       return;
     }
@@ -68,7 +63,7 @@ function WorkstationComponent() {
             if (diff > 0) {
               const hrs = Math.floor(diff / (1000 * 60 * 60));
               const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-              alert(`Resuming previous session — ${hrs}h ${mins}m remaining`);
+              toast.success(`Resuming previous session — ${hrs}h ${mins}m remaining`);
             }
           }
         }
@@ -79,9 +74,6 @@ function WorkstationComponent() {
     const socket = io(socketUrl, { auth: { token: getToken() } });
     socketRef.current = socket;
     socket.emit("join_desk", dsk);
-
-    // Clock is now calculated locally per-user using sessionStart
-    // socket.on("clock_tick", ... ) is no longer needed
 
     socket.on("trade_update", () => {
       refreshQueueSilent(dsk);
@@ -99,7 +91,7 @@ function WorkstationComponent() {
     const interval = setInterval(() => {
       const diff = new Date(sessionExpiry) - new Date();
       if (diff <= 0) {
-        alert("🚨 Session expired (3 hours). Logging off.");
+        toast.error("🚨 Session expired (3 hours). Logging off.");
         logout();
         return;
       }
@@ -124,11 +116,22 @@ function WorkstationComponent() {
   }, [sessionExpiry, sessionStart]);
 
   // Keep selectedTrade in sync with the latest queue updates
+  // Uses targeted field comparison instead of expensive JSON.stringify (KP-005)
   useEffect(() => {
     if (selectedTrade && queue.length > 0) {
       const updatedTrade = queue.find(t => t.tradeRef === selectedTrade.tradeRef);
-      if (updatedTrade && JSON.stringify(updatedTrade) !== JSON.stringify(selectedTrade)) {
-        setSelectedTrade(updatedTrade);
+      if (updatedTrade) {
+        const changed =
+          updatedTrade.currentStatus !== selectedTrade.currentStatus ||
+          updatedTrade.age !== selectedTrade.age ||
+          JSON.stringify(updatedTrade.pendingAmendments) !== JSON.stringify(selectedTrade.pendingAmendments) ||
+          updatedTrade.cptyResponseReceived !== selectedTrade.cptyResponseReceived ||
+          updatedTrade.foResponseReceived !== selectedTrade.foResponseReceived ||
+          updatedTrade.cptyContactCount !== selectedTrade.cptyContactCount ||
+          updatedTrade.foContactCount !== selectedTrade.foContactCount;
+        if (changed) {
+          setSelectedTrade(updatedTrade);
+        }
       }
     }
   }, [queue, selectedTrade]);
@@ -144,15 +147,15 @@ function WorkstationComponent() {
 
   const handleAlerts = (mins) => {
     if (mins <= 60 && !alert1hrShown.current) {
-      alert("⚠️ 1 hour remaining in simulation day");
+      toast("⚠️ 1 hour remaining in simulation day", { icon: "⚠️" });
       alert1hrShown.current = true;
     }
     if (mins <= 10 && !alert10minShown.current) {
-      alert("⏳ 10 minutes remaining — wrap up trades");
+      toast("⏳ 10 minutes remaining — wrap up trades", { icon: "⏳" });
       alert10minShown.current = true;
     }
     if (mins <= 0) {
-      alert("📛 Market Closed — Logging off");
+      toast.error("📛 Market Closed — Logging off");
       logout();
     }
   };
@@ -173,8 +176,7 @@ function WorkstationComponent() {
 
   const logout = async () => {
     await fetch("/api/session/logout", { method: "POST", headers: authHeaders(), body: JSON.stringify({}) });
-    Cookies.remove("auth_token");
-    sessionStorage.removeItem("auth_token");
+    clearSession();
     router.push("/");
   };
 
@@ -183,7 +185,7 @@ function WorkstationComponent() {
       method: "POST", headers: authHeaders(), body: JSON.stringify({ desk })
     });
     const data = await res.json();
-    if (!data.success) return alert(data.error || "Complete Your Current Trades First");
+    if (!data.success) return toast.error(data.error || "Complete Your Current Trades First");
     setQueue(data.trades || []);
     if (data.sessionExpiry) {
       setSessionExpiry(data.sessionExpiry);
@@ -194,13 +196,13 @@ function WorkstationComponent() {
   const refreshQueue = async () => {
     const res = await fetch("/api/queue/my?desk=" + encodeURIComponent(desk), { headers: authHeaders() });
     const data = await res.json();
-    if (!data.success) return alert(data.error || "Unable to refresh queue");
+    if (!data.success) return toast.error(data.error || "Unable to refresh queue");
     setQueue(data.trades || []);
     if (data.sessionExpiry) {
       setSessionExpiry(data.sessionExpiry);
       if (data.sessionStart) setSessionStart(data.sessionStart);
     }
-    alert("Queue refreshed");
+    toast.success("Queue refreshed");
   };
 
   const format = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -225,15 +227,15 @@ function WorkstationComponent() {
   };
 
   const handleOpenAction = (action) => {
-    if (!selectedTrade) return alert("Select trade first");
+    if (!selectedTrade) return toast.error("Select trade first");
     if (!allowed[action] || !allowed[action].includes(selectedTrade.currentStatus)) {
-      return alert("Invalid action for current state");
+      return toast.error("Invalid action for current state");
     }
     if (action === 'CONFIRM_RAISE_BREAK') {
       const cptyCount = selectedTrade.cptyContactCount || 0;
       const foCount = selectedTrade.foContactCount || 0;
       if (cptyCount !== 1 || foCount > 0) {
-        return alert("You can only raise a Confirmation Break once, immediately after the first time you mail the Counterparty.");
+        return toast.error("You can only raise a Confirmation Break once, immediately after the first time you mail the Counterparty.");
       }
     }
     setPopupState({ type: "action", action });
@@ -247,13 +249,13 @@ function WorkstationComponent() {
       body: JSON.stringify({ trade: selectedTrade, action: popupState.action, comment })
     });
     const data = await res.json();
-    if (!data.success) return alert(data.error || "Action failed");
+    if (!data.success) return toast.error(data.error || "Action failed");
     setQueue(data.trades || []);
     setPopupState({ type: null });
   };
 
   const downloadCSV = () => {
-    if (!queue || queue.length === 0) return alert("No data to export");
+    if (!queue || queue.length === 0) return toast.error("No data to export");
     const headers = [
       "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "Counterparty", "Entity", "FO Region",
       "Product", "Trade Type", "Settlement Type", "Direction", "Currency", "Amount"
@@ -272,7 +274,7 @@ function WorkstationComponent() {
   };
 
   const openAudit = async () => {
-    if (!selectedTrade) return alert("Select trade first");
+    if (!selectedTrade) return toast.error("Select trade first");
     const res = await fetch("/api/audit/" + selectedTrade.tradeRef, { headers: authHeaders() });
     const data = await res.json();
     
@@ -289,7 +291,7 @@ function WorkstationComponent() {
   };
 
   const openMailboxGeneral = (forceChannel) => {
-    const mailParams = new URLSearchParams({ userId, desk });
+    const mailParams = new URLSearchParams({ desk });
     if (selectedTrade) mailParams.set("tradeRef", selectedTrade.tradeRef);
     if (forceChannel) {
       mailParams.set("channel", forceChannel);
@@ -298,30 +300,26 @@ function WorkstationComponent() {
   };
 
   const sendToFO = () => {
-    if (!selectedTrade) return alert("Select trade first");
-    if (!allowed['MO_SEND_TO_FO'] || !allowed['MO_SEND_TO_FO'].includes(selectedTrade.currentStatus)) return alert("Invalid action for current state");
+    if (!selectedTrade) return toast.error("Select trade first");
+    if (!allowed['MO_SEND_TO_FO'] || !allowed['MO_SEND_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
     const mailParams = new URLSearchParams({
-      userId, desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO"
+      desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO"
     });
     window.open("/communication?" + mailParams.toString(), "_blank");
   };
 
   const startCptyFlow = () => {
-    if (!selectedTrade) return alert("Select trade first");
+    if (!selectedTrade) return toast.error("Select trade first");
     const mailParams = new URLSearchParams({
-      userId, 
-      desk, 
-      tradeRef: selectedTrade.tradeRef, 
-      composeFor: selectedTrade.tradeRef, 
-      composeTo: "COUNTERPARTY",
+      desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
       composeAction: "CONFIRM_SEND_TO_CPTY"
     });
     window.open("/communication?" + mailParams.toString(), "_blank");
   };
 
   const sendEmail = async () => {
-    if (!selectedTrade) return alert("Select trade first");
-    if (!emailText || emailText.trim() === "") return alert("Email content required");
+    if (!selectedTrade) return toast.error("Select trade first");
+    if (!emailText || emailText.trim() === "") return toast.error("Email content required");
     
     if (popupState.action === "CONFIRM_SEND_TO_CPTY") {
       const res = await fetch("/api/trade/action", {
@@ -329,8 +327,8 @@ function WorkstationComponent() {
         body: JSON.stringify({ trade: selectedTrade, action: popupState.action, comment: emailText })
       });
       const data = await res.json();
-      if (!data.success) return alert(data.error || "Email send failed");
-      alert("Email sent successfully");
+      if (!data.success) return toast.error(data.error || "Email send failed");
+      toast.success("Email sent successfully");
       setPopupState({ type: null });
       refreshQueueSilent();
       return;
@@ -342,14 +340,14 @@ function WorkstationComponent() {
       body: JSON.stringify({ tradeRef: selectedTrade.tradeRef, sender: userId, message: emailText, desk })
     });
     const data = await res.json();
-    if (!data.success) return alert(data.error || "Email send failed");
-    alert("Email sent successfully");
+    if (!data.success) return toast.error(data.error || "Email send failed");
+    toast.success("Email sent successfully");
     setPopupState({ type: null });
     refreshQueueSilent();
   };
 
   const viewTruth = () => {
-    if (!selectedTrade) return alert("Select trade first");
+    if (!selectedTrade) return toast.error("Select trade first");
     const truthContent = selectedTrade.truths ? JSON.stringify(selectedTrade.truths, null, 2) : 
                         selectedTrade.truth ? JSON.stringify(selectedTrade.truth, null, 2) : "No truths object found for this trade.";
     setAuditData({ xml: truthContent, trail: [] });
@@ -357,7 +355,7 @@ function WorkstationComponent() {
   };
 
   const openTermsheet = () => {
-    window.open(`/mo-risk?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`, "_blank");
+    window.open(`/mo-risk?desk=${encodeURIComponent(desk)}`, "_blank");
   };
 
   if (!userId) return null;
@@ -469,8 +467,8 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
                 <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
                 <button className="btn primary" onClick={() => {
-                  if(!selectedTrade) return alert("Select a trade first");
-                  const mailParams = new URLSearchParams({userId, desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
+                  if(!selectedTrade) return toast.error("Select a trade first");
+                  const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
                   window.open("/communication?" + mailParams.toString(), "_blank");
                 }}>Escalate to FO</button>
               </>

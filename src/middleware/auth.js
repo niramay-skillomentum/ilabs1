@@ -1,5 +1,10 @@
 const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "sgb_ops_simulator_fallback_secret";
+
+// ======================================
+// JWT_SECRET must be set via environment variable.
+// No fallback — fails fast at startup if missing.
+// ======================================
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function authenticateToken(req, res, next) {
   // Check Authorization header first

@@ -2,10 +2,22 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 const User = require("../models/User");
 const { JWT_SECRET } = require("../middleware/auth");
 
-router.post("/register", async (req, res) => {
+// ======================================
+// Rate Limiter — protect auth endpoints from brute force
+// ======================================
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // limit each IP to 15 requests per window
+  message: { error: "Too many requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+router.post("/register", authLimiter, async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
 
@@ -36,7 +48,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -64,8 +76,8 @@ router.post("/login", async (req, res) => {
       { expiresIn: "3h" }
     );
 
-    // Set cookie with token
-    res.setHeader("Set-Cookie", `auth_token=${token}; Path=/; Max-Age=${3 * 60 * 60}; SameSite=Lax`);
+    // Set cookie with token (HttpOnly for security — frontend uses sessionStorage)
+    res.setHeader("Set-Cookie", `auth_token=${token}; Path=/; Max-Age=${3 * 60 * 60}; SameSite=Lax; HttpOnly`);
 
     res.json({
       success: true,

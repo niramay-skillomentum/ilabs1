@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Cookies from "js-cookie";
+import { loadUserId, loadFullName, getToken } from "../../lib/auth";
+import toast from "react-hot-toast";
 
 function MoRiskComponent() {
   const router = useRouter();
@@ -15,14 +16,13 @@ function MoRiskComponent() {
   const [selectedTrade, setSelectedTrade] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const getToken = () => sessionStorage.getItem("auth_token") || Cookies.get("auth_token");
-
   useEffect(() => {
-    let uid = searchParams.get("userId");
+    let uid = loadUserId();
+    let fullName = loadFullName();
     let dsk = searchParams.get("desk");
 
     if (!getToken()) {
-      alert("Session expired. Login again.");
+      toast.error("Session expired. Login again.");
       router.push("/");
       return;
     }
@@ -40,7 +40,7 @@ function MoRiskComponent() {
       })
       .catch(err => console.error(err));
     } else {
-      setUserId(uid);
+      setUserId(fullName || uid);
       setDesk(dsk || "Risk");
     }
 

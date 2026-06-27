@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
+import { saveSession } from "../lib/auth";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,11 +34,12 @@ export default function LoginPage() {
         const data = await res.json();
         
         if (res.ok && data.success) {
-          Cookies.set("auth_token", data.token, { expires: 3/24, path: '/', sameSite: 'Lax' });
+          // Store token and session in sessionStorage (not URL)
           sessionStorage.setItem("auth_token", data.token);
           sessionStorage.setItem("justLoggedIn", "true");
+          saveSession(data.user.email, data.user.fullName);
 
-          router.push(`/dashboard?userId=${encodeURIComponent(data.user.email)}&fullName=${encodeURIComponent(data.user.fullName)}`);
+          router.push("/dashboard");
         } else {
           setErrorMsg(data.error || "Login failed");
         }
@@ -55,7 +57,7 @@ export default function LoginPage() {
         const data = await res.json();
         
         if (res.ok && data.success) {
-          alert("Registration successful! Please login.");
+          toast.success("Registration successful! Please login.");
           setIsLoginMode(true);
         } else {
           setErrorMsg(data.error || "Registration failed");

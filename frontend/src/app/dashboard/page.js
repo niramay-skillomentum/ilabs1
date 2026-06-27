@@ -1,29 +1,28 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Cookies from "js-cookie";
+import { useRouter } from "next/navigation";
+import { loadUserId, hasSession } from "../../lib/auth";
+import toast from "react-hot-toast";
 
 function DashboardComponent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    const uid = searchParams.get("userId");
-    const token = Cookies.get("auth_token");
+    const uid = loadUserId();
 
-    if (!uid || !token) {
-      alert("Session expired. Login again.");
+    if (!uid || !hasSession()) {
+      toast.error("Session expired. Login again.");
       router.push("/");
     } else {
       setUserId(uid);
     }
-  }, [router, searchParams]);
+  }, [router]);
 
   const goDesk = (desk) => {
     if (userId) {
-      router.push(`/workstation?userId=${encodeURIComponent(userId)}&desk=${encodeURIComponent(desk)}`);
+      router.push(`/workstation?desk=${encodeURIComponent(desk)}`);
     }
   };
 

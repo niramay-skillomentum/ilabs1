@@ -89,6 +89,15 @@ setInterval(async () => {
 }, 2000);
 
 // ======================================
+// STARTUP VALIDATION
+// ======================================
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is not set. Server cannot start.");
+  console.error("Set JWT_SECRET in your .env file with a strong random string.");
+  process.exit(1);
+}
+
+// ======================================
 // EXPRESS CONFIG & ROUTES
 // ======================================
 app.use(express.json());

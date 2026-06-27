@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Cookies from "js-cookie";
+import { loadUserId, getToken, authHeaders } from "../../lib/auth";
 import { io } from "socket.io-client";
+import toast from "react-hot-toast";
 import "./page.css";
 
 function CommunicationComponent() {
@@ -46,13 +47,8 @@ function CommunicationComponent() {
   const lastRenderedInboxDataStr = useRef("");
 
   // ========================================
-  // AUTH HELPERS
+  // AUTH HELPERS (shared via lib/auth)
   // ========================================
-  const getToken = () => sessionStorage.getItem("auth_token") || Cookies.get("auth_token");
-  const authHeaders = useCallback(() => ({
-    "Content-Type": "application/json",
-    "Authorization": "Bearer " + getToken()
-  }), []);
 
   // ========================================
   // FORMATTERS (identical to original)
@@ -185,13 +181,13 @@ function CommunicationComponent() {
   // INIT EFFECT
   // ========================================
   useEffect(() => {
-    const uid = searchParams.get("userId");
+    const uid = loadUserId();
     const dsk = searchParams.get("desk");
     const tRef = searchParams.get("tradeRef");
     const ch = searchParams.get("channel");
 
     if (!uid) {
-      alert("Session expired. Login again.");
+      toast.error("Session expired. Login again.");
       router.push("/");
       return;
     }
@@ -385,7 +381,7 @@ function CommunicationComponent() {
   };
 
   const resolveConversation = () => {
-    if (!selectedTradeRef) return alert("No trade selected");
+    if (!selectedTradeRef) return toast.error("No trade selected");
     fetch("/api/conversation/resolve", {
       method: "POST",
       headers: authHeaders(),
@@ -393,8 +389,8 @@ function CommunicationComponent() {
     })
     .then(res => res.json())
     .then(data => {
-      if (!data.success) return alert(data.error || "Resolve failed");
-      alert("✅ " + data.message);
+      if (!data.success) return toast.error(data.error || "Resolve failed");
+      toast.success("✅ " + data.message);
       loadConversation(selectedTradeRef, channel, null, false);
     });
   };
@@ -403,14 +399,14 @@ function CommunicationComponent() {
   // REPLY MODAL
   // ========================================
   const openReplyModal = () => {
-    if (!selectedTradeRef || !currentTrade) return alert("Select an email first");
+    if (!selectedTradeRef || !currentTrade) return toast.error("Select an email first");
     setReplyBody("");
     setReplyModalOpen(true);
   };
 
   const sendReply = () => {
-    if (!replyBody.trim()) return alert("Email content cannot be empty");
-    if (!selectedTradeRef) return alert("No trade selected");
+    if (!replyBody.trim()) return toast.error("Email content cannot be empty");
+    if (!selectedTradeRef) return toast.error("No trade selected");
     const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
     fetch(endpoint, {
       method: "POST",
@@ -484,8 +480,8 @@ function CommunicationComponent() {
   };
 
   const sendCompose = () => {
-    if (!composeTrade) return alert("Select a trade");
-    if (!composeBody.trim()) return alert("Email body cannot be empty");
+    if (!composeTrade) return toast.error("Select a trade");
+    if (!composeBody.trim()) return toast.error("Email body cannot be empty");
 
     const composeAction = searchParams.get("composeAction");
 

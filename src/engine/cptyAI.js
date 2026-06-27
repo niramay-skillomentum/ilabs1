@@ -13,12 +13,15 @@ const truthEngine = require("./truthEngine");
 // GEMINI SYSTEM PROMPT FOR CPTY
 // ======================================
 function buildCPTYSystemPrompt(trade, parsedIntent) {
+  const cptyRound = trade.cptyContactCount || 1;
+  const targetDeskTruth = cptyRound > 1 ? "universal" : "confirmation";
+
   const scenario = truthEngine.getScenario(trade.tradeRef) || {};
   const refCheck = truthEngine.verifyReference(trade.tradeRef);
   const payment = truthEngine.checkPaymentReceived(trade.tradeRef);
   const ssi = truthEngine.verifySSI(trade.tradeRef);
   
-  const confirmMismatches = truthEngine.getConfirmationMismatches(trade);
+  const confirmMismatches = truthEngine.getConfirmationMismatches(trade, targetDeskTruth);
 
   let context = `You are a Counterparty Operations professional replying to a bank's Middle Office.
 You are responding about Trade ${trade.tradeRef}.
@@ -29,10 +32,16 @@ You are responding about Trade ${trade.tradeRef}.
     confirmMismatches.forEach(m => {
       context += `\n- Field [${m.field}]: Bank booking shows ${m.tradeValue}, but WE EXPECT ${m.cptyExpected}.`;
     });
+    if (cptyRound > 1) {
+      context += `\n(Note: You double-checked your internal records and the discrepancy remains. Stay firm on your expected values.)`;
+    }
   } else if (scenario.breakType) {
     context += `\nKNOWN BREAK TYPE: ${scenario.breakType}`;
   } else {
     context += `\nNO KNOWN BREAKS on this trade. Everything matches our records.`;
+    if (cptyRound > 1) {
+      context += `\n(Note: You previously raised a discrepancy, but upon double-checking you realize you were mistaken and the bank's booking is correct. Apologize for the confusion and confirm the trade.)`;
+    }
   }
 
   if (payment) {

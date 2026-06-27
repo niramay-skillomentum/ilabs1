@@ -5,11 +5,25 @@ const { JWT_SECRET } = require("../middleware/auth");
 
 let io;
 
+// ======================================
+// CORS — restrict to known origins.
+// Set ALLOWED_ORIGINS env var (comma-separated) in production.
+// Defaults to the dev frontend origin.
+// ======================================
+function getAllowedOrigins() {
+  const raw = process.env.ALLOWED_ORIGINS;
+  if (raw) {
+    return raw.split(",").map(o => o.trim()).filter(Boolean);
+  }
+  return [process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"];
+}
+
 function initSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
+      origin: getAllowedOrigins(),
+      methods: ["GET", "POST"],
+      credentials: true
     }
   });
 
