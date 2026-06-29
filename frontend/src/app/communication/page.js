@@ -203,7 +203,7 @@ function CommunicationComponent() {
             if (dsk === "CONFIRMATION" && (composeToRecipient || "FO") === "COUNTERPARTY") {
               const trade = data.trades.find(t => t.tradeRef === composeForTrade);
               if (trade) {
-                setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.buySell}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
+                setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
               }
             } else {
               setComposeBody("");
@@ -414,7 +414,7 @@ function CommunicationComponent() {
             // Generate pre-draft
             if (desk === "CONFIRMATION" && toVal === "COUNTERPARTY") {
               const t = data.trades[0];
-              setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${t.tradeRef}\nCounterparty    : ${t.counterparty}\nTrade Date      : ${new Date(t.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(t.valueDate).toLocaleDateString()}\nCurrency        : ${t.currency}\nAmount          : ${formatAmount(t.amount)}\nBuy/Sell        : ${t.buySell}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
+              setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${t.tradeRef}\nCounterparty    : ${t.counterparty}\nTrade Date      : ${new Date(t.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(t.valueDate).toLocaleDateString()}\nCurrency        : ${t.currency}\nAmount          : ${formatAmount(t.amount)}\nBuy/Sell        : ${t.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
             }
           }
         }
@@ -430,7 +430,7 @@ function CommunicationComponent() {
     if (desk === "CONFIRMATION" && composeTo === "COUNTERPARTY") {
       const trade = composeTrades.find(t => t.tradeRef === newTradeRef);
       if (trade) {
-        setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.buySell}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
+        setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
       }
     } else {
       setComposeBody("");
@@ -444,7 +444,7 @@ function CommunicationComponent() {
     if (desk === "CONFIRMATION" && newTo === "COUNTERPARTY") {
       const trade = composeTrades.find(t => t.tradeRef === composeTrade);
       if (trade) {
-        setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.buySell}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
+        setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
       }
     } else {
       setComposeBody("");

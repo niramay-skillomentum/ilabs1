@@ -1,6 +1,6 @@
 content: # Business Rules
 
-> Last updated: 2026-06-27
+> Last updated: 2026-06-29
 
 ---
 
@@ -57,7 +57,7 @@ Trades are generated in `src/engine/tradeGenerator.js` with a **three-scenario d
 
 | Rule | Description |
 |------|-------------|
-| CONF-01 | `CONFIRM_TRADE` from `CONFIRMATION_PENDING` or `LIASING_WITH_CPTY` → `SETTLEMENT_PENDING` |
+| CONF-01 | `CONFIRM_TRADE` from `LIASING_WITH_CPTY` → `SETTLEMENT_PENDING` |
 | CONF-02 | `CONFIRM_RAISE_BREAK` is gated: exactly **1 CPTY contact** and **0 FO contacts** (`cptyContactCount === 1 && foContactCount === 0`); otherwise 400 |
 | CONF-03 | `CONFIRM_SEND_TO_CPTY` increments `cptyContactCount` and schedules a CPTY AI reply |
 | CONF-04 | `CONFIRM_ESCALATE_TO_FO` opens FO internal channel, increments `foContactCount`, sets `foEscalation.status = "PENDING"` |
@@ -98,7 +98,7 @@ Trades are generated in `src/engine/tradeGenerator.js` with a **three-scenario d
 | `MO_VALIDATE_PASS` | `MO_PENDING`, `PENDING_FO_RESPONSE` |
 | `MO_RAISE_BREAK` | `MO_PENDING` |
 | `MO_SEND_TO_FO` | `MO_BREAK_OPEN` |
-| `CONFIRM_TRADE` | `CONFIRMATION_PENDING`, `LIASING_WITH_CPTY` |
+| `CONFIRM_TRADE` | `LIASING_WITH_CPTY` |
 | `CONFIRM_RAISE_BREAK` | `LIASING_WITH_CPTY` |
 | `CONFIRM_SEND_TO_CPTY` | `CONFIRMATION_PENDING`, `CONFIRMATION_BREAK`, `LIASING_WITH_FO`, `LIASING_WITH_CPTY` |
 | `CONFIRM_REJECT_CLAIM` | `CONFIRMATION_BREAK` |

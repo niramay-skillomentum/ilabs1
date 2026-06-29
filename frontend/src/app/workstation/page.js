@@ -221,7 +221,7 @@ function WorkstationComponent() {
     MO_VALIDATE_PASS: ["MO_PENDING", "PENDING_FO_RESPONSE"],
     MO_RAISE_BREAK: ["MO_PENDING"],
     MO_SEND_TO_FO: ["MO_BREAK_OPEN"],
-    CONFIRM_TRADE: ["CONFIRMATION_PENDING", "LIASING_WITH_CPTY"],
+    CONFIRM_TRADE: ["LIASING_WITH_CPTY"],
     CONFIRM_RAISE_BREAK: ["LIASING_WITH_CPTY"],
     CONFIRM_SEND_TO_CPTY: ["CONFIRMATION_PENDING", "CONFIRMATION_BREAK", "LIASING_WITH_FO", "LIASING_WITH_CPTY"],
     CONFIRM_REJECT_CLAIM: ["CONFIRMATION_BREAK"],
@@ -318,6 +318,7 @@ function WorkstationComponent() {
 
   const startCptyFlow = () => {
     if (!selectedTrade) return toast.error("Select trade first");
+    if (!allowed['CONFIRM_SEND_TO_CPTY'] || !allowed['CONFIRM_SEND_TO_CPTY'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
     const mailParams = new URLSearchParams({
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
       composeAction: "CONFIRM_SEND_TO_CPTY"
@@ -483,6 +484,7 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
                 <button className="btn primary" onClick={() => {
                   if(!selectedTrade) return toast.error("Select a trade first");
+                  if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
                   const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
                   window.open("/communication?" + mailParams.toString(), "_blank");
                 }}>Escalate to FO</button>

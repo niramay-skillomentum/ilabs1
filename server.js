@@ -65,7 +65,7 @@ setInterval(() => {
         $set: {
           foEscalation: trade.foEscalation,
           foResponseReceived: true,
-          currentStatus: trade.foEscalation?.status === "FO_INVESTIGATING" ? trade.currentStatus : "CONFIRMATION_BREAK"
+          currentStatus: trade.currentStatus
         }
       });
     }

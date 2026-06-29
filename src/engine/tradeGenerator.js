@@ -573,7 +573,7 @@ async function saveGeneratedTrades(trades) {
     for (const trade of trades) {
       if (trade.nextDesk === "CONFIRMATION" && trade.currentStatus === "CONFIRMATION_PENDING" && proactiveEmailCount < 3) {
           // Generate a proactive email from CPTY to USER for CONFIRMATION_PENDING
-          const cptyTruth = trade.truths?.counterparty || trade.truth || trade;
+          const confirmationTruth = trade.truths?.confirmation || {};
           const formatDate = (dateStr) => {
               if (!dateStr) return "";
               return new Date(dateStr).toISOString().split('T')[0];
@@ -583,11 +583,11 @@ async function saveGeneratedTrades(trades) {
           <br><br>
           <table style="border-collapse: collapse; width: 100%; max-width: 400px; font-size: 13px; text-align: left;">
             <tr><th style="border: 1px solid #c8c8c8; padding: 6px; background-color: #f3f2f1;">Field</th><th style="border: 1px solid #c8c8c8; padding: 6px; background-color: #f3f2f1;">Value</th></tr>
-            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Trade Date</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${formatDate(cptyTruth.tradeDate)}</td></tr>
-            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Value Date</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${formatDate(cptyTruth.valueDate)}</td></tr>
-            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Direction</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${cptyTruth.direction || trade.direction}</td></tr>
-            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Currency</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${cptyTruth.currency || trade.currency}</td></tr>
-            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Amount</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${cptyTruth.amount || trade.amount}</td></tr>
+            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Trade Date</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${formatDate(trade.tradeDate)}</td></tr>
+            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Value Date</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${formatDate(confirmationTruth.valueDate || trade.valueDate)}</td></tr>
+            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Direction</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${trade.direction}</td></tr>
+            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Currency</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${confirmationTruth.currency || trade.currency}</td></tr>
+            <tr><td style="border: 1px solid #c8c8c8; padding: 6px;">Amount</td><td style="border: 1px solid #c8c8c8; padding: 6px;">${confirmationTruth.amount || trade.amount}</td></tr>
           </table>
           <br>
           `;

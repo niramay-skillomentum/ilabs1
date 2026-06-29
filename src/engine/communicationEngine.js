@@ -301,16 +301,17 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
                  if (trade.currentStatus === "PENDING_FO_RESPONSE") {
                      trade.currentStatus = "MO_PENDING";
                  } else if (trade.currentStatus === "LIASING_WITH_FO") {
-                     trade.currentStatus = "CONFIRMATION_BREAK";
+                     // Keep state as LIASING_WITH_FO on first reply
                      if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_US";
                  }
              } else if (breakCategories.includes(foResponse.category)) {
                  trade.foResponseReceived = true;
                  if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_CPTY";
                  
-                 if (trade.currentStatus === "LIASING_WITH_FO" || trade.currentStatus === "CONFIRMATION_BREAK") {
+                 if (trade.currentStatus === "CONFIRMATION_BREAK") {
                      trade.currentStatus = "CONFIRMATION_PENDING";
                  }
+                 // If LIASING_WITH_FO, keep the state
              }
 
              // Determine which truth to use for mismatches

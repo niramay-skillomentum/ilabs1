@@ -4,9 +4,13 @@ All notable changes — reverse chronological order.
 
 ---
 
-## [Unreleased] — 2026-06-27
+## [Unreleased] — 2026-06-29
 
-*(Documentation refresh — no code changes)*
+### Fixed
+- **Confirmation Desk Constraints**: Enforced action validation checks on frontend UI buttons ("Send to CPTY" and "Escalate to FO"). `CONFIRM_TRADE` now strictly requires `LIASING_WITH_CPTY` state, and "Escalate to FO" requires the user to manually trigger "Confirmation Break" first.
+- **FO Escalation State Bug**: Fixed `server.js` background polling loop improperly forcing `CONFIRMATION_BREAK` on all internal FO replies. Trades now correctly remain in `LIASING_WITH_FO` when FO replies with "Our records match".
+- **Proactive Email Generation**: Fixed `tradeGenerator.js` to correctly route `trade.truths.confirmation` discrepancy data instead of universal truths to the proactive Counterparty emails.
+- **Email Template Rendering**: Corrected `buySell` typo to `direction` in the frontend confirmation email template, ensuring correct rendering of trade direction.
 
 ---
 
