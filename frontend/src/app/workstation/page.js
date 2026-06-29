@@ -200,6 +200,22 @@ function WorkstationComponent() {
     }
   };
 
+  const finishSessionAndReport = async () => {
+    if (!confirm("Are you sure you want to finish the session early and view your report?")) return;
+    try {
+      const res = await fetch("/api/score/force-report", { method: "POST", headers: authHeaders() });
+      const data = await res.json();
+      if (data.success && data.report) {
+        toast.success("Session finished! Redirecting to report...");
+        router.push(`/report?sessionId=${data.report.sessionId}`);
+      } else {
+        toast.error(data.error || "Failed to generate report");
+      }
+    } catch (err) {
+      toast.error("Network error forcing report");
+    }
+  };
+
   const refreshQueue = async () => {
     setIsRefreshingQueue(true);
     const res = await fetch("/api/queue/my?desk=" + encodeURIComponent(desk), { headers: authHeaders() });
@@ -424,6 +440,7 @@ function WorkstationComponent() {
             {isRefreshingQueue ? "Refreshing..." : "Refresh"}
           </button>
           <span className="clock">{simTime}</span>
+          <button className="btn" onClick={finishSessionAndReport} style={{ background: '#ec4899', color: 'white' }}>End Session & Score</button>
           <button className="btn secondary" onClick={logout}>Logoff</button>
         </div>
       </div>

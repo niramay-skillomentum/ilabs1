@@ -287,6 +287,16 @@ class QueueComposer {
   async expireSession(userId) {
     console.log(`⏰ Expiring session for ${userId}`);
 
+    const queueDoc = await Queue.findOne({ userId, isActive: true });
+    if (queueDoc) {
+      try {
+        const scoringEngine = require("./scoringEngine");
+        await scoringEngine.generateReport(userId, `${userId}_active_${queueDoc.desk}`);
+      } catch(err) {
+        console.warn("Failed to generate report on expiry:", err.message);
+      }
+    }
+
     await Trade.updateMany(
       { assignedTo: userId },
       { $set: { assignedTo: null } }

@@ -79,6 +79,11 @@ function DashboardComponent() {
           <button onClick={() => goDesk('SETTLEMENT')}>Settlement Desk</button>
           <button onClick={() => goDesk('TLM')}>TLM</button>
           <button onClick={() => goDesk('REPORTING')}>Reporting</button>
+
+          <hr style={{ borderColor: '#1e293b', margin: '20px 0' }} />
+          <button onClick={() => router.push('/report-history')} style={{ background: '#3b82f6', borderColor: '#2563eb' }}>
+            📊 View Performance Reports
+          </button>
       </div>
     </>
   );

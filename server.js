@@ -111,6 +111,7 @@ app.use("/api/conversation", require("./src/routes/conversationRoutes"));
 app.use("/api/conversations", require("./src/routes/conversationRoutes"));
 app.use("/api/fo-channel", require("./src/routes/foChannelRoutes"));
 app.use("/api/audit", require("./src/routes/auditRoutes"));
+app.use("/api/score", require("./src/routes/scoreRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START

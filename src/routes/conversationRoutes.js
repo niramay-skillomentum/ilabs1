@@ -7,6 +7,7 @@ const communicationEngine = require("../engine/communicationEngine");
 const aiParser = require("../engine/aiParser");
 const auditEngine = require("../engine/auditEngine");
 const LifecycleEngine = require("../engine/lifecycle");
+const scoringEngine = require("../engine/scoringEngine");
 const { authenticateToken } = require("../middleware/auth");
 
 router.post("/send", authenticateToken, async (req, res) => {
@@ -110,6 +111,16 @@ router.post("/send", authenticateToken, async (req, res) => {
     "EMAIL_SENT",
     auditDetails
   ).catch(e => console.warn("DB audit:", e.message));
+
+  // Score email quality (fire-and-forget)
+  const recipient = auditDetails.includes("FO") ? "FO" : "COUNTERPARTY";
+  scoringEngine.evaluateEmail(
+    tradeRef,
+    message,
+    recipient,
+    trade,
+    sender
+  ).catch(e => console.warn("Email scoring error:", e.message));
 
   res.json({ success: true });
 });

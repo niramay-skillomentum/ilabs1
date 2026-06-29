@@ -8,6 +8,7 @@ const conversationEngine = require("../engine/conversationEngine");
 const communicationEngine = require("../engine/communicationEngine");
 const foInternalChannel = require("../engine/foInternalChannel");
 const amendmentEngine = require("../engine/amendmentEngine");
+const scoringEngine = require("../engine/scoringEngine");
 const { authenticateToken } = require("../middleware/auth");
 const { getIo } = require("../engine/socketEngine");
 
@@ -369,6 +370,15 @@ router.post("/action", authenticateToken, async (req, res) => {
       action,
       comment || "Action taken on trade"
     ).catch(e => console.warn("DB audit:", e.message));
+
+    // Score (fire-and-forget)
+    scoringEngine.evaluateAction(
+      sessionTrade,
+      action,
+      comment,
+      userId,
+      sessionTrade.nextDesk
+    ).catch(e => console.warn("Scoring error:", e.message));
 
   } catch (err) {
     console.error("Trade action error:", err);
