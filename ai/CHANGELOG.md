@@ -11,6 +11,12 @@ All notable changes — reverse chronological order.
 - **FO Escalation State Bug**: Fixed `server.js` background polling loop improperly forcing `CONFIRMATION_BREAK` on all internal FO replies. Trades now correctly remain in `LIASING_WITH_FO` when FO replies with "Our records match".
 - **Proactive Email Generation**: Fixed `tradeGenerator.js` to correctly route `trade.truths.confirmation` discrepancy data instead of universal truths to the proactive Counterparty emails.
 - **Email Template Rendering**: Corrected `buySell` typo to `direction` in the frontend confirmation email template, ensuring correct rendering of trade direction.
+- **Pending Replies Persistence (KI-007)**: Moved in-memory LLM reply queues for CPTY emails, FO emails, and FO Internal Chat to a MongoDB `PendingReply` collection. Delayed responses now successfully survive server restarts.
+- **Security & Quality Enhancements**:
+  - **(KI-016)**: Added conditional `Secure` flag to `auth_token` cookie when running in production.
+  - **(KI-017)**: Integrated `sanitize-html` into `conversationEngine.js` to proactively strip malicious `<script>` tags and XSS payloads from all AI and user-generated email bodies before they reach the frontend.
+  - **(KI-011)**: Introduced the foundational frontend testing suite with Jest & React Testing Library (RTL), featuring component rendering validation for the `Workstation` dashboard.
+  - **(KI-012)**: Introduced the backend integration test suite with Supertest, validating core Trade Action endpoints (e.g. `CONFIRM_TRADE`) against state machine constraints.
 
 ---
 

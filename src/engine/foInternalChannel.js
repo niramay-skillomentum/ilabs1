@@ -8,9 +8,9 @@
 const foAI = require("./foAI");
 const truthEngine = require("./truthEngine");
 const FOCommunication = require("../models/FOCommunication");
+const PendingReply = require("../models/PendingReply");
+const Trade = require("../models/Trade");
 
-// Pending FO internal replies
-const pendingFOInternalReplies = [];
 let isProcessingFOInternal = false;
 
 /**
@@ -65,15 +65,15 @@ async function sendMessage(tradeRef, sender, message, senderRole = "USER") {
  * @param {string} userMessage - What the user said
  * @param {string} escalationContext - "CONFIRMATION" or "MO"
  */
-function scheduleFOInternalReply(tradeRef, trade, userMessage, escalationContext = "CONFIRMATION") {
+async function scheduleFOInternalReply(tradeRef, trade, userMessage, escalationContext = "CONFIRMATION") {
   const delay = Math.floor(Math.random() * (8000 - 3000 + 1)) + 3000; // 3-8 seconds
 
-  pendingFOInternalReplies.push({
+  await PendingReply.create({
     tradeRef,
-    trade,
+    replyType: "FO_INTERNAL",
     userMessage,
     escalationContext,
-    sendAt: Date.now() + delay
+    sendAt: new Date(Date.now() + delay)
   });
 }
 
@@ -84,23 +84,23 @@ function scheduleFOInternalReply(tradeRef, trade, userMessage, escalationContext
 async function processFOInternalReplies(saveTrade) {
   if (isProcessingFOInternal) return;
 
-  const now = Date.now();
-
-  const readyIndices = [];
-  for (let i = 0; i < pendingFOInternalReplies.length; i++) {
-    if (now >= pendingFOInternalReplies[i].sendAt) {
-      readyIndices.push(i);
-    }
-  }
-
-  if (readyIndices.length === 0) return;
-
-  const randomIndex = readyIndices[Math.floor(Math.random() * readyIndices.length)];
-  const reply = pendingFOInternalReplies.splice(randomIndex, 1)[0];
+  const now = new Date();
 
   isProcessingFOInternal = true;
   try {
-    const trade = reply.trade;
+    const readyReplies = await PendingReply.find({
+      replyType: "FO_INTERNAL",
+      sendAt: { $lte: now }
+    }).lean();
+
+    if (readyReplies.length === 0) return;
+
+    const randomIndex = Math.floor(Math.random() * readyReplies.length);
+    const reply = readyReplies[randomIndex];
+
+    await PendingReply.findByIdAndDelete(reply._id);
+
+    const trade = await Trade.findOne({ tradeRef: reply.tradeRef });
     if (!trade) return;
 
     const foRound = trade.foContactCount || 1;
@@ -162,9 +162,13 @@ async function processFOInternalReplies(saveTrade) {
         }
     }
 
+    if (trade.markModified) trade.markModified("foEscalation");
     if (saveTrade) await saveTrade(trade);
 
-    console.log("FO INTERNAL REPLY:", reply.tradeRef, "Position:", foPosition);
+  } catch (err) {
+    console.error("Error processing FO internal reply:", err);
+    // Note: in a real robust system, we would either not delete until success
+    // or we'd retry. For this simulation, we'll just log it.
   } finally {
     isProcessingFOInternal = false;
   }

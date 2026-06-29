@@ -5,6 +5,7 @@
 const Conversation = require("../models/Conversation");
 const Trade = require("../models/Trade");
 const { getIo } = require("./socketEngine");
+const sanitizeHtml = require("sanitize-html");
 
 // In-memory cache for fast access during active sessions
 const cache = {};
@@ -14,12 +15,22 @@ const cache = {};
  */
 async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = false) {
 
+  // KI-017: Sanitize body to prevent XSS
+  const sanitizedBody = sanitizeHtml(body, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([ 'img', 'span', 'div' ]),
+    allowedAttributes: {
+      '*': ['style', 'class', 'id'], // Need style for UI components like attachments
+      'a': ['href', 'name', 'target'],
+      'img': ['src', 'srcset', 'alt', 'title', 'width', 'height', 'loading']
+    }
+  });
+
   const updateDoc = {
     $setOnInsert: { tradeRef, status: "OPEN" },
     $push: {
       messages: {
         sender,
-        body,
+        body: sanitizedBody,
         subject: subject || `Trade ${tradeRef}`,
         timestamp: new Date()
       }

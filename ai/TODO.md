@@ -24,7 +24,7 @@ content: # TODO
 
 ## 🔴 Critical / Bugs
 
-- [ ] **KI-007** Persist pending CPTY/FO reply queue to DB (or migrate to Agenda jobs) — lost on server restart
+- `[x]` **KI-007** Persist pending CPTY/FO reply queue to DB (or migrate to Agenda jobs) — lost on server restart
   - *File*: `src/engine/communicationEngine.js`
   - *Fix*: Add `PendingReply` collection or use Agenda for all delayed AI tasks
 
@@ -32,18 +32,18 @@ content: # TODO
 
 ## 🟡 Security & Quality
 
-- [ ] **KI-016** Add `Secure` flag to `auth_token` cookie when `NODE_ENV === "production"`
+- `[x]` **KI-016** Add `Secure` flag to `auth_token` cookie when `NODE_ENV === "production"`
   - *File*: `src/routes/authRoutes.js`
 
-- [ ] **KI-017** Sanitize email message bodies before storage/rendering (prevent XSS)
+- `[x]` **KI-017** Sanitize email message bodies before storage/rendering (prevent XSS)
   - *Files*: `src/engine/conversationEngine.js`, `frontend/src/app/communication/page.js`
   - *Fix*: Use `sanitize-html` on server or `DOMPurify` on client
 
-- [ ] **KI-011** Write frontend component tests
+- `[x]` **KI-011** Write frontend component tests
   - *File*: `frontend/__tests__/`
   - Framework already configured: Jest + React Testing Library + jsdom
 
-- [ ] **KI-012** Write backend integration tests for queue, trade actions, conversations, FO channel
+- `[x]` **KI-012** Write backend integration tests for queue, trade actions, conversations, FO channel
   - *File*: `tests/backend/`
   - Framework already configured: Jest + Supertest
 

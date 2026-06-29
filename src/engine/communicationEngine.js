@@ -5,65 +5,68 @@ const truthEngine = require("./truthEngine");
 const foAI = require("./foAI");
 const foResponseProfiles = require("./foResponseProfiles");
 const LifecycleEngine = require("./lifecycle");
+const PendingReply = require("../models/PendingReply");
 
 // ======================================
 // CPTY REPLY QUEUE (existing — unchanged)
 // ======================================
 
-const pendingReplies = [];
 let isProcessingCPTY = false;
 
-function scheduleReply(tradeRef, subject, body) {
+async function scheduleReply(tradeRef, subject, body) {
 
   // Randomize delay between 4 and 12 seconds for realism
   const delay = Math.floor(Math.random() * (12000 - 4000 + 1)) + 4000;
 
-  pendingReplies.push({
+  await PendingReply.create({
     tradeRef,
+    replyType: "CPTY_EMAIL",
     subject,
     body,
-    sendAt: Date.now() + delay
+    sendAt: new Date(Date.now() + delay)
   });
 
 }
 
-function scheduleCPTYFinalReply(tradeRef, trade, cptyResponse) {
+async function scheduleCPTYFinalReply(tradeRef, trade, cptyResponse) {
   const delay = cptyResponse.followUpDelayMs || 15000;
   console.log("CPTY SCHEDULING FINAL REPLY:", tradeRef, "Delay:", delay);
-  pendingReplies.push({
+  await PendingReply.create({
     tradeRef,
+    replyType: "CPTY_EMAIL",
     isFinalReply: true,
-    cptyResponse,
-    sendAt: Date.now() + delay
+    payload: cptyResponse,
+    sendAt: new Date(Date.now() + delay)
   });
 }
 
 async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
   if (isProcessingCPTY) return;
 
-  const now = Date.now();
-
-  const readyIndices = [];
-  for (let i = 0; i < pendingReplies.length; i++) {
-    if (now >= pendingReplies[i].sendAt) {
-      readyIndices.push(i);
-    }
-  }
-
-  if (readyIndices.length === 0) return;
-
-  const randomIndex = readyIndices[Math.floor(Math.random() * readyIndices.length)];
-  const reply = pendingReplies.splice(randomIndex, 1)[0];
+  const now = new Date();
 
   isProcessingCPTY = true;
   try {
+    const readyReplies = await PendingReply.find({
+      replyType: "CPTY_EMAIL",
+      sendAt: { $lte: now }
+    }).lean();
+
+    if (readyReplies.length === 0) return;
+
+    const randomIndex = Math.floor(Math.random() * readyReplies.length);
+    const reply = readyReplies[randomIndex];
+
+    await PendingReply.findByIdAndDelete(reply._id);
+
     const trade = getTradeByRef(reply.tradeRef);
 
     if (reply.isFinalReply) {
+      const cptyResponse = reply.payload;
       
       if (trade) {
         trade.cptyResponseReceived = true;
-        const amendments = amendmentEngine.extractAmendments(reply.cptyResponse.followUpBody, trade);
+        const amendments = amendmentEngine.extractAmendments(cptyResponse.followUpBody, trade);
         amendmentEngine.attachAmendments(trade, amendments);
         if (saveTrade) await saveTrade(trade);
         // Emit after trade save so UI gets fresh cptyResponseReceived
@@ -74,8 +77,8 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
         } catch (err) {}
       }
 
-      let finalBody = reply.cptyResponse.followUpBody;
-      if (reply.cptyResponse.hasAttachment) {
+      let finalBody = cptyResponse.followUpBody;
+      if (cptyResponse.hasAttachment) {
          finalBody += `\n\n<div style="margin-top:12px; padding:8px 12px; border:1px solid #c8c8c8; border-radius:4px; display:inline-block; background:#f3f2f1; cursor:pointer;">📎 <b>TradeTicket_${reply.tradeRef}.pdf</b><br><span style="font-size:11px;color:#605e5c;">1.2 MB</span></div>`;
       }
 
@@ -83,7 +86,7 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
         reply.tradeRef,
         "COUNTERPARTY",
         finalBody,
-        reply.cptyResponse.followUpSubject || "RE: Trade Clarification",
+        cptyResponse.followUpSubject || "RE: Trade Clarification",
         null, // desk
         true  // skipEmit
       );
@@ -142,8 +145,13 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
         }
       } else {
         // Retry LLM later
-        reply.sendAt = Date.now() + 5000;
-        pendingReplies.push(reply);
+        await PendingReply.create({
+          tradeRef: reply.tradeRef,
+          replyType: "CPTY_EMAIL",
+          subject: reply.subject,
+          body: reply.body,
+          sendAt: new Date(Date.now() + 5000)
+        });
       }
     }
   } finally {
@@ -155,25 +163,24 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
 // FO REPLY QUEUE (new)
 // ======================================
 
-const pendingFOReplies = [];
 let isProcessingFO = false;
 
-function scheduleFOFinalReply(tradeRef, trade, foResponse) {
+async function scheduleFOFinalReply(tradeRef, trade, foResponse) {
   const delay = foResponse.followUpDelayMs || 15000;
   console.log("FO SCHEDULING FINAL REPLY:", tradeRef, "Delay:", delay);
-  pendingFOReplies.push({
+  await PendingReply.create({
     tradeRef,
-    trade,
+    replyType: "FO_EMAIL",
     isFinalReply: true,
-    foResponse,
-    sendAt: Date.now() + delay
+    payload: foResponse,
+    sendAt: new Date(Date.now() + delay)
   });
 }
 
 /**
  * Schedule an FO reply with delay based on counterparty profile
  */
-function scheduleFOReply(tradeRef, trade, userMessage) {
+async function scheduleFOReply(tradeRef, trade, userMessage) {
 
   const delay = foResponseProfiles.getDelay(trade.counterparty);
 
@@ -184,11 +191,11 @@ function scheduleFOReply(tradeRef, trade, userMessage) {
     "| Delay:", delay + "ms"
   );
 
-  pendingFOReplies.push({
+  await PendingReply.create({
     tradeRef,
-    trade,
+    replyType: "FO_EMAIL",
     userMessage,
-    sendAt: Date.now() + delay
+    sendAt: new Date(Date.now() + delay)
   });
 
 }
@@ -199,30 +206,30 @@ function scheduleFOReply(tradeRef, trade, userMessage) {
 async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
   if (isProcessingFO) return;
 
-  const now = Date.now();
-
-  const readyIndices = [];
-  for (let i = 0; i < pendingFOReplies.length; i++) {
-    if (now >= pendingFOReplies[i].sendAt) {
-      readyIndices.push(i);
-    }
-  }
-
-  if (readyIndices.length === 0) return;
-
-  const randomIndex = readyIndices[Math.floor(Math.random() * readyIndices.length)];
-  const reply = pendingFOReplies.splice(randomIndex, 1)[0];
+  const now = new Date();
 
   isProcessingFO = true;
   try {
+    const readyReplies = await PendingReply.find({
+      replyType: "FO_EMAIL",
+      sendAt: { $lte: now }
+    }).lean();
+
+    if (readyReplies.length === 0) return;
+
+    const randomIndex = Math.floor(Math.random() * readyReplies.length);
+    const reply = readyReplies[randomIndex];
+
+    await PendingReply.findByIdAndDelete(reply._id);
     const trade = getTradeByRef(reply.tradeRef);
 
     if (trade) {
 
       if (reply.isFinalReply) {
+        const foResponse = reply.payload;
         
-        let finalBody = reply.foResponse.followUpBody;
-        if (reply.foResponse.hasAttachment) {
+        let finalBody = foResponse.followUpBody;
+        if (foResponse.hasAttachment) {
            finalBody += `\n\n<div style="margin-top:12px; padding:8px 12px; border:1px solid #c8c8c8; border-radius:4px; display:inline-block; background:#f3f2f1; cursor:pointer;">📎 <b>FO_BookingData_${reply.tradeRef}.pdf</b><br><span style="font-size:11px;color:#605e5c;">3.4 MB</span></div>`;
         }
 
@@ -230,7 +237,7 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
           reply.tradeRef,
           "FO",
           finalBody,
-          reply.foResponse.followUpSubject || "RE: Trade Clarification",
+          foResponse.followUpSubject || "RE: Trade Clarification",
           null, // desk
           true  // skipEmit
         );
@@ -360,8 +367,12 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
           }
         } else {
           // Retry LLM later
-          reply.sendAt = Date.now() + 5000;
-          pendingFOReplies.push(reply);
+          await PendingReply.create({
+            tradeRef: reply.tradeRef,
+            replyType: "FO_EMAIL",
+            userMessage: reply.userMessage,
+            sendAt: new Date(Date.now() + 5000)
+          });
         }
       }
     }

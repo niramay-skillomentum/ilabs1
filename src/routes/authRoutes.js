@@ -77,7 +77,8 @@ router.post("/login", authLimiter, async (req, res) => {
     );
 
     // Set cookie with token (HttpOnly for security — frontend uses sessionStorage)
-    res.setHeader("Set-Cookie", `auth_token=${token}; Path=/; Max-Age=${3 * 60 * 60}; SameSite=Lax; HttpOnly`);
+    const secureFlag = process.env.NODE_ENV === "production" ? "; Secure" : "";
+    res.setHeader("Set-Cookie", `auth_token=${token}; Path=/; Max-Age=${3 * 60 * 60}; SameSite=Lax; HttpOnly${secureFlag}`);
 
     res.json({
       success: true,
