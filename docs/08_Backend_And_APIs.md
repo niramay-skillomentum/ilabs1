@@ -37,6 +37,19 @@ The backend Express application exposes several RESTful endpoints.
 - **Logic:** Validates the state transition. Calls `lifecycle.js` to move the trade (e.g., MO -> Confirmation). Logs an entry in `AuditLog`. Triggers Socket.io `trade_update`.
 - **Returns:** `{ success: true, trades: [...] }` (Returns the updated queue).
 
+## Settlement (`settlementRoutes.js`)
+
+### `POST /api/settlement/select-type`
+- **Payload:** `{ tradeRef, selectedType }`
+- **Logic:** Validates if the user selected the correct settlement type (Bilateral vs Electronic).
+
+### `GET /api/settlement/bilateral/:tradeRef` & `GET /api/settlement/electronic/:tradeRef`
+- **Logic:** Returns the trade for the respective settlement dashboard.
+
+### `POST /api/settlement/bilateral/action` & `POST /api/settlement/electronic/action`
+- **Payload:** `{ tradeRef, action, editData }`
+- **Logic:** Handles `APPROVE_SETTLEMENT`, `RAISE_BREAK`, `EDIT_SETTLEMENT`, and `MAIL_CPTY` (Bilateral only). Enforces SSI matching on approval.
+
 ## Conversations (`conversationRoutes.js` & `foChannelRoutes.js`)
 
 ### `GET /api/conversations/personal`

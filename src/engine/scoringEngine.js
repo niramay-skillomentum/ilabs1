@@ -58,6 +58,39 @@ async function evaluateAction(trade, action, issueType, userId) {
   };
 }
 
+async function applyPenalty(userId, tradeRef, penaltyPoints, reason) {
+  if (!userScores[userId]) {
+    userScores[userId] = 0;
+  }
+
+  userScores[userId] -= penaltyPoints;
+
+  if (getIsConnected() && UserScore) {
+    UserScore.findOneAndUpdate(
+      { userId },
+      {
+        $inc: { penalties: penaltyPoints },
+        $push: {
+          history: {
+            tradeRef: tradeRef,
+            action: "PENALTY",
+            pointsAwarded: -penaltyPoints,
+            details: reason,
+            timestamp: new Date()
+          }
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    ).catch(err => console.warn("DB penalty write:", err.message));
+  }
+
+  return {
+    scoreDelta: -penaltyPoints,
+    total: userScores[userId]
+  };
+}
+
 module.exports = {
-  evaluateAction
+  evaluateAction,
+  applyPenalty
 };

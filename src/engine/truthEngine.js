@@ -214,6 +214,37 @@ function getConfirmationMismatches(trade, desk = "confirmation") {
   return mismatches;
 }
 
+/**
+ * Get settlement-level mismatches.
+ * Compares the trade's settlementDetails against truths.settlement.
+ * @param {Object} trade - The trade object
+ * @returns {Object[]} Array of mismatch objects with field, tradeValue, cptyExpected
+ */
+function getSettlementMismatches(trade) {
+  const system = trade.settlementDetails || {};
+  const truth = trade.truths?.settlement || {};
+  
+  const fieldsToCheck = [
+    "beneficiaryName", "beneficiaryBank", "beneficiaryBIC",
+    "accountNumber", "accountType", "currency",
+    "settlementMethod", "correspondentBank", "paymentReference"
+  ];
+
+  const mismatches = [];
+
+  for (const field of fieldsToCheck) {
+    if (system[field] !== truth[field]) {
+      mismatches.push({
+        field: field,
+        tradeValue: system[field],
+        cptyExpected: truth[field]
+      });
+    }
+  }
+
+  return mismatches;
+}
+
 module.exports = {
   verifyReference,
   checkPaymentReceived,
@@ -222,5 +253,6 @@ module.exports = {
   getScenario,
   getMismatchFields,
   getDeskTruth,
-  getConfirmationMismatches
+  getConfirmationMismatches,
+  getSettlementMismatches
 };

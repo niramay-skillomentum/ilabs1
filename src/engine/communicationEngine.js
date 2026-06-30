@@ -13,7 +13,7 @@ const PendingReply = require("../models/PendingReply");
 
 let isProcessingCPTY = false;
 
-async function scheduleReply(tradeRef, subject, body) {
+async function scheduleReply(tradeRef, subject, body, desk) {
 
   // Randomize delay between 4 and 12 seconds for realism
   const delay = Math.floor(Math.random() * (12000 - 4000 + 1)) + 4000;
@@ -23,6 +23,7 @@ async function scheduleReply(tradeRef, subject, body) {
     replyType: "CPTY_EMAIL",
     subject,
     body,
+    desk,
     sendAt: new Date(Date.now() + delay)
   });
 
@@ -94,7 +95,14 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
     } else {
 
       const parsed = aiParser.parseEmail(reply.body);
-      const aiResponse = await cptyAI.generateResponse(parsed, reply.tradeRef, reply.body);
+      
+      let aiResponse;
+      if (reply.desk === "SETTLEMENT") {
+        const cptySettlementAI = require("./cptySettlementAI");
+        aiResponse = await cptySettlementAI.generateResponse(parsed, reply.tradeRef, reply.body);
+      } else {
+        aiResponse = await cptyAI.generateResponse(parsed, reply.tradeRef, reply.body);
+      }
 
       if (aiResponse) {
 

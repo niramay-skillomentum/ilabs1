@@ -194,4 +194,15 @@ Used in `CONFIRM_REJECT_CLAIM` / `CONFIRM_REQUEST_EVIDENCE` to decide if CPTY au
 | 5 | Agenda sweep | Periodic job may sweep expired sessions |
 
 In all cases, `endSession()` sets `Queue.isActive = false` and unassigns all trades (`assignedTo = null`) to return them to the pool.
+
+---
+
+## Settlement Rules
+
+| Rule | Description |
+|------|-------------|
+| SET-01 | **Bilateral Settlement**: Allows users to compare System (Booking) vs Truth. If there's a discrepancy, users can raise a break and use "Mail CPTY" to communicate and resolve the discrepancy. |
+| SET-02 | **Electronic Settlement**: Strict matching required. Users compare System vs Truth. If there is a mismatch, the user *must* explicitly "Raise Break" to unlock the "Edit Details" functionality. |
+| SET-03 | **Electronic Mail Restriction**: Electronic settlement does not support the "Mail CPTY" flow. Users are forced to edit and correct system values directly based on the Expected Truth. |
+| SET-04 | **SSI Validation**: In both settlement types, `APPROVE_SETTLEMENT` strictly validates that all 9 SSI fields (beneficiaryName, bank, BIC, accountNumber, accountType, currency, method, correspondent, paymentRef) match the truth. Any mismatch during approval triggers a 10-point scoring penalty. |
  file_path: /workspace/ilabs1/ai/BUSINESS_RULES.md

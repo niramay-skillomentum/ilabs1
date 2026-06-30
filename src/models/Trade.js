@@ -53,7 +53,17 @@ const TradeSchema = new mongoose.Schema({
       amount: Number,
       valueDate: Date,
       currency: String,
-      counterparty: String
+      counterparty: String,
+      beneficiaryName: String,
+      beneficiaryBank: String,
+      beneficiaryBIC: String,
+      accountNumber: String,
+      accountType: String,
+      settlementMethod: String,
+      correspondentBank: String,
+      paymentReference: String,
+      settlementDate: Date,
+      settlementType: String
     }
   },
 
@@ -62,6 +72,20 @@ const TradeSchema = new mongoose.Schema({
     valueDate: Date,
     currency: String,
     counterparty: String
+  },
+
+  settlementDetails: {
+    beneficiaryName: String,
+    beneficiaryBank: String,
+    beneficiaryBIC: String,
+    accountNumber: String,
+    accountType: String,
+    currency: String,
+    settlementMethod: String,
+    correspondentBank: String,
+    paymentReference: String,
+    settlementDate: Date,
+    settlementType: String
   },
 
   // ======================================

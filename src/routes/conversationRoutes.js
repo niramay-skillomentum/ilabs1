@@ -99,7 +99,8 @@ router.post("/send", authenticateToken, async (req, res) => {
     communicationEngine.scheduleReply(
       tradeRef,
       subject,
-      message
+      message,
+      desk
     );
     auditDetails = "Sent mail to Counterparty";
   }

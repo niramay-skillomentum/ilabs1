@@ -17,10 +17,14 @@ const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "AUD"];
 const COUNTERPARTIES = ["CITI", "HSBC", "DB", "JPM", "BNP", "BARC", "MS", "UBS"];
 const ENTITIES = ["GS London", "GS New York", "GS Singapore", "GS Tokyo", "GS Frankfurt"];
 const REGIONS = ["AMER", "EMEA", "APAC"];
-const PRODUCTS = ["FX", "Equity", "Derivatives", "Fixed Income"];
-const TRADE_TYPES = ["OTC", "Listed"];
-const SETTLEMENT_TYPES = ["Electronic", "Bilateral"];
+const PRODUCTS = [
+  "FX Spot", "FX Forward", "Interest Rate Swap", "Credit Default Swap",
+  "Equity", "Corporate Bond", "Government Bond", "Listed Futures", "Listed Options"
+];
+const TRADE_TYPES = ["OTC", "Listed", "Exchange", "Depository"];
+const SETTLEMENT_TYPES = ["ELECTRONIC", "BILATERAL"];
 const DIRECTIONS = ["BUY", "SELL"];
+const SSI_BICS = ["CITIUS33", "HSBCGB2L", "DEUTDEFF", "CHASUS33", "BNPADEFF", "BARCGB2L", "MSUS33", "UBSWCHZH"];
 
 const MO_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY", "COUNTERPARTY"];
 // Confirmation breaks: no counterparty mismatch per user feedback
@@ -285,9 +289,11 @@ function generateXmlAudit(trade) {
  * @param {boolean} isMoBreak - Whether to inject an MO-level break
  * @param {string|null} forcedStatus - Force a specific status
  * @param {boolean} hasConfirmationBreak - Whether to inject a confirmation-level break
+ * @param {string} settlementInitialState - Configured initial state for settlement
+ * @param {boolean} hasSettlementBreak - Whether to inject a settlement-level break
  * @returns {Object} Trade object (not yet saved to DB)
  */
-function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false) {
+function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false, settlementInitialState = "SETTLEMENT_PENDING", hasSettlementBreak = false) {
   const now = new Date();
   const tradeDate = new Date(now);
 
@@ -300,6 +306,23 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
   const currency = pick(CURRENCIES);
   const product = pick(PRODUCTS);
+
+  let derivedTradeType = "";
+  let derivedSettlementType = "";
+
+  if (["FX Spot", "FX Forward", "Interest Rate Swap", "Credit Default Swap"].includes(product)) {
+    derivedTradeType = "OTC";
+    derivedSettlementType = "BILATERAL";
+  } else if (["Equity", "Listed Futures", "Listed Options"].includes(product)) {
+    derivedTradeType = "Exchange";
+    derivedSettlementType = "ELECTRONIC";
+  } else if (product === "Corporate Bond") {
+    derivedTradeType = pick(["Exchange", "Depository"]);
+    derivedSettlementType = "ELECTRONIC";
+  } else if (product === "Government Bond") {
+    derivedTradeType = "Depository";
+    derivedSettlementType = "ELECTRONIC";
+  }
 
   // T+2 enforcement
   let valueDate = new Date(tradeDate);
@@ -382,9 +405,51 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   } else if (desk === "CONFIRMATION") {
     currentStatus = isMoBreak ? "CONFIRMATION_BREAK" : "CONFIRMATION_PENDING";
   } else if (desk === "SETTLEMENT") {
-    currentStatus = isMoBreak ? "SETTLEMENT_BREAK" : "SETTLEMENT_PENDING";
+    currentStatus = isMoBreak ? "SETTLEMENT_BREAK" : settlementInitialState;
   } else {
     currentStatus = desk + "_PENDING";
+  }
+
+  // 4. SETTLEMENT DETAILS GENERATION
+  const sBeneficiaryName = initialCounterparty + " Global Markets";
+  const sBeneficiaryBank = pick(COUNTERPARTIES) + " Bank N.A.";
+  const sBeneficiaryBIC = pick(SSI_BICS);
+  const sAccountNumber = Math.floor(Math.random() * 90000000) + 10000000 + "";
+  const sAccountType = "Nostro";
+  const sSettlementMethod = "SWIFT";
+  const sCorrespondentBank = pick(COUNTERPARTIES) + " NY";
+  const sPaymentReference = "TRD" + Math.floor(Math.random() * 900000) + 100000;
+  const sSettlementDate = universalTruth.valueDate;
+  const sSettlementType = derivedSettlementType;
+
+  let bookingBeneficiaryName = sBeneficiaryName;
+  let bookingBeneficiaryBank = sBeneficiaryBank;
+  let bookingBeneficiaryBIC = sBeneficiaryBIC;
+  let bookingAccountNumber = sAccountNumber;
+  let bookingAccountType = sAccountType;
+  let bookingSettlementCurrency = universalTruth.currency;
+  let bookingSettlementMethod = sSettlementMethod;
+  let bookingCorrespondentBank = sCorrespondentBank;
+  let bookingPaymentReference = sPaymentReference;
+  let bookingSettlementDate = bookingValueDate;
+
+  if (hasSettlementBreak) {
+    const breakFields = ["beneficiaryName", "beneficiaryBank", "beneficiaryBIC", "accountNumber", "accountType", "currency", "settlementMethod", "correspondentBank", "paymentReference", "settlementDate"];
+    const field = pick(breakFields);
+    if (field === "beneficiaryName") bookingBeneficiaryName = "WRONG NAME";
+    else if (field === "beneficiaryBank") bookingBeneficiaryBank = "WRONG BANK";
+    else if (field === "beneficiaryBIC") bookingBeneficiaryBIC = "WRONGBIC";
+    else if (field === "accountNumber") bookingAccountNumber = "99999999";
+    else if (field === "accountType") bookingAccountType = "Vostro";
+    else if (field === "currency") bookingSettlementCurrency = pick(CURRENCIES.filter(c => c !== universalTruth.currency));
+    else if (field === "settlementMethod") bookingSettlementMethod = "CHAPS";
+    else if (field === "correspondentBank") bookingCorrespondentBank = "WRONG CORRESPONDENT";
+    else if (field === "paymentReference") bookingPaymentReference = "WRONG_REF";
+    else if (field === "settlementDate") {
+      const d = new Date(bookingSettlementDate);
+      d.setDate(d.getDate() + 1);
+      bookingSettlementDate = d;
+    }
   }
 
   const trade = {
@@ -423,8 +488,32 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
         amount: universalTruth.amount,
         valueDate: universalTruth.valueDate,
         currency: universalTruth.currency,
-        counterparty: universalTruth.counterparty
+        counterparty: universalTruth.counterparty,
+        beneficiaryName: sBeneficiaryName,
+        beneficiaryBank: sBeneficiaryBank,
+        beneficiaryBIC: sBeneficiaryBIC,
+        accountNumber: sAccountNumber,
+        accountType: sAccountType,
+        settlementMethod: sSettlementMethod,
+        correspondentBank: sCorrespondentBank,
+        paymentReference: sPaymentReference,
+        settlementDate: sSettlementDate,
+        settlementType: sSettlementType
       }
+    },
+
+    settlementDetails: {
+      beneficiaryName: bookingBeneficiaryName,
+      beneficiaryBank: bookingBeneficiaryBank,
+      beneficiaryBIC: bookingBeneficiaryBIC,
+      accountNumber: bookingAccountNumber,
+      accountType: bookingAccountType,
+      currency: bookingSettlementCurrency,
+      settlementMethod: bookingSettlementMethod,
+      correspondentBank: bookingCorrespondentBank,
+      paymentReference: bookingPaymentReference,
+      settlementDate: bookingSettlementDate,
+      settlementType: sSettlementType
     },
 
     booking: {
@@ -455,8 +544,8 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
     entity: pick(ENTITIES),
     foRegion: pick(REGIONS),
     product,
-    tradeType: pick(TRADE_TYPES),
-    settlementType: pick(SETTLEMENT_TYPES),
+    tradeType: derivedTradeType,
+    settlementType: derivedSettlementType,
 
     age: ageCalculator.calculateAge(tradeDate, now, desk),
     assignedTo: null,
@@ -479,14 +568,15 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
  * @param {number} cleanCount - Number of clean trades
  * @param {number} breakCount - Number of break trades
  * @param {string} desk - Target desk
+ * @param {string} settlementInitialState - Configured initial state for settlement
  * @returns {Array} Array of trade objects with XML audits attached
  */
-function generateTrades(cleanCount, breakCount, desk) {
+function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "SETTLEMENT_PENDING") {
   const trades = [];
 
   let defaultCleanStatus = "MO_PENDING";
   if (desk === "CONFIRMATION") defaultCleanStatus = "CONFIRMATION_PENDING";
-  if (desk === "SETTLEMENT") defaultCleanStatus = "SETTLEMENT_PENDING";
+  if (desk === "SETTLEMENT") defaultCleanStatus = settlementInitialState;
 
   // ── Generate CLEAN trades ──
   // For MO desk, some clean trades might have a hidden confirmation break
@@ -495,7 +585,7 @@ function generateTrades(cleanCount, breakCount, desk) {
     if (desk === "MO") {
       hasConfirmationBreak = Math.random() < CONFIRMATION_BREAK_RATIO;
     }
-    const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak);
+    const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak, settlementInitialState);
 
     // Generate XML audit (story: captured → validated → routed)
     const { xml } = generateXmlAudit(trade);
@@ -509,6 +599,7 @@ function generateTrades(cleanCount, breakCount, desk) {
     let isMoBreak = false;
     let status = defaultCleanStatus;
     let hasConfirmationBreak = false;
+    let hasSettlementBreak = false;
 
     if (desk === "MO") {
       isMoBreak = true;
@@ -522,10 +613,11 @@ function generateTrades(cleanCount, breakCount, desk) {
       status = "CONFIRMATION_BREAK";
     } else if (desk === "SETTLEMENT") {
       isMoBreak = false;
-      status = "SETTLEMENT_PENDING";
+      hasSettlementBreak = true;
+      status = settlementInitialState;
     }
 
-    const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak);
+    const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak, settlementInitialState, hasSettlementBreak);
 
     // Generate XML audit
     const { xml } = generateXmlAudit(trade);

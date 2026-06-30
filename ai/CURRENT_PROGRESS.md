@@ -45,6 +45,8 @@ content: # Current Progress
 - [x] Workstation — trade queue table, action panel, audit trail popup, truth viewer, CSV export
 - [x] Communication page — full email mailbox (CPTY inbox, FO channel, compose, reply)
 - [x] MO Risk / Termsheet reference viewer
+- [x] Bilateral Settlement Dashboard — System vs Truth comparison and resolution
+- [x] Electronic Settlement Dashboard — Strict System vs Truth comparison without external mail capability
 - [x] Session timer — real-time countdown display
 - [x] Simulation clock — client-side calculation (no backend clock dependency)
 - [x] Socket.io real-time updates

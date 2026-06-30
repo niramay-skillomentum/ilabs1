@@ -20,6 +20,7 @@ const pendingReplySchema = new mongoose.Schema({
   body: { type: String },
   userMessage: { type: String },
   escalationContext: { type: String },
+  desk: { type: String }, // To identify which desk triggered this reply
   isFinalReply: { type: Boolean, default: false },
   payload: { type: mongoose.Schema.Types.Mixed } // Stores complex response objects like cptyResponse or foResponse
 }, { timestamps: true });

@@ -74,3 +74,28 @@ The Mailbox is a 3-panel UI mimicking an email client for ops-to-ops or ops-to-c
 - **UI:** Splitscreen layout. Left side lists trades.
 - **User Action:** Clicks a trade on the left.
 - **UI Update:** Right side (`TermsheetViewer` component) extracts `trade.truth` (the immutable generated truth representing the physical FO document) and displays it formatted. This allows the user to compare the "Risk system" view (in Workstation) vs the "FO Termsheet" (in MO-Risk) to spot breaks.
+
+---
+
+## 5. Settlement Flows
+
+Settlement flows are designed to simulate the final stages of trade processing, where operations compare booked SSI (Standard Settlement Instructions) details against expected truth details. 
+
+### Sub-Flow: Bilateral Settlement
+- **Navigation:** User clicks "Action" on a trade in `SETTLEMENT_PENDING` status and selects `Bilateral`.
+- **UI:** The Bilateral Dashboard (`frontend/src/app/settlement/bilateral/page.js`) is loaded.
+- **User Action (Match):** If system details exactly match truth details, user clicks "Approve Settlement". Status transitions to `SETTLED`.
+- **User Action (Mismatch):** 
+  - User clicks "Raise Break". Status becomes `SETTLEMENT_BREAK`.
+  - User can then click "Edit Details" to correct the system values, OR
+  - User can click "Mail CPTY" to navigate to the mailbox and communicate with the counterparty.
+
+### Sub-Flow: Electronic Settlement
+- **Navigation:** User clicks "Action" on a trade in `SETTLEMENT_PENDING` status and selects `Electronic`.
+- **UI:** The Electronic Dashboard (`frontend/src/app/settlement/electronic/page.js`) is loaded.
+- **User Action (Match):** If system details exactly match truth details, user clicks "Approve Settlement". Status transitions to `SETTLED`.
+- **User Action (Mismatch):**
+  - Mail CPTY functionality is completely disabled/removed for Electronic settlement.
+  - User must first click "Raise Break" to transition the trade to `SETTLEMENT_BREAK`.
+  - Only after raising a break does the "Edit Details" button become enabled.
+  - User fixes the system details to match the expected truth and clicks "Approve Settlement".

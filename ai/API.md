@@ -382,6 +382,25 @@ The `xmlAudit` field is the XML from the trade's `auditXml` field (generated at 
 
 ---
 
+## Settlement Routes — `/api/settlement` 🔒
+
+### `POST /api/settlement/select-type`
+Validates the user's choice of settlement type (Bilateral vs Electronic). Applies penalty if incorrect.
+
+### `GET /api/settlement/bilateral/:tradeRef`
+Fetches the trade for the Bilateral Settlement Dashboard.
+
+### `POST /api/settlement/bilateral/action`
+Performs an action on a Bilateral Settlement trade (`APPROVE_SETTLEMENT`, `RAISE_BREAK`, `EDIT_SETTLEMENT`, `MAIL_CPTY`).
+
+### `GET /api/settlement/electronic/:tradeRef`
+Fetches the trade for the Electronic Settlement Dashboard.
+
+### `POST /api/settlement/electronic/action`
+Performs an action on an Electronic Settlement trade (`APPROVE_SETTLEMENT`, `RAISE_BREAK`, `EDIT_SETTLEMENT`). Does NOT include `MAIL_CPTY`.
+
+---
+
 ## Clock Routes — `/api/clock`
 
 ### `GET /api/clock`

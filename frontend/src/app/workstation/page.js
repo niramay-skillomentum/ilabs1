@@ -28,6 +28,7 @@ function WorkstationComponent() {
   const [isRefreshingQueue, setIsRefreshingQueue] = useState(false);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [settlementTypeSelection, setSettlementTypeSelection] = useState("BILATERAL");
 
   const alert1hrShown = useRef(false);
   const alert10minShown = useRef(false);
@@ -251,6 +252,12 @@ function WorkstationComponent() {
     setComment("");
   };
 
+  const handleOpenSettlementType = () => {
+    if (!selectedTrade) return toast.error("Select trade first");
+    setPopupState({ type: "settlement_type" });
+    setSettlementTypeSelection("BILATERAL");
+  };
+
   const submitAction = async () => {
     if (!comment || comment.trim() === "") console.warn("No comment provided - will be penalized in scoring");
     setIsSubmittingAction(true);
@@ -265,15 +272,63 @@ function WorkstationComponent() {
     setPopupState({ type: null });
   };
 
+  const submitSettlementType = async () => {
+    setIsSubmittingAction(true);
+    const res = await fetch("/api/settlement/select-type", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ tradeRef: selectedTrade.tradeRef, selectedType: settlementTypeSelection })
+    });
+    const data = await res.json();
+    setIsSubmittingAction(false);
+    
+    if (!res.ok || !data.success) {
+      toast.error(data.error || "Incorrect Settlement Type");
+      setPopupState({ type: null }); // allow them to retry by reopening modal
+      return;
+    }
+    
+    toast.success("Correct Settlement Type!");
+    setPopupState({ type: null });
+    window.open(data.redirect + "?tradeRef=" + selectedTrade.tradeRef, "_blank");
+  };
+
   const downloadCSV = () => {
     if (!queue || queue.length === 0) return toast.error("No data to export");
-    const headers = [
+    const baseHeaders = [
       "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "Counterparty", "Entity", "FO Region",
-      "Product", "Trade Type", "Settlement Type", "Direction", "Currency", "Amount"
+      "Product", "Trade Type"
     ];
+    
+    let headers = [...baseHeaders];
+    if (desk === "SETTLEMENT") {
+      headers = headers.concat(["Beneficiary Name", "Beneficiary BIC", "Account Number", "Account Type", "Settlement Method", "Direction", "Currency", "Amount"]);
+    } else {
+      headers = headers.concat(["Settlement Type", "Direction", "Currency", "Amount"]);
+    }
+
     let csv = headers.join(",") + "\n";
     queue.forEach(t => {
-      csv += [t.tradeRef, t.currentStatus, t.nextDesk, t.age, format(t.tradeDate), format(t.valueDate), t.counterparty, t.entity, t.foRegion, t.product, t.tradeType, t.settlementType, t.direction, t.currency, t.amount].join(",") + "\n";
+      let row = [
+        t.tradeRef, t.currentStatus, t.nextDesk, t.age, format(t.tradeDate), format(t.valueDate), 
+        t.counterparty, t.entity, t.foRegion, t.product, t.tradeType
+      ];
+      
+      if (desk === "SETTLEMENT") {
+        row = row.concat([
+          t.settlementDetails?.beneficiaryName || "",
+          t.settlementDetails?.beneficiaryBIC || "",
+          t.settlementDetails?.accountNumber || "",
+          t.settlementDetails?.accountType || "",
+          t.settlementDetails?.settlementMethod || "",
+          t.direction,
+          t.currency,
+          t.amount
+        ]);
+      } else {
+        row = row.concat([t.settlementType || "", t.direction, t.currency, t.amount]);
+      }
+      
+      csv += row.join(",") + "\n";
     });
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -439,7 +494,18 @@ function WorkstationComponent() {
               <tr>
                 <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Desk</th><th className="num">Age</th>
                 <th>Trade Date</th><th>Value Date</th><th>Counterparty</th><th>Entity</th><th>FO Region</th>
-                <th>Product</th><th>Trade Type</th><th>Settlement Type</th><th>Direction</th><th>Currency</th>
+                <th>Product</th><th>Trade Type</th>
+                {desk !== "SETTLEMENT" && <th>Settlement Type</th>}
+                {desk === "SETTLEMENT" && (
+                  <>
+                    <th>Beneficiary Name</th>
+                    <th>Beneficiary BIC</th>
+                    <th>Account #</th>
+                    <th>Account Type</th>
+                    <th>Settlement Method</th>
+                  </>
+                )}
+                <th>Direction</th><th>Currency</th>
                 <th className="num">Amount</th>
               </tr>
             </thead>
@@ -458,7 +524,16 @@ function WorkstationComponent() {
                   <td>{t.foRegion}</td>
                   <td>{t.product}</td>
                   <td>{t.tradeType}</td>
-                  <td>{t.settlementType}</td>
+                  {desk !== "SETTLEMENT" && <td>{t.settlementType}</td>}
+                  {desk === "SETTLEMENT" && (
+                    <>
+                      <td>{t.settlementDetails?.beneficiaryName}</td>
+                      <td>{t.settlementDetails?.beneficiaryBIC}</td>
+                      <td>{t.settlementDetails?.accountNumber}</td>
+                      <td>{t.settlementDetails?.accountType}</td>
+                      <td>{t.settlementDetails?.settlementMethod}</td>
+                    </>
+                  )}
                   <td>{t.direction}</td>
                   <td>{t.currency}</td>
                   <td className="num">{t.amount ? t.amount.toLocaleString() : ''}</td>
@@ -496,6 +571,7 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_FOLLOW_UP_CPTY')}>Follow-up</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
+                <button className="btn warning" onClick={handleOpenSettlementType}>Select Settlement Type</button>
               </>
             )}
           </div>
@@ -516,6 +592,27 @@ function WorkstationComponent() {
           <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
             <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSubmittingAction}>Cancel</button>
             <button className="btn primary" onClick={submitAction} disabled={isSubmittingAction}>
+              {isSubmittingAction ? "Submitting..." : "Submit"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {popupState.type === "settlement_type" && (
+        <div className="popup" style={{display: 'block'}}>
+          <h3 style={{marginBottom: '10px'}}>Choose Settlement Type</h3>
+          <div style={{color: '#475569', fontSize: '14px', marginBottom: '15px'}}>Select the correct settlement type to process this trade.</div>
+          <select 
+            value={settlementTypeSelection} 
+            onChange={(e) => setSettlementTypeSelection(e.target.value)}
+            style={{width: '100%', padding: '12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', marginTop: '10px'}}
+          >
+            <option value="BILATERAL">Bilateral</option>
+            <option value="ELECTRONIC">Electronic</option>
+          </select>
+          <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
+            <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSubmittingAction}>Cancel</button>
+            <button className="btn primary" onClick={submitSettlementType} disabled={isSubmittingAction}>
               {isSubmittingAction ? "Submitting..." : "Submit"}
             </button>
           </div>
