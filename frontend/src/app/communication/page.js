@@ -205,6 +205,11 @@ function CommunicationComponent() {
               if (trade) {
                 setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
               }
+            } else if (dsk === "SETTLEMENT" && (composeToRecipient || "FO") === "COUNTERPARTY") {
+              const trade = data.trades.find(t => t.tradeRef === composeForTrade);
+              if (trade) {
+                setComposeBody(`Dear Counterparty,\n\nWe are preparing to settle trade ${trade.tradeRef}. Please confirm your Standard Settlement Instructions (SSI ID) for this transaction so we can verify our system details before approving settlement.\n\nRegards,\nSettlement Desk`);
+              }
             } else {
               setComposeBody("");
             }
@@ -463,8 +468,13 @@ function CommunicationComponent() {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({ trade: { tradeRef: composeTrade }, action: composeAction, comment: composeBody })
-      }).then(() => {
+      })
+      .then(res => res.json())
+      .then(data => {
         setIsSendingCompose(false);
+        if (!data.success) {
+          return toast.error(data.error || "Failed to send message");
+        }
         setComposeModalOpen(false);
         setSelectedTradeRef(composeTrade);
         selectedTradeRefRef.current = composeTrade;
@@ -472,6 +482,10 @@ function CommunicationComponent() {
         if (folder === "inbox") loadPersonalInbox(desk, userId, channel);
         else if (folder === "group" && channel !== "FO") loadGroupInbox(desk);
         setTimeout(() => loadConversation(composeTrade, channel, null, true), 500);
+      })
+      .catch(err => {
+        setIsSendingCompose(false);
+        toast.error("Network error");
       });
       return;
     }

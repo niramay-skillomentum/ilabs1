@@ -50,6 +50,33 @@ router.post("/select-type", authenticateToken, async (req, res) => {
   }
 });
 
+router.post("/edit-ssi", authenticateToken, async (req, res) => {
+  try {
+    const { tradeRef, ssiData } = req.body;
+    const userId = req.user.userId;
+
+    const trade = await Trade.findOne({ tradeRef, assignedTo: userId });
+    if (!trade) return res.status(404).json({ success: false, error: "Trade not found in session" });
+    
+    // Update the system settlementDetails
+    trade.settlementDetails = { ...trade.settlementDetails, ...ssiData };
+    trade.markModified('settlementDetails');
+    await trade.save();
+
+    await auditEngine.recordEvent(
+      tradeRef,
+      userId,
+      "SETTLEMENT_SSI_EDITED",
+      "User manually edited SSI details from the workstation"
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Edit SSI error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ======================================
 // BILATERAL SETTLEMENT ENDPOINTS
 // ======================================

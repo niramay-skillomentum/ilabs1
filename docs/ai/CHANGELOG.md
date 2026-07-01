@@ -4,9 +4,20 @@ All notable changes — reverse chronological order.
 
 ---
 
-## [Unreleased] — 2026-06-29
+## [Unreleased] — 2026-06-30
 
-### Fixed
+### Added
+- **Global SSI Database**: Introduced a static database containing 32 distinct entity SSIs. Added `/ssi-database` frontend UI and `/api/ssi/search` endpoint to retrieve SSI details based on unique alphanumeric identifiers.
+- **Bilateral Settlement Manual Verification Flow**: Removed direct redirection to a Bilateral Settlement Dashboard. Users must now email the CPTY for the SSI ID, look it up in the SSI Database, and manually compare/edit the Workstation's SSI values before approving. 
+- **Workstation SSI Editing**: Added ability for users to directly edit a trade's system-booked SSI details in the Workstation's "View SSI" modal during a Settlement Break.
+- **CPTY Settlement AI Persona**: Created `cptySettlementAI.js` to specifically handle CPTY responses for the Settlement Desk, forcing the AI to provide the SSI ID rather than directly confirming mismatched fields.
+
+### Changed
+- **SSI Validation**: `SETTLEMENT_APPROVE` in `tradeRoutes.js` now strictly validates Bilateral trades against the static underlying truths in the new SSI reference database.
+
+---
+
+## [Archived] — 2026-06-29
 - **Confirmation Desk Constraints**: Enforced action validation checks on frontend UI buttons ("Send to CPTY" and "Escalate to FO"). `CONFIRM_TRADE` now strictly requires `LIASING_WITH_CPTY` state, and "Escalate to FO" requires the user to manually trigger "Confirmation Break" first.
 - **FO Escalation State Bug**: Fixed `server.js` background polling loop improperly forcing `CONFIRMATION_BREAK` on all internal FO replies. Trades now correctly remain in `LIASING_WITH_FO` when FO replies with "Our records match".
 - **Proactive Email Generation**: Fixed `tradeGenerator.js` to correctly route `trade.truths.confirmation` discrepancy data instead of universal truths to the proactive Counterparty emails.

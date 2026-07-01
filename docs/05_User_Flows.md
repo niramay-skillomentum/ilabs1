@@ -82,13 +82,16 @@ The Mailbox is a 3-panel UI mimicking an email client for ops-to-ops or ops-to-c
 Settlement flows are designed to simulate the final stages of trade processing, where operations compare booked SSI (Standard Settlement Instructions) details against expected truth details. 
 
 ### Sub-Flow: Bilateral Settlement
-- **Navigation:** User clicks "Action" on a trade in `SETTLEMENT_PENDING` status and selects `Bilateral`.
-- **UI:** The Bilateral Dashboard (`frontend/src/app/settlement/bilateral/page.js`) is loaded.
-- **User Action (Match):** If system details exactly match truth details, user clicks "Approve Settlement". Status transitions to `SETTLED`.
+- **Navigation:** User clicks "Select Settlement Type" on a trade in `SETTLEMENT_PENDING` status and selects `Bilateral`.
+- **UI:** The user receives a confirmation toast but remains on the Workstation. There is no redirection to a separate dashboard.
+- **Verification:** User must click "SSI Database" to open the standalone SSI search application (`/ssi-database`).
+- **Counterparty Liaison:** User uses the Mailbox to email the Counterparty (CPTY) and asks to confirm settlement instructions. The CPTY (AI) responds with a unique SSI ID (e.g., `CITI-01`).
+- **Database Search:** User searches this SSI ID in the SSI Database to view the correct standard instructions.
+- **User Action (Match):** If the Workstation's "View SSI" details exactly match the Database's details, the user clicks "Approve Settlement". Status transitions to `READY_FOR_APPROVAL` (and ultimately `SETTLED`).
 - **User Action (Mismatch):** 
-  - User clicks "Raise Break". Status becomes `SETTLEMENT_BREAK`.
-  - User can then click "Edit Details" to correct the system values, OR
-  - User can click "Mail CPTY" to navigate to the mailbox and communicate with the counterparty.
+  - User clicks "Setts Break". Status becomes `SETTLEMENT_BREAK`.
+  - User opens "View SSI", clicks "Edit SSI", and manually corrects the system values to match the Database values.
+  - User saves the SSI and clicks "Approve Settlement". The backend strictly validates the manually entered details against the underlying truth before approving.
 
 ### Sub-Flow: Electronic Settlement
 - **Navigation:** User clicks "Action" on a trade in `SETTLEMENT_PENDING` status and selects `Electronic`.

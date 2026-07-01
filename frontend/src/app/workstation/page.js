@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { loadUserId, getToken, authHeaders, clearSession } from "../../lib/auth";
 import toast from "react-hot-toast";
+import InstructionPanel from "../../components/InstructionPanel";
+import TutorialPanel from "../../components/TutorialPanel";
 
 function WorkstationComponent() {
   const router = useRouter();
@@ -29,6 +31,8 @@ function WorkstationComponent() {
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [settlementTypeSelection, setSettlementTypeSelection] = useState("BILATERAL");
+  const [isEditingSSI, setIsEditingSSI] = useState(false);
+  const [ssiFormData, setSsiFormData] = useState({});
 
   const alert1hrShown = useRef(false);
   const alert10minShown = useRef(false);
@@ -231,9 +235,9 @@ function WorkstationComponent() {
     CONFIRM_RAISE_AMENDMENT: ["CONFIRMATION_BREAK"],
     CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
     CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
-    SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING"],
-    SETTLEMENT_RAISE_BREAK: ["READY_FOR_APPROVAL"],
-    SETTLEMENT_FOLLOW_UP_CPTY: ["SETTLEMENT_BREAK"]
+    SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "SETTLEMENT_BREAK"],
+    SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "READY_FOR_APPROVAL", "LIASING_WITH_CPTY"],
+    SETTLEMENT_FOLLOW_UP_CPTY: ["SETTLEMENT_PENDING", "SETTLEMENT_BREAK", "LIASING_WITH_CPTY"]
   };
 
   const handleOpenAction = (action) => {
@@ -272,6 +276,30 @@ function WorkstationComponent() {
     setPopupState({ type: null });
   };
 
+  const handleSaveSSI = async () => {
+    try {
+      const res = await fetch("/api/settlement/edit-ssi", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          tradeRef: popupState.trade.tradeRef,
+          ssiData: ssiFormData
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("SSI Updated Successfully");
+        setIsEditingSSI(false);
+        refreshQueueSilent();
+        setPopupState({type: null});
+      } else {
+        toast.error(data.error || "Failed to update SSI");
+      }
+    } catch (err) {
+      toast.error("Error saving SSI");
+    }
+  };
+
   const submitSettlementType = async () => {
     setIsSubmittingAction(true);
     const res = await fetch("/api/settlement/select-type", {
@@ -287,9 +315,14 @@ function WorkstationComponent() {
       return;
     }
     
-    toast.success("Correct Settlement Type!");
     setPopupState({ type: null });
-    window.open(data.redirect + "?tradeRef=" + selectedTrade.tradeRef, "_blank");
+    if (data.redirect) {
+      toast.success("Correct Settlement Type!");
+      window.open(data.redirect + "?tradeRef=" + selectedTrade.tradeRef, "_blank");
+    } else {
+      toast.success("Bilateral confirmed! Please verify SSI manually.", { duration: 4000 });
+      refreshQueueSilent();
+    }
   };
 
   const downloadCSV = () => {
@@ -353,11 +386,17 @@ function WorkstationComponent() {
     setPopupState({ type: "audit" });
   };
 
-  const openMailboxGeneral = (forceChannel) => {
+  const openMailboxGeneral = (forceChannel, forceComposeTo) => {
     const mailParams = new URLSearchParams({ desk });
-    if (selectedTrade) mailParams.set("tradeRef", selectedTrade.tradeRef);
+    if (selectedTrade) {
+      mailParams.set("tradeRef", selectedTrade.tradeRef);
+      mailParams.set("composeFor", selectedTrade.tradeRef);
+    }
     if (forceChannel) {
       mailParams.set("channel", forceChannel);
+    }
+    if (forceComposeTo) {
+      mailParams.set("composeTo", forceComposeTo);
     }
     window.open("/communication?" + mailParams.toString(), "_blank");
   };
@@ -377,6 +416,16 @@ function WorkstationComponent() {
     const mailParams = new URLSearchParams({
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
       composeAction: "CONFIRM_SEND_TO_CPTY"
+    });
+    window.open("/communication?" + mailParams.toString(), "_blank");
+  };
+
+  const startSettlementCptyFlow = () => {
+    if (!selectedTrade) return toast.error("Select trade first");
+    if (!allowed['SETTLEMENT_FOLLOW_UP_CPTY'] || !allowed['SETTLEMENT_FOLLOW_UP_CPTY'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+    const mailParams = new URLSearchParams({
+      desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
+      composeAction: "SETTLEMENT_FOLLOW_UP_CPTY"
     });
     window.open("/communication?" + mailParams.toString(), "_blank");
   };
@@ -419,6 +468,10 @@ function WorkstationComponent() {
                         selectedTrade.truth ? JSON.stringify(selectedTrade.truth, null, 2) : "No truths object found for this trade.";
     setAuditData({ xml: truthContent, trail: [] });
     setPopupState({ type: "truth" });
+  };
+
+  const viewSSI = (trade) => {
+    setPopupState({ type: "ssi", trade });
   };
 
   const openTermsheet = () => {
@@ -484,9 +537,13 @@ function WorkstationComponent() {
       </div>
 
       <div className="container">
-        <button className="btn warning" onClick={generateQueue} disabled={isGeneratingQueue}>
-          {isGeneratingQueue ? "Generating..." : "Generate Queue"}
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <button className="btn warning" onClick={generateQueue} disabled={isGeneratingQueue} style={{ margin: 0 }}>
+            {isGeneratingQueue ? "Generating..." : "Generate Queue"}
+          </button>
+          
+          <TutorialPanel desk={desk} />
+        </div>
         
         <div className="table-container">
           <table>
@@ -496,15 +553,7 @@ function WorkstationComponent() {
                 <th>Trade Date</th><th>Value Date</th><th>Counterparty</th><th>Entity</th><th>FO Region</th>
                 <th>Product</th><th>Trade Type</th>
                 {desk !== "SETTLEMENT" && <th>Settlement Type</th>}
-                {desk === "SETTLEMENT" && (
-                  <>
-                    <th>Beneficiary Name</th>
-                    <th>Beneficiary BIC</th>
-                    <th>Account #</th>
-                    <th>Account Type</th>
-                    <th>Settlement Method</th>
-                  </>
-                )}
+                {desk === "SETTLEMENT" && <th>SSI Details</th>}
                 <th>Direction</th><th>Currency</th>
                 <th className="num">Amount</th>
               </tr>
@@ -526,13 +575,9 @@ function WorkstationComponent() {
                   <td>{t.tradeType}</td>
                   {desk !== "SETTLEMENT" && <td>{t.settlementType}</td>}
                   {desk === "SETTLEMENT" && (
-                    <>
-                      <td>{t.settlementDetails?.beneficiaryName}</td>
-                      <td>{t.settlementDetails?.beneficiaryBIC}</td>
-                      <td>{t.settlementDetails?.accountNumber}</td>
-                      <td>{t.settlementDetails?.accountType}</td>
-                      <td>{t.settlementDetails?.settlementMethod}</td>
-                    </>
+                    <td>
+                      <button className="btn secondary" style={{padding: "4px 8px", fontSize: "11px", margin: 0}} onClick={(e) => { e.stopPropagation(); viewSSI(t); }}>View SSI</button>
+                    </td>
                   )}
                   <td>{t.direction}</td>
                   <td>{t.currency}</td>
@@ -570,8 +615,10 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_FOLLOW_UP_CPTY')}>Follow-up</button>
+                <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
                 <button className="btn warning" onClick={handleOpenSettlementType}>Select Settlement Type</button>
+                <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
               </>
             )}
           </div>
@@ -582,6 +629,9 @@ function WorkstationComponent() {
             <button className="btn secondary" style={{backgroundColor:"#8b5cf6", color:"white", border:"none"}} onClick={viewTruth}>👁️ View Truth</button>
           </div>
         </div>
+
+        {/* Instructions Panel */}
+        {desk && <InstructionPanel desk={desk} />}
       </div>
 
       {popupState.type === "action" && (
@@ -655,6 +705,69 @@ function WorkstationComponent() {
             )}
           </div>
           <button onClick={() => setPopupState({type: null})}>Close</button>
+        </div>
+      )}
+
+      {popupState.type === "ssi" && popupState.trade && (
+        <div className="popup" style={{display: 'block', width: '600px'}}>
+          <h3 style={{marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px'}}>
+            Standard Settlement Instructions 
+            {popupState.trade.currentStatus === 'SETTLEMENT_BREAK' && !isEditingSSI && (
+              <button onClick={() => {
+                setSsiFormData(popupState.trade.settlementDetails || {});
+                setIsEditingSSI(true);
+              }} style={{marginLeft: "15px", padding: "4px 8px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer"}}>Edit SSI</button>
+            )}
+          </h3>
+          <div style={{fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#334155'}}>
+            {!isEditingSSI ? (
+              <>
+                <div style={{marginBottom: '16px'}}>
+                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Currency & Method</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Currency:</strong> {popupState.trade.currency}</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Settlement Method:</strong> {popupState.trade.settlementDetails?.settlementMethod}</div>
+                </div>
+                <div style={{marginBottom: '16px'}}>
+                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Beneficiary Customer</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Name:</strong> {popupState.trade.settlementDetails?.beneficiaryName}</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Account Number:</strong> {popupState.trade.settlementDetails?.accountNumber}</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Account Type:</strong> {popupState.trade.settlementDetails?.accountType}</div>
+                </div>
+                <div style={{marginBottom: '16px'}}>
+                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Beneficiary Institution</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Bank Name:</strong> {popupState.trade.settlementDetails?.beneficiaryBank}</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>BIC / SWIFT:</strong> {popupState.trade.settlementDetails?.beneficiaryBIC}</div>
+                </div>
+                <div style={{marginBottom: '16px'}}>
+                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Intermediary / Correspondent</div>
+                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Correspondent Bank:</strong> {popupState.trade.settlementDetails?.correspondentBank}</div>
+                </div>
+              </>
+            ) : (
+              <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
+                {["beneficiaryName", "accountNumber", "accountType", "beneficiaryBank", "beneficiaryBIC", "settlementMethod", "correspondentBank"].map(field => (
+                  <div key={field} style={{display: "flex", alignItems: "center"}}>
+                    <label style={{width: "180px", fontWeight: "bold"}}>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+                    <input 
+                      style={{flex: 1, padding: "6px", border: "1px solid #cbd5e1", borderRadius: "4px"}}
+                      value={ssiFormData[field] || ""}
+                      onChange={e => setSsiFormData({...ssiFormData, [field]: e.target.value})}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '20px', gap: '10px'}}>
+            {!isEditingSSI ? (
+              <button className="btn secondary" onClick={() => setPopupState({type: null})}>Close</button>
+            ) : (
+              <>
+                <button className="btn secondary" onClick={() => setIsEditingSSI(false)}>Cancel Edit</button>
+                <button className="btn primary" onClick={handleSaveSSI}>Save Changes</button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </>

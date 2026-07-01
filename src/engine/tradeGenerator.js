@@ -26,6 +26,90 @@ const SETTLEMENT_TYPES = ["ELECTRONIC", "BILATERAL"];
 const DIRECTIONS = ["BUY", "SELL"];
 const SSI_BICS = ["CITIUS33", "HSBCGB2L", "DEUTDEFF", "CHASUS33", "BNPADEFF", "BARCGB2L", "MSUS33", "UBSWCHZH"];
 
+const CPTY_SSIS = {
+  "CITI": [
+    { ssiId: "CPTY-CITI-01", beneficiaryName: "Citigroup Global Markets Inc", beneficiaryBank: "Citibank N.A. New York", beneficiaryBIC: "CITIUS33", accountNumber: "10293847", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
+    { ssiId: "CPTY-CITI-02", beneficiaryName: "Citigroup Global Markets Ltd", beneficiaryBank: "Citibank N.A. London", beneficiaryBIC: "CITIGB2L", accountNumber: "39481920", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. London"  },
+    { ssiId: "CPTY-CITI-03", beneficiaryName: "Citibank Singapore", beneficiaryBank: "Citibank N.A. Singapore", beneficiaryBIC: "CITISGSG", accountNumber: "83749210", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
+    { ssiId: "CPTY-CITI-04", beneficiaryName: "Citigroup Global Markets Europe", beneficiaryBank: "Citibank Europe PLC", beneficiaryBIC: "CITIIE2D", accountNumber: "55667788", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "Citibank N.A. London"  }
+  ],
+  "HSBC": [
+    { ssiId: "CPTY-HSBC-01", beneficiaryName: "HSBC Bank PLC", beneficiaryBank: "HSBC London", beneficiaryBIC: "HSBCGB2L", accountNumber: "88992211", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "HSBC London"  },
+    { ssiId: "CPTY-HSBC-02", beneficiaryName: "HSBC USA Inc", beneficiaryBank: "HSBC Bank USA N.A.", beneficiaryBIC: "HSBCUS33", accountNumber: "77665544", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank USA N.A."  },
+    { ssiId: "CPTY-HSBC-03", beneficiaryName: "HSBC France", beneficiaryBank: "HSBC Continental Europe", beneficiaryBIC: "HSBCFRPP", accountNumber: "11223344", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "HSBC Continental Europe"  },
+    { ssiId: "CPTY-HSBC-04", beneficiaryName: "HSBC Hong Kong", beneficiaryBank: "The Hongkong and Shanghai Banking Corp", beneficiaryBIC: "HSBCHKHH", accountNumber: "99887766", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank USA N.A."  }
+  ],
+  "DB": [
+    { ssiId: "CPTY-DB-01", beneficiaryName: "Deutsche Bank AG Frankfurt", beneficiaryBank: "Deutsche Bank AG", beneficiaryBIC: "DEUTDEFF", accountNumber: "10203040", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank AG"  },
+    { ssiId: "CPTY-DB-02", beneficiaryName: "Deutsche Bank Securities Inc", beneficiaryBank: "Deutsche Bank Trust Company Americas", beneficiaryBIC: "BKTRUS33", accountNumber: "50607080", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank Trust Company Americas"  },
+    { ssiId: "CPTY-DB-03", beneficiaryName: "Deutsche Bank AG London", beneficiaryBank: "Deutsche Bank AG London Branch", beneficiaryBIC: "DEUTGB2L", accountNumber: "11221122", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "Deutsche Bank AG London Branch"  },
+    { ssiId: "CPTY-DB-04", beneficiaryName: "Deutsche Bank AG Singapore", beneficiaryBank: "Deutsche Bank AG Singapore Branch", beneficiaryBIC: "DEUTSGSG", accountNumber: "33443344", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank Trust Company Americas"  }
+  ],
+  "JPM": [
+    { ssiId: "CPTY-JPM-01", beneficiaryName: "J.P. Morgan Securities LLC", beneficiaryBank: "JPMorgan Chase Bank N.A.", beneficiaryBIC: "CHASUS33", accountNumber: "90807060", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A."  },
+    { ssiId: "CPTY-JPM-02", beneficiaryName: "J.P. Morgan Securities PLC", beneficiaryBank: "JPMorgan Chase Bank N.A. London", beneficiaryBIC: "CHASGB2L", accountNumber: "10901090", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "JPMorgan Chase Bank N.A. London"  },
+    { ssiId: "CPTY-JPM-03", beneficiaryName: "J.P. Morgan SE", beneficiaryBank: "J.P. Morgan SE Frankfurt", beneficiaryBIC: "CHASDEFF", accountNumber: "50403020", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "J.P. Morgan SE Frankfurt"  },
+    { ssiId: "CPTY-JPM-04", beneficiaryName: "JPMorgan Chase Bank N.A. Sydney", beneficiaryBank: "JPMorgan Chase Bank N.A. Sydney Branch", beneficiaryBIC: "CHASAU2S", accountNumber: "12121212", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A."  }
+  ],
+  "BNP": [
+    { ssiId: "CPTY-BNP-01", beneficiaryName: "BNP Paribas SA", beneficiaryBank: "BNP Paribas Paris", beneficiaryBIC: "BNPADEFF", accountNumber: "11112222", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "BNP Paribas Paris"  },
+    { ssiId: "CPTY-BNP-02", beneficiaryName: "BNP Paribas Securities Corp", beneficiaryBank: "BNP Paribas New York Branch", beneficiaryBIC: "BNPAUS33", accountNumber: "33334444", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "BNP Paribas New York Branch"  },
+    { ssiId: "CPTY-BNP-03", beneficiaryName: "BNP Paribas London Branch", beneficiaryBank: "BNP Paribas London", beneficiaryBIC: "BNPAGB2L", accountNumber: "55556666", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "BNP Paribas London"  },
+    { ssiId: "CPTY-BNP-04", beneficiaryName: "BNP Paribas Singapore", beneficiaryBank: "BNP Paribas Singapore Branch", beneficiaryBIC: "BNPASGSG", accountNumber: "77778888", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "BNP Paribas New York Branch"  }
+  ],
+  "BARC": [
+    { ssiId: "CPTY-BARC-01", beneficiaryName: "Barclays Bank PLC", beneficiaryBank: "Barclays Bank PLC London", beneficiaryBIC: "BARCGB2L", accountNumber: "12344321", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "Barclays Bank PLC London"  },
+    { ssiId: "CPTY-BARC-02", beneficiaryName: "Barclays Capital Inc", beneficiaryBank: "Barclays Bank PLC New York", beneficiaryBIC: "BARCUS33", accountNumber: "56788765", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Barclays Bank PLC New York"  },
+    { ssiId: "CPTY-BARC-03", beneficiaryName: "Barclays Bank Ireland PLC", beneficiaryBank: "Barclays Bank Ireland PLC", beneficiaryBIC: "BARCIE2D", accountNumber: "90122109", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "Barclays Bank Ireland PLC"  },
+    { ssiId: "CPTY-BARC-04", beneficiaryName: "Barclays Bank PLC Singapore", beneficiaryBank: "Barclays Bank PLC Singapore Branch", beneficiaryBIC: "BARCSGSG", accountNumber: "34566543", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Barclays Bank PLC New York"  }
+  ],
+  "MS": [
+    { ssiId: "CPTY-MS-01", beneficiaryName: "Morgan Stanley & Co. LLC", beneficiaryBank: "Morgan Stanley Bank N.A.", beneficiaryBIC: "MSUS33", accountNumber: "10101010", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Morgan Stanley Bank N.A."  },
+    { ssiId: "CPTY-MS-02", beneficiaryName: "Morgan Stanley & Co. International", beneficiaryBank: "Morgan Stanley Bank International Ltd", beneficiaryBIC: "MSGB2L", accountNumber: "20202020", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "Morgan Stanley Bank International Ltd"  },
+    { ssiId: "CPTY-MS-03", beneficiaryName: "Morgan Stanley Europe SE", beneficiaryBank: "Morgan Stanley Europe SE", beneficiaryBIC: "MSDEFF", accountNumber: "30303030", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "Morgan Stanley Europe SE"  },
+    { ssiId: "CPTY-MS-04", beneficiaryName: "Morgan Stanley MUFG Securities Co", beneficiaryBank: "Morgan Stanley MUFG Securities Co Ltd", beneficiaryBIC: "MSJPJT", accountNumber: "40404040", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Morgan Stanley Bank N.A."  }
+  ],
+  "UBS": [
+    { ssiId: "CPTY-UBS-01", beneficiaryName: "UBS AG", beneficiaryBank: "UBS AG Zurich", beneficiaryBIC: "UBSWCHZH", accountNumber: "99009900", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "UBS AG Zurich"  },
+    { ssiId: "CPTY-UBS-02", beneficiaryName: "UBS Securities LLC", beneficiaryBank: "UBS AG Stamford Branch", beneficiaryBIC: "UBSWUS33", accountNumber: "88008800", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "UBS AG Stamford Branch"  },
+    { ssiId: "CPTY-UBS-03", beneficiaryName: "UBS AG London Branch", beneficiaryBank: "UBS AG London Branch", beneficiaryBIC: "UBSWGB2L", accountNumber: "77007700", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "UBS AG London Branch"  },
+    { ssiId: "CPTY-UBS-04", beneficiaryName: "UBS Europe SE", beneficiaryBank: "UBS Europe SE Frankfurt", beneficiaryBIC: "UBSWDEFF", accountNumber: "66006600", accountType: "Vostro", settlementMethod: "TARGET2", correspondentBank: "UBS Europe SE Frankfurt"  }
+  ]
+};
+
+const ENTITY_SSIS = {
+  "GS London": [
+    { ssiId: "ENT-GSLONDON-01", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "GS Bank PLC London", beneficiaryBIC: "GSGB2L", accountNumber: "12312312", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "GS Bank PLC London"  },
+    { ssiId: "ENT-GSLONDON-02", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "HSBC Bank PLC", beneficiaryBIC: "HSBCGB2L", accountNumber: "45645645", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank PLC"  },
+    { ssiId: "ENT-GSLONDON-03", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "Barclays Bank PLC", beneficiaryBIC: "BARCGB2L", accountNumber: "78978978", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Barclays Bank PLC"  },
+    { ssiId: "ENT-GSLONDON-04", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "Lloyds Bank PLC", beneficiaryBIC: "LLOYGB2L", accountNumber: "32132132", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "Lloyds Bank PLC"  }
+  ],
+  "GS New York": [
+    { ssiId: "ENT-GSNEWYORK-01", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "GS Bank USA New York", beneficiaryBIC: "GSUS33", accountNumber: "98798798", accountType: "Nostro", settlementMethod: "FEDWIRE", correspondentBank: "GS Bank USA New York"  },
+    { ssiId: "ENT-GSNEWYORK-02", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "JPMorgan Chase Bank N.A.", beneficiaryBIC: "CHASUS33", accountNumber: "65465465", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A."  },
+    { ssiId: "ENT-GSNEWYORK-03", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "Citibank N.A. New York", beneficiaryBIC: "CITIUS33", accountNumber: "32132132", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
+    { ssiId: "ENT-GSNEWYORK-04", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "Bank of America N.A.", beneficiaryBIC: "BOFAUS3N", accountNumber: "85285285", accountType: "Vostro", settlementMethod: "FEDWIRE", correspondentBank: "Bank of America N.A."  }
+  ],
+  "GS Singapore": [
+    { ssiId: "ENT-GSSINGAPORE-01", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "GS Bank Singapore", beneficiaryBIC: "GSSGSG", accountNumber: "11122233", accountType: "Nostro", settlementMethod: "MEPS", correspondentBank: "GS Bank Singapore"  },
+    { ssiId: "ENT-GSSINGAPORE-02", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "DBS Bank Ltd", beneficiaryBIC: "DBSSSGSG", accountNumber: "44455566", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "DBS Bank Ltd"  },
+    { ssiId: "ENT-GSSINGAPORE-03", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "Standard Chartered Bank", beneficiaryBIC: "SCBLSGSG", accountNumber: "77788899", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Standard Chartered Bank"  },
+    { ssiId: "ENT-GSSINGAPORE-04", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "Citibank N.A. Singapore", beneficiaryBIC: "CITISGSG", accountNumber: "22233344", accountType: "Vostro", settlementMethod: "MEPS", correspondentBank: "Citibank N.A. Singapore"  }
+  ],
+  "GS Tokyo": [
+    { ssiId: "ENT-GSTOKYO-01", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "GS Bank Tokyo", beneficiaryBIC: "GSJPJT", accountNumber: "99988877", accountType: "Nostro", settlementMethod: "BOJ-NET", correspondentBank: "GS Bank Tokyo"  },
+    { ssiId: "ENT-GSTOKYO-02", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "MUFG Bank Ltd", beneficiaryBIC: "BOTKJPJT", accountNumber: "66655544", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "MUFG Bank Ltd"  },
+    { ssiId: "ENT-GSTOKYO-03", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "Sumitomo Mitsui Banking Corp", beneficiaryBIC: "SMBCJPJT", accountNumber: "33322211", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Sumitomo Mitsui Banking Corp"  },
+    { ssiId: "ENT-GSTOKYO-04", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "Mizuho Bank Ltd", beneficiaryBIC: "MHCBJPJT", accountNumber: "88877766", accountType: "Vostro", settlementMethod: "BOJ-NET", correspondentBank: "Mizuho Bank Ltd"  }
+  ],
+  "GS Frankfurt": [
+    { ssiId: "ENT-GSFRANKFURT-01", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "GS Bank Europe Frankfurt", beneficiaryBIC: "GSDEFF", accountNumber: "10102020", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "GS Bank Europe Frankfurt"  },
+    { ssiId: "ENT-GSFRANKFURT-02", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "Deutsche Bank AG", beneficiaryBIC: "DEUTDEFF", accountNumber: "30304040", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank AG"  },
+    { ssiId: "ENT-GSFRANKFURT-03", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "Commerzbank AG", beneficiaryBIC: "COBADEFF", accountNumber: "50506060", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Commerzbank AG"  },
+    { ssiId: "ENT-GSFRANKFURT-04", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "DZ Bank AG", beneficiaryBIC: "GENODEF1", accountNumber: "70708080", accountType: "Vostro", settlementMethod: "TARGET2", correspondentBank: "DZ Bank AG"  }
+  ]
+};
+
 const MO_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY", "COUNTERPARTY"];
 // Confirmation breaks: no counterparty mismatch per user feedback
 const CONFIRMATION_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY"];
@@ -306,6 +390,9 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
   const currency = pick(CURRENCIES);
   const product = pick(PRODUCTS);
+  const direction = pick(DIRECTIONS);
+  const entity = pick(ENTITIES);
+  const foRegion = pick(REGIONS);
 
   let derivedTradeType = "";
   let derivedSettlementType = "";
@@ -411,13 +498,16 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   }
 
   // 4. SETTLEMENT DETAILS GENERATION
-  const sBeneficiaryName = initialCounterparty + " Global Markets";
-  const sBeneficiaryBank = pick(COUNTERPARTIES) + " Bank N.A.";
-  const sBeneficiaryBIC = pick(SSI_BICS);
-  const sAccountNumber = Math.floor(Math.random() * 90000000) + 10000000 + "";
-  const sAccountType = "Nostro";
-  const sSettlementMethod = "SWIFT";
-  const sCorrespondentBank = pick(COUNTERPARTIES) + " NY";
+  const ssiList = direction === "BUY" ? CPTY_SSIS[initialCounterparty] : ENTITY_SSIS[entity];
+  const selectedSSI = pick(ssiList);
+  
+  const sBeneficiaryName = selectedSSI.beneficiaryName;
+  const sBeneficiaryBank = selectedSSI.beneficiaryBank;
+  const sBeneficiaryBIC = selectedSSI.beneficiaryBIC;
+  const sAccountNumber = selectedSSI.accountNumber;
+  const sAccountType = selectedSSI.accountType;
+  const sSettlementMethod = selectedSSI.settlementMethod;
+  const sCorrespondentBank = selectedSSI.correspondentBank;
   const sPaymentReference = "TRD" + Math.floor(Math.random() * 900000) + 100000;
   const sSettlementDate = universalTruth.valueDate;
   const sSettlementType = derivedSettlementType;
@@ -485,6 +575,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
         currency: confirmTruthCurrency
       },
       settlement: {
+        ssiId: selectedSSI.ssiId,
         amount: universalTruth.amount,
         valueDate: universalTruth.valueDate,
         currency: universalTruth.currency,
@@ -540,9 +631,9 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
     amendmentHistory: [],
 
-    direction: pick(DIRECTIONS),
-    entity: pick(ENTITIES),
-    foRegion: pick(REGIONS),
+    direction,
+    entity,
+    foRegion,
     product,
     tradeType: derivedTradeType,
     settlementType: derivedSettlementType,
@@ -708,6 +799,8 @@ async function saveGeneratedTrades(trades) {
 }
 
 module.exports = {
+  CPTY_SSIS,
+  ENTITY_SSIS,
   generateTrades,
   generateSingleTrade,
   generateXmlAudit,

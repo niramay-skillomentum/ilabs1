@@ -1,5 +1,6 @@
 const express = require("express");
 const http = require("http");
+const cors = require("cors");
 require("dotenv").config();
 
 const { connectDB, getIsConnected } = require("./src/db");
@@ -100,6 +101,7 @@ if (!process.env.JWT_SECRET) {
 // ======================================
 // EXPRESS CONFIG & ROUTES
 // ======================================
+app.use(cors());
 app.use(express.json());
 
 app.use("/api/auth", require("./src/routes/authRoutes"));
@@ -112,6 +114,8 @@ app.use("/api/conversations", require("./src/routes/conversationRoutes"));
 app.use("/api/fo-channel", require("./src/routes/foChannelRoutes"));
 app.use("/api/audit", require("./src/routes/auditRoutes"));
 app.use("/api/settlement", require("./src/routes/settlementRoutes"));
+app.use("/api/ssi", require("./src/routes/ssiRoutes"));
+app.use("/api/chat", require("./src/routes/chatRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START

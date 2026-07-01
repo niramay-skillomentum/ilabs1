@@ -70,9 +70,9 @@ router.post("/action", authenticateToken, async (req, res) => {
       CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
       CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
 
-      SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING"],
-      SETTLEMENT_RAISE_BREAK: ["READY_FOR_APPROVAL"],
-      SETTLEMENT_FOLLOW_UP_CPTY: ["SETTLEMENT_BREAK"]
+      SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "SETTLEMENT_BREAK"],
+      SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "READY_FOR_APPROVAL", "LIASING_WITH_CPTY"],
+      SETTLEMENT_FOLLOW_UP_CPTY: ["SETTLEMENT_PENDING", "SETTLEMENT_BREAK", "LIASING_WITH_CPTY"]
     };
 
     if (!allowedActions[action] || !allowedActions[action].includes(currentStatus)) {
@@ -294,7 +294,15 @@ router.post("/action", authenticateToken, async (req, res) => {
         break;
 
       case "SETTLEMENT_APPROVE":
-        nextStatus = "READY_FOR_APPROVAL";
+        if (sessionTrade.truths?.settlement?.settlementType === 'BILATERAL') {
+          const truthEngineObj = require("../engine/truthEngine");
+          const mismatches = truthEngineObj.getSettlementMismatches(sessionTrade);
+          if (mismatches.length > 0) {
+            await scoringEngine.applyPenalty(userId, sessionTrade.tradeRef, 15, "Tried to approve Bilateral settlement with incorrect SSI details");
+            return res.status(400).json({ success: false, error: "Cannot approve: SSI details do not match the expected standard instructions." });
+          }
+        }
+        nextStatus = "SETTLED";
         nextDesk = "SETTLEMENT";
         break;
 
@@ -317,7 +325,8 @@ router.post("/action", authenticateToken, async (req, res) => {
         communicationEngine.scheduleReply(
           sessionTrade.tradeRef,
           "RE: Settlement Follow-up",
-          "Awaiting settlement confirmation"
+          "Awaiting settlement confirmation",
+          "SETTLEMENT"
         );
 
         break;

@@ -9,47 +9,41 @@ const llmService = require("./llmService");
 const offlineResponseEngine = require("./offlineResponseEngine");
 const truthEngine = require("./truthEngine");
 
+function getSsiId(trade) {
+  if (!trade) return "UNKNOWN-SSI-ID";
+  let ssiId = trade.truths?.settlement?.ssiId;
+  
+  if (!ssiId) {
+    const { CPTY_SSIS, ENTITY_SSIS } = require("./tradeGenerator");
+    const allDicts = [CPTY_SSIS, ENTITY_SSIS];
+    let foundSsi = null;
+    for (const dict of allDicts) {
+      const ssiList = dict[trade.counterparty] || dict[trade.entity];
+      if (ssiList) {
+        foundSsi = ssiList.find(s => s.accountNumber === trade.truths?.settlement?.accountNumber);
+        if (!foundSsi) foundSsi = ssiList[0];
+      }
+      if (foundSsi) {
+        ssiId = foundSsi.ssiId;
+        break;
+      }
+    }
+    if (!ssiId) ssiId = "UNKNOWN-SSI-ID";
+  }
+  return ssiId;
+}
+
 // ======================================
 // GEMINI SYSTEM PROMPT FOR CPTY
 // ======================================
 function buildCPTYSystemPrompt(trade, parsedIntent) {
-  const cptyRound = trade.cptyContactCount || 1;
-  const targetDeskTruth = cptyRound > 1 ? "universal" : "confirmation";
-
-  const scenario = truthEngine.getScenario(trade.tradeRef) || {};
-  const refCheck = truthEngine.verifyReference(trade.tradeRef);
-  const payment = truthEngine.checkPaymentReceived(trade.tradeRef);
-  const ssi = truthEngine.verifySSI(trade.tradeRef);
-  
-  const isSettlementBreak = trade.currentStatus === "LIASING_WITH_CPTY" && trade.truths?.settlement;
-  const settlementMismatches = isSettlementBreak ? truthEngine.getSettlementMismatches(trade) : [];
+  const ssiId = getSsiId(trade);
 
   let context = `You are a Counterparty Operations professional replying to a bank's Settlement desk.
 You are responding about Trade ${trade.tradeRef}.
-`;
 
-  if (isSettlementBreak && settlementMismatches.length > 0) {
-    context += `\nKNOWN SETTLEMENT DISCREPANCIES (YOU MUST REFER TO THESE EXACT EXPECTED SSI VALUES):`;
-    settlementMismatches.forEach(m => {
-      context += `\n- Field [${m.field}]: Bank booking shows ${m.tradeValue || "blank"}, but WE EXPECT ${m.cptyExpected}.`;
-    });
-    context += `\n(Note: The bank is asking you to confirm settlement instructions. Please provide your correct SSI details listed above).`;
-  } else if (scenario.breakType) {
-    context += `\nKNOWN BREAK TYPE: ${scenario.breakType}`;
-  } else {
-    context += `\nNO KNOWN BREAKS on this trade. Everything matches our records.`;
-  }
-
-  if (payment) {
-    context += `\nPayment Received: ${payment.paymentReceived ? "Yes" : "No"}`;
-  }
-  if (ssi) {
-    context += `\nSSI Correct: ${ssi.correct ? "Yes" : "No"}`;
-    if (!ssi.correct) context += ` (Correct SSI: ${ssi.correctSSI})`;
-  }
-  if (refCheck) {
-    context += `\nReference Correct: ${refCheck.correct ? "Yes" : "No"}`;
-  }
+OUR STANDARD SETTLEMENT INSTRUCTION (SSI) ID: ${ssiId}
+(Note: You MUST ONLY provide this SSI ID. Do NOT list out the individual fields like bank name or account number. Do NOT confirm if details match or if there are any breaks. Tell them to use our standard SSI ID "${ssiId}" and look it up in their SSI Database to verify on their end.)`;
 
   if (parsedIntent && parsedIntent.intent) {
     context += `\nParsed User Intent: ${parsedIntent.intent}`;
@@ -59,11 +53,9 @@ You are responding about Trade ${trade.tradeRef}.
 
 RULES:
 - Reply professionally, like a real counterparty operations desk would in an Outlook email.
-- Provide factual answers based on the data above.
-- If there are known discrepancies, explicitly state what your records expect (the WE EXPECT values).
-- If the user's query is vague or just a greeting, ask for clarification.
-- Keep responses concise (2-5 sentences).
-- Do NOT invent issues or numbers that don't exist in the data above.
+- CRITICAL: Do NOT say whether our records match or if there are breaks. The bank must do the matching themselves.
+- CRITICAL: Only provide the SSI ID.
+- Keep responses concise (2-4 sentences).
 - Sign off with a realistic name and title.
 
 Respond in this JSON format:
@@ -80,11 +72,16 @@ Respond in this JSON format:
 // MAIN RESPONSE GENERATOR (HYBRID)
 // ======================================
 async function generateResponse(parsedIntent, tradeRef, userMessage) {
+  let trade = null;
+  try {
+    const Trade = require("../models/Trade");
+    trade = await Trade.findOne({ tradeRef });
+  } catch (err) {
+    console.warn("Failed to fetch trade:", err.message);
+  }
 
   // ── ATTEMPT 1: Gemini LLM ──
   try {
-    const Trade = require("../models/Trade");
-    const trade = await Trade.findOne({ tradeRef });
     const systemPrompt = buildCPTYSystemPrompt(trade, parsedIntent);
     const geminiResult = await llmService.generateResponse(systemPrompt, userMessage);
 
@@ -98,7 +95,12 @@ async function generateResponse(parsedIntent, tradeRef, userMessage) {
 
   // ── ATTEMPT 2: Offline Engine (guaranteed) ──
   console.log("🔄 CPTY Response: Using offline engine for", tradeRef);
-  return offlineResponseEngine.generateCPTYResponseOffline(parsedIntent, tradeRef, userMessage);
+  const ssiId = getSsiId(trade);
+  return {
+    action: "IMMEDIATE_ANSWER",
+    subject: "RE: Trade Inquiry",
+    body: `Our standard settlement instruction (SSI) ID is ${ssiId}. Please refer to this ID in your SSI Database.`
+  };
 }
 
 module.exports = {
