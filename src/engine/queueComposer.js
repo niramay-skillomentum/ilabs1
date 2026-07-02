@@ -262,14 +262,15 @@ class QueueComposer {
       t.age = ageCalculator.calculateAge(t.tradeDate, ageNow, desk);
     });
 
-    // Mark all trades as assigned to this user and persist the recalculated age
+    // Mark all trades as assigned to this user and persist the recalculated age using bulkWrite for performance
     const tradeRefs = queue.map(t => t.tradeRef);
-    for (const t of queue) {
-      await Trade.updateOne(
-        { tradeRef: t.tradeRef },
-        { $set: { assignedTo: userId, age: t.age } }
-      );
-    }
+    const bulkOps = queue.map(t => ({
+      updateOne: {
+        filter: { tradeRef: t.tradeRef },
+        update: { $set: { assignedTo: userId, age: t.age } }
+      }
+    }));
+    await Trade.bulkWrite(bulkOps);
 
     // Create session record
     const sessionStart = new Date();

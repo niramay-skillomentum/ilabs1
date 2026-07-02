@@ -1,129 +1,88 @@
 # Screen & Feature Guide
 
-## 1. Dashboard
-
-The Dashboard is the user's home screen and command center in the simulator. It provides a high-level view of the user's progress and active queues.
-
-### Sections
-- **Overview Metrics:** Displays total trades processed, current active breaks, and overall completion percentage for the active scenario.
-- **Desk Navigation:** Buttons to enter the active queues: 
-  - `Go to MO Desk`
-  - `Go to Confirmation Desk`
-  - `Go to Settlement Desk`
-- **Statistics:** A visual representation of the user's score, time taken per trade, and accuracy rate.
-- **Reports:** Downloadable summaries of all actions taken during the session, useful for post-mortem analysis.
-- **Progress Tracking:** Shows how many trades remain in the current scenario before completion.
+> **Purpose:** Describe every screen and interactive feature of the iLabs — SGB Operations Simulator exactly as it behaves, so the analyst (and the AI Tutor) reference real UI, not imagined UI.
+> **Audience:** Trainees and the AI Tutor (this file is loaded into the tutor's knowledge base at runtime).
+> **Last verified:** 2026-07-01 against the frontend implementation.
+> **Related:** [Simulator Workflow Guide](simulator_workflow_guide.md) · [Troubleshooting & FAQs](troubleshooting_and_faqs.md)
 
 ---
 
-## 2. MO Desk Workstation
+## 1. Login (`/`)
 
-When a user clicks "Go to MO Desk", they enter the MO Workstation.
+The entry screen. You **register** (full name, email, password) or **log in** (email, password). On success a session token is stored in the browser and you are taken to the Dashboard. There is nothing else on this screen — no data loads until you are authenticated.
 
-### Queue (Left Panel)
-- A list of all trades currently in the `MO Pending` or `MO Break` state.
-- **Columns Displayed:** Trade ID, Counterparty, Product, and Status.
-- **Action:** Clicking a row opens the Trade Details in the main view.
+## 2. Dashboard (`/dashboard`)
 
-### Workstation Layout
-- **Left Panel:** The Queue (as described above).
-- **Middle Panel (Trade Details):** Shows the digital representation of the trade as recorded in the simulator's internal system (Trade Date, Value Date, Quantity, Price, Counterparty, Direction).
-- **Right Panel (Documents):** Displays the PDF or Image of the original Trade Ticket provided by the Front Office (FO).
-- **Bottom Panel (Actions & Mailbox):** Where the user selects an action button or views incoming/outgoing communications.
+The Dashboard is a **desk selector — and only a desk selector**. It shows buttons for the desks:
 
-### Available Actions (Buttons)
-- **Mark Validated**
-  - *What it does:* Signals that the user has checked the Trade Details against the Trade Ticket and found NO discrepancies. 
-  - *Effect:* Moves the trade to `Confirmation Pending`.
-- **Raise Break**
-  - *What it does:* Flags the trade as having a discrepancy (e.g., Price mismatch). 
-  - *Effect:* Changes trade status to `MO Break`.
-- **Send Mail**
-  - *What it does:* Opens a modal to select a recipient (e.g., Front Office) and a template to notify them of an issue.
-  - *Effect:* Sends an email. Responses will appear in the Mailbox.
-- **Amend Trade**
-  - *What it does:* Opens editable fields in the Trade Details panel to correct errors based on FO instructions.
-  - *Effect:* Allows saving new values. Must be followed by "Mark Validated" once correct.
+- **MO** (Middle Office)
+- **CONFIRMATION**
+- **SETTLEMENT**
+- **TLM** (Reconciliation)
+- **REPORTING**
 
----
+Clicking a desk takes you to the Workstation for that desk (`/workstation?desk=<DESK>`). There are **no** overview metrics, statistics charts, downloadable reports, or progress widgets on the Dashboard — those do not exist.
 
-## 3. Confirmation Desk Workstation
+## 3. Workstation (`/workstation?desk=<DESK>`)
 
-When a user clicks "Go to Confirmation Desk", they enter the Confirmation Workstation.
+The main working screen for every desk. Its layout is the same regardless of desk; the available action buttons change with the desk and the selected trade's status.
 
-### Queue (Left Panel)
-- Displays trades that have passed MO validation and are in `Confirmation Pending` or `Confirmation Break`.
+- **Top bar:** desk title, a **session timer** (real 3-hour countdown plus the simulated 09:00–18:00 clock), and refresh / log-off controls.
+- **Trade table:** one row per trade in your queue, with columns: Ref, Status, Next Desk, Age, Trade/Value Dates, Counterparty, Currency, Amount. You can export the table to CSV. Selecting a row makes it the active trade.
+- **Action bar:** desk- and status-specific buttons (see the [Workflow Guide](simulator_workflow_guide.md) for the full action list per desk). Every action opens a **comment modal** — a comment is mandatory.
+- **Settlement-type selector** (Settlement desk): choose electronic or bilateral; the correct choice opens the corresponding settlement screen.
+- **Audit trail modal:** the full chronological history for a trade — system events plus every action you took, including an XML audit record for auto-generated events.
+- **SSI viewer / editor:** view and (where permitted) edit the trade's settlement instructions.
+- **Truth viewer:** reveals the trade's ground-truth economics for study/verification.
+- **Instruction & Tutor panels:** a collapsible **Desk Guide** (step-by-step for the current desk) and a floating **Tutor** chatbot (see §8).
 
-### Workstation Layout
-- **Middle Panel (Trade Details):** Read-only view of the validated trade. You cannot amend from this view without escalating first.
-- **Right Panel (Evidence/Documents):** Displays any evidence requested from the counterparty (e.g., their booking ticket or confirmation email).
-- **Bottom Panel (Timeline & Actions):** Shows the history of the trade and current available buttons.
+Actions are submitted to the backend; the queue updates in real time over a live socket connection, with polling as a fallback.
 
-### Available Actions (Buttons)
-- **Send Confirmation**
-  - *What it does:* Dispatches the confirmation document to the simulated counterparty. 
-  - *Effect:* Triggers the simulator to check for matches. Changes state to `Confirmed` or `Confirmation Break`.
-- **Request Evidence**
-  - *What it does:* Asks the counterparty to supply their booking documentation when a break occurs.
-  - *Effect:* An automated email response will deliver a document into the Right Panel.
-- **Escalate to FO**
-  - *What it does:* Sends the counterparty's evidence to the Front Office for a final ruling on who is correct.
-  - *Effect:* An automated email response will tell the user to either amend the trade or reject the counterparty's claim.
-- **Amend**
-  - *What it does:* Allows changing trade details if the FO confirms our booking was incorrect.
-- **Reconfirm**
-  - *What it does:* Resends the confirmation after an amendment has been made or after the counterparty has (simulated) corrected their side.
+## 4. Communication mailbox (`/communication`)
 
----
+A three-panel mailbox where all asynchronous conversations with the Counterparty and Front Office happen.
 
-## 4. Settlement Desk Workstation
+- **Folders (left):**
+  - **Inbox** — your personal conversations for the current desk.
+  - **Group Inbox** — desk-wide shared conversations (hidden when viewing the FO channel).
+  - **Front Office Communications (FO channel)** — the internal escalation channel (shown when you escalate to FO).
+  - **Sent / Drafts / Deleted** — present as folders but currently **placeholders** with no items.
+- **Message list (middle):** conversations for the selected folder, searchable by reference, subject, counterparty, body, or sender, with status badges (awaiting / responded / resolved).
+- **Thread (right):** the message thread for the selected conversation, newest expanded, with **Reply** and **Resolve** controls.
+- **Compose / Reply modals:** new message and reply forms. For Confirmation and Settlement desks the compose form pre-fills a template (a trade-verification email or an SSI-request email). Replies quote recent history.
 
-The Settlement Desk is split into Bilateral and Electronic, depending on the scenario.
+Remember: replies from the CPTY/FO arrive here **a few seconds after you send** — they are not instant.
 
-### Bilateral Settlement
+## 5. Settlement screens (`/settlement/electronic`, `/settlement/bilateral`)
 
-#### Queue (Left Panel)
-- Displays confirmed trades nearing their Value Date (Status: `Settlement Pending` or `Settlement Break`).
+Reached by selecting the settlement type for a trade. Both screens show two columns:
 
-#### Workstation Layout
-- **Middle Panel (Settlement Instructions):** Shows our SSIs (Standard Settlement Instructions) alongside the Counterparty's SSIs.
-- **Right Panel (Payment Status & Audit):** Shows real-time simulated Swift messaging (e.g., MT202, MT103) or payment success/failure logs.
-- **Bottom Panel (Actions):** Available buttons for resolving settlement issues.
+- **System Details** — the trade's current settlement instructions (the 9 SSI fields).
+- **Truth Details** — the correct settlement instructions; any field that differs from the system value is highlighted.
 
-#### Available Actions (Buttons)
-- **Update SSI**
-  - *What it does:* Allows the user to correct our Settlement Instructions if static data was determined to be incorrect.
-- **Retry Settlement**
-  - *What it does:* Re-initiates the payment/settlement process after an SSI update or after the counterparty fixes their side.
-- **Approve Settlement**
-  - *What it does:* The final authorization step for staged payments.
-  - *Effect:* Marks the trade as `Settled`.
+The 9 SSI fields are: **beneficiaryName, beneficiaryBank, beneficiaryBIC, accountNumber, accountType, currency, settlementMethod, correspondentBank, paymentReference**.
 
----
+Actions on these screens:
+- **Approve Settlement** — validates all 9 fields against the truth; a mismatch is rejected with a 10-point penalty, a full match settles the trade.
+- **Raise Break** — flags a settlement break.
+- **Edit SSI** — correct the system fields. On the **electronic** screen editing is allowed only while the trade is in `SETTLEMENT_BREAK`; on the **bilateral** screen you can edit until the trade is settled.
+- **Mail CPTY** — *bilateral only* — jumps to the Communication mailbox to message the counterparty about this trade.
 
-### Electronic Settlement
+A settled trade shows a clear "settled" indicator.
 
-#### Workstation Layout
-- **Settlement Dashboard:** Shows an aggregated view of trades routing through a central matching utility (e.g., Euroclear/DTCC).
-- **Exception Queue:** Trades that fail to match appear here.
-- **Exception Details Panel:** Shows a side-by-side comparison of Our Submission vs. Counterparty Submission, highlighting fields that are outside of matching tolerance.
+## 6. SSI Database (`/ssi-database`)
 
-#### Available Actions (Buttons)
-- **Force Amend**
-  - *What it does:* Overrides our submitted value to match the counterparty if they are correct.
-- **Accept Counterparty Value**
-  - *What it does:* A one-click resolution that adopts the counterparty's value based on simulator logic.
-- **Re-Match**
-  - *What it does:* Sends the updated data back into the matching engine.
+A lookup screen. Enter an **SSI ID** (for example `CITI-01`) and the screen returns that party's standard settlement instructions. This is how you **self-match** at the Settlement desk: the settlement counterparty only ever gives you its SSI ID, so you look the ID up here and compare it field by field against the system SSI.
 
----
+## 7. MO-Risk termsheet viewer (`/mo-risk`)
 
-## 5. Global Actions & Components
+A reference screen for the MO desk. It lists all trades and shows a **termsheet** (front-office reference data) for the selected one: reference, status, next desk, age, dates, counterparty, entity, region, product, type, settlement type, direction, currency, amount. Use it to compare the booking against what the front office intended.
 
-These components are accessible from any desk within the simulator.
+## 8. Shared panels: Desk Guide and Tutor
 
-- **Audit Timeline:** A chronological list of every state change, email sent, response received, and button clicked for a specific trade. Highly useful for tracking down *why* a trade is in its current state.
-- **Mailbox:** A simulated email client. 
-  - Users receive automated responses from the FO, Counterparty, or Static Data teams here. 
-  - All decisions from simulated actors arrive via this Mailbox. 
-  - Users can read threads to understand the context of a break.
+- **Desk Guide (Instruction panel):** a collapsible panel on the Workstation with numbered steps and a "Pro Tip" for the current desk (MO, Confirmation, Settlement have full guides; TLM and Reporting show a short placeholder).
+- **Tutor (Tutorial panel):** a floating chatbot. It answers questions about the current desk and trade using this knowledge base, in a Socratic style — it guides you rather than handing over answers. It is labelled "Powered by Nvidia Nemotron 3".
+
+## 9. Global feature: the audit trail
+
+Every trade carries a complete audit trail: system-generated capture/compliance/routing events (as XML) plus every analyst action with its mandatory comment. Open it from the Workstation to understand *why* a trade is in its current state.

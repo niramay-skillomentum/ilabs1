@@ -1,88 +1,104 @@
 # Troubleshooting & FAQs
 
-This document contains frequently asked questions about the simulator's mechanics, rules, and troubleshooting steps. The AI Assistant should use this to answer "Why" and "How" questions regarding simulator behavior.
+> **Purpose:** Answer the common "why" and "how" questions about simulator behaviour, accurately, so the AI Tutor can extend the same logic to similar questions.
+> **Audience:** Trainees and the AI Tutor (this file is loaded into the tutor's knowledge base at runtime).
+> **Last verified:** 2026-07-01 against the implementation.
+> **Related:** [Simulator Workflow Guide](simulator_workflow_guide.md) · [Screen & Feature Guide](screen_and_feature_guide.md)
 
-## General Simulator Questions
+---
+
+## General
 
 **Q: Why can't I generate another desk queue?**
-A: The simulator enforces a strict rule of "One active desk queue per user." You must finish processing your current active queue or current desk scenario before generating or moving to a new one.
+A: You may only have **one active desk queue at a time**. Finish your current queue, or let the 3-hour session expire, before generating a new one.
 
 **Q: How is my score calculated?**
-A: Your score depends on four factors:
-1. **Investigation Quality:** Identifying the exact field that caused the break.
-2. **Communication:** Emailing the correct party with the correct template.
-3. **Resolution Accuracy:** Amending the trade exactly as instructed.
-4. **Time:** Processing the trade efficiently.
+A: Scoring is simple and action-based: **+5** for correctly validating a clean trade, **+3** for correctly raising a break, and **+2** for selecting an issue type when you raise a break. **Penalties** of **10 points** apply when you approve settlement with mismatched SSI details or choose the wrong settlement type. The habit the score rewards is *investigate first, then act*.
 
 **Q: Why did my score go down?**
-A: Scores decrease when you make "Bad Decisions." For example: 
-- Clicking "Mark Validated" when the trade and ticket do not match.
-- Amending a trade without Front Office approval.
-- Escalating to the wrong party.
-- Updating SSIs incorrectly during a Settlement Break.
+A: The most common causes are approving a settlement whose 9 SSI fields don't match the truth, or selecting the wrong settlement type (electronic vs bilateral). Both are 10-point penalties. Advancing a trade without resolving its break also forfeits the points you would have earned.
 
 **Q: Can a trade skip a desk?**
-A: No. The simulator requires strict linearity. Every trade must follow the path: MO -> Confirmation -> Settlement.
+A: No. Trades follow a strict state machine: MO → Confirmation → Settlement → Reconciliation. You can only take the actions the current status allows.
 
 **Q: Why is my queue empty?**
-A: Either you have not generated any trades for this scenario, or all trades have successfully moved to the next desk. If you are in Confirmation and it is empty, ensure you have finished validating trades in the MO desk first.
+A: Either you haven't generated a queue for this desk, or all your trades have advanced to the next desk. Each queue holds 20 trades for one desk.
+
+**Q: I sent a message but nothing happened. Is it broken?**
+A: No — replies are **asynchronous**. The counterparty or front office answers a few seconds later, and the reply appears in your **Communication** mailbox. Keep working other trades and check back.
 
 ---
 
-## Middle Office (MO) Desk FAQs
+## Middle Office (MO) desk
 
-**Q: What happens after I click "Raise Break"?**
-A: The trade state changes to `MO Break`. You are now expected to investigate the discrepancy and click "Send Mail" to notify the Front Office (FO) about the issue.
+**Q: What happens after I raise a break?**
+A: The trade moves to `MO_BREAK_OPEN`. Investigate the discrepancy, then use **Send to FO** (`MO_SEND_TO_FO`) to escalate it — that moves the trade to `PENDING_FO_RESPONSE` and the front office replies asynchronously.
 
-**Q: What does "Mark Validated" do?**
-A: It tells the simulator that you guarantee the Trade Details exactly match the Trade Ticket. If they do, the trade moves to `Confirmation Pending`. If they don't, you lose points, and the trade may be forced into an error state.
+**Q: What does the Validate/Pass action do?**
+A: `MO_VALIDATE_PASS` asserts the booking matches the MO truth and moves the trade `MO_PENDING → CONFIRMATION_PENDING`. If the trade is `PENDING_FO_RESPONSE`, you can only pass after the FO has responded; if amendments are pending, resolve the related conversation first.
 
-**Q: I sent an email to FO. Why haven't they responded?**
-A: Check your simulated Mailbox. The FO responds automatically based on the scenario. If you selected the wrong email template or recipient, they might reply with confusion, or not at all. Ensure you use the correct escalation path.
+**Q: I emailed the FO. Why haven't they replied?**
+A: FO replies are asynchronous — check the mailbox after a few seconds. If the FO admits a booking error, the simulator auto-extracts the corrected values into **pending amendments** for you to approve.
 
-**Q: What is the next step after FO approves an amendment?**
-A: You must click "Amend Trade", apply the exact changes the FO instructed, save the changes, and then click "Mark Validated" to push the trade to the Confirmation Desk.
+**Q: The FO approved a correction — what's the next step?**
+A: Approve the **pending amendment** the simulator created from the FO's message (approving applies it to the booking), then `MO_VALIDATE_PASS`. There is no separate "amend trade" form — corrections flow through the amendment approval mechanism.
 
-**Q: What if the FO says the Trade Ticket is wrong, not the Trade Details?**
-A: Do not amend the trade. Simply accept the FO's clarification and click "Mark Validated" since the system details are correct as-is.
-
----
-
-## Confirmation Desk FAQs
-
-**Q: Why is my trade in Confirmation Break?**
-A: When you clicked "Send Confirmation," the simulator compared your trade details with the counterparty's simulated truth. A mismatch was found (e.g., they booked a different price, quantity, or value date).
-
-**Q: What should I do after receiving a Confirmation Break?**
-A: You should click "Request Evidence" to get the counterparty's documentation. Once received, review it, and click "Escalate to FO" so the Front Office can decide if we need to amend our trade or if the counterparty is wrong.
-
-**Q: What happens if I reject the counterparty claim (FO says we are correct)?**
-A: If the FO tells you our booking is correct, do not amend the trade. You will communicate back to the counterparty (via the Mailbox) insisting they amend their side. Once they do (simulated), you can click "Reconfirm."
-
-**Q: How do I resend a confirmation?**
-A: Use the "Reconfirm" button. This is typically done after an amendment has been made or after the counterparty has corrected their side.
-
-**Q: Why can't I access the Confirmation Desk?**
-A: Confirmation starts only after MO completion. You must validate trades in the MO queue before they appear in the Confirmation queue.
+**Q: What if the FO says the ticket/records were right, not the booking?**
+A: Then don't amend anything — just `MO_VALIDATE_PASS`. Amending a correct booking is a wrong action.
 
 ---
 
-## Settlement Desk FAQs
+## Confirmation desk
 
-**Q: Why did my trade move to Settlement Break?**
-A: A Settlement Break occurs if there is an issue executing the payment. In the simulator, this is usually caused by an SSI (Standard Settlement Instruction) mismatch or insufficient funds.
+**Q: Why did my trade go into a confirmation break?**
+A: You raised a break (`CONFIRM_RAISE_BREAK`) because the counterparty's expected economics disagree with the trade on amount, value date, or currency. (Counterparty identity is not disputed at confirmation.)
+
+**Q: What should I do with a confirmation break?**
+A: Gather evidence and a ruling: **Request Evidence** (`CONFIRM_REQUEST_EVIDENCE`) and/or **Escalate to FO** (`CONFIRM_ESCALATE_TO_FO`, which opens the internal FO channel and moves the trade to `LIASING_WITH_FO`). When the FO admits a booking error, amendments are auto-applied and the trade returns to `CONFIRMATION_PENDING`. Then approve the amendment / resend / confirm.
+
+**Q: The FO says our booking is correct — now what?**
+A: Reject the counterparty's claim (`CONFIRM_REJECT_CLAIM`); this returns the trade to `CONFIRMATION_PENDING`. Resend the confirmation (`CONFIRM_RESEND`) to re-engage the counterparty, and confirm (`CONFIRM_TRADE`) once agreed.
+
+**Q: How do I move a confirmed trade to settlement?**
+A: `CONFIRM_TRADE` moves `LIASING_WITH_CPTY → SETTLEMENT_PENDING`. You must have contacted the counterparty first (`CONFIRM_SEND_TO_CPTY`).
+
+**Q: Why is my Confirmation queue empty?**
+A: Trades only reach Confirmation after MO validation. Work the MO desk first.
+
+---
+
+## Settlement desk
+
+**Q: Why did my trade go into a settlement break?**
+A: The system settlement instructions don't match the truth, or you flagged one with `SETTLEMENT_RAISE_BREAK`. The mismatch is in one or more of the 9 SSI fields.
 
 **Q: How do I resolve an SSI mismatch?**
-A: Compare our SSIs with the Counterparty's SSIs in the workstation. Check the Mailbox/Audit log to see which is correct. If our Static Data is wrong, click "Update SSI" to fix it, then click "Retry Settlement".
+A: When you message the settlement counterparty it replies only with its **SSI ID** — it never confirms a match. Look that ID up in the **SSI Database** (`/ssi-database`), compare it field by field against the system SSI, correct the wrong field with **Edit SSI**, then **Approve Settlement**. On the electronic screen you can only edit while in `SETTLEMENT_BREAK`.
 
-**Q: Why is my trade still in Settlement Break after I clicked Retry?**
-A: You likely did not resolve the root cause. For example, you may have updated the SSI with incorrect details, or you haven't received confirmation from the static data team that the change was approved. Review your Mailbox and Audit Timeline.
+**Q: Why was my settlement approval rejected?**
+A: `SETTLEMENT_APPROVE` re-checks all 9 SSI fields against the truth. If any field is still wrong the approval is rejected and a 10-point penalty applies. Fix the offending field and approve again.
 
-**Q: Why can't I approve settlement?**
-A: The "Approve Settlement" button only becomes active when the trade is in the `Ready for Approval` state. If it is still in `Settlement Pending` or `Settlement Break`, you must resolve any issues and ensure the payment status shows as staged or matched.
+**Q: Which settlement type do I pick?**
+A: Choose the type that matches the trade's real settlement type. Picking the wrong one (electronic vs bilateral) is a 10-point penalty. The correct choice opens the matching settlement screen.
 
-**Q: How is Electronic Settlement simulated?**
-A: Electronic Settlement is simulated via a matching utility dashboard. Instead of manual SSIs, you look at an Exception Queue. The simulator matches trades automatically unless a field is out of tolerance, in which case you must review the Exception Details and resolve it on the dashboard.
+**Q: What is "Mail CPTY"?**
+A: On the **bilateral** screen only, it takes you to the mailbox to message the counterparty about this trade (for example to chase an SSI). Electronic settlement has no Mail CPTY action.
 
-**Q: What happens if payment fails due to insufficient funds?**
-A: This simulates a cash management break. You must navigate to the Mailbox, contact the Treasury or Cash Management team, and wait for them to fund the account before clicking "Retry Settlement".
+**Q: My settlement approved but the value date changed — why?**
+A: If the currency's cut-off time had already passed on the value date when you approved, settlement rolls to the next business day and the value date shifts forward by one.
+
+---
+
+## After settlement (Reconciliation / TLM)
+
+**Q: What happens after a trade settles?**
+A: It moves to `RECON_PENDING`. Ledger and statement entries auto-match on amount, currency and reference. Match remaining items manually, or mark genuine exceptions as `UNMATCHED_BY_USER`. When all entries are matched the break clears (`RECON_CLEARED`) and the trade closes (`CLOSED`).
+
+---
+
+## Common pitfalls
+
+- Expecting instant replies — they're asynchronous; watch the mailbox.
+- Amending a booking that was actually correct — only amend when the booking is wrong.
+- Approving settlement before self-matching the SSI in the SSI Database.
+- Forgetting the mandatory comment on every action.

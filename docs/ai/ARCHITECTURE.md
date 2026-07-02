@@ -1,284 +1,155 @@
-content: # Architecture
+# Architecture
 
-> Last updated: 2026-06-27
-
----
-
-## System Overview
-
-iLabs1 is a **monorepo** with a Node.js/Express backend and a Next.js frontend. They run as separate processes (ports 3002 and 3000 respectively) and communicate via HTTP (proxied through Next.js rewrites) and WebSocket (Socket.io).
-
-```
-┌──────────────────────────────────────────────┐
-│        Next.js Frontend  (Port 3000)          │
-│        /frontend/src/app/                     │
-│                                               │
-│  Login → Dashboard → Workstation              │
-│                    → Communication            │
-│                    → MO Risk                  │
-└────────────────────┬─────────────────────────┘
-                     │  HTTP /api/* (next.config.mjs rewrites)
-                     │  WebSocket /socket.io/*
-                     ▼
-┌──────────────────────────────────────────────┐
-│        Express Backend  (Port 3002)           │
-│        server.js + src/                       │
-│                                               │
-│  Routes → Engines → Models                   │
-│  Background Intervals (3s CPTY, 3s FO,       │
-│    3s FO-internal, 2s cache refresh)          │
-└────────┬────────────────────────┬────────────┘
-         │                        │
-         ▼                        ▼
-┌────────────────┐    ┌──────────────────────┐
-│  MongoDB Atlas │    │  Socket.io Server    │
-│  (7 collections│    │  (room-based events) │
-│   via Mongoose)│    └──────────────────────┘
-└────────────────┘
-         │
-         ▼
-┌────────────────────────────────────────────┐
-│  LLM Providers (async, fire-and-forget)    │
-│  Gemini → Cerebras → offline fallback      │
-└────────────────────────────────────────────┘
-```
+> **Purpose:** Describe the runtime architecture of the iLabs — SGB Operations Simulator: processes, layers, the async simulation loop, real-time channel, and AI integration.
+> **Audience:** Backend and full-stack engineers.
+> **Last verified:** 2026-07-01 against the implementation.
+> **Related:** [API Reference](API.md) · [Database](DATABASE.md) · [Business Rules](BUSINESS_RULES.md) · [Deployment](DEPLOYMENT.md)
 
 ---
 
-## Backend Architecture
+## System overview
 
-### Entry Point: `server.js`
+The system is two processes: an **Express 5 backend** (`server.js`, default port **3002**) and a **Next.js 16 frontend** (`frontend/`, dev port 3000, Docker port 3001). The frontend talks to the backend over HTTP and Socket.io; in dev/prod the Next.js config **proxies** `/api/*` and `/socket.io/*` to the backend, so page code uses relative paths.
 
-`server.js` is the single startup file. On boot it:
+```mermaid
+graph TD
+    subgraph Client[Next.js Frontend]
+        UI[Login / Dashboard / Workstation / Communication / Settlement / SSI-DB / MO-Risk]
+    end
+    subgraph Backend[Express Backend :3002]
+        R[Routes /api/*]
+        E[Engine layer]
+        M[(Mongoose Models)]
+        S[Socket.io server]
+        L[Background setInterval loops]
+        AG[Agenda jobs]
+    end
+    DB[(MongoDB)]
+    GEM[Gemini 2.5 Flash]
+    OR[OpenRouter Nemotron - Tutor]
+    OFF[Offline template engine]
 
-1. Validates `JWT_SECRET` is set — exits with `FATAL` if missing
-2. Calls `connectDB()` (MongoDB Atlas via `src/db.js`)
-3. Calls `startAgenda()` for scheduled jobs
-4. Creates an `http.Server` wrapping the Express `app`
-5. Calls `initSocket(server)` to mount Socket.io
-6. Starts listening on `PORT` (default: 3002)
-7. Launches 4 background loops:
+    UI -- HTTP /api/* --> R
+    UI <-- WebSocket --> S
+    R --> E --> M --> DB
+    L --> E
+    AG --> E
+    E -- CPTY/FO reply --> GEM
+    GEM -. on failure .-> OFF
+    E -- tutor --> OR
+    S -- trade_update / new_email --> UI
+```
+
+## Backend layering
+
+Strict one-way dependency: **routes → engine → models**. Routes are thin (validate input, call an engine, return JSON); all business logic lives in `src/engine/`.
+
+### Entry point — `server.js`
+
+On boot (`server.js`):
+1. Load `.env`; **fail fast** if `JWT_SECRET` is missing (server.js:95-99).
+2. `connectDB()` — MongoDB via `src/db.js` (serverSelectionTimeout 10s; continues in memory-only mode if `MONGO_URI` unset).
+3. `startAgenda()` — schedules periodic jobs.
+4. Wrap Express `app` in an `http.Server`; `initSocket(server)` mounts Socket.io.
+5. Mount 11 routers under `/api/*` (server.js:107-118); apply global `cors()` and `express.json()`.
+6. Listen on `PORT` (default 3002).
+7. Start 4 background loops (below).
+
+### The four background loops
+
+The simulation advances on timers in `server.js`, decoupled from request/response:
 
 | Loop | Interval | Purpose |
 |------|----------|---------|
-| CPTY reply processor | 3s | Delivers pending CPTY simulated replies to conversations |
-| FO reply processor | 3s | Delivers pending FO simulated replies to conversations |
-| FO internal channel processor | 3s | Delivers FO internal channel replies, updates `foEscalation` |
-| Trade cache refresh | 2s | Rebuilds `_cachedTrades` from all assigned trades in DB |
+| CPTY reply processor | 3s | Deliver due counterparty replies into conversations |
+| FO reply processor | 3s | Deliver due front-office replies into conversations |
+| FO internal channel processor | 3s | Deliver due FO internal-channel replies; update `foEscalation` |
+| Trade cache refresh | 2s | Rebuild an in-memory cache of assigned trades for fast lookup |
 
-The trade cache (`communicationEngine._cachedTrades`) is a plain object keyed by `tradeRef` that holds all currently-assigned trades. Reply processors use this cache for fast lookups instead of hitting MongoDB on every 3s tick.
+**Scheduled replies are persisted, not in-memory.** When you message the CPTY/FO, the engine writes a **`PendingReply`** document (`replyType` = `CPTY_EMAIL` / `FO_EMAIL` / `FO_INTERNAL`, with a future `sendAt`). The 3-second loops pick up any `PendingReply` whose `sendAt` has passed, generate the reply, persist it to the conversation, and emit a socket event. Because scheduling lives in MongoDB, a restart does not lose in-flight replies.
 
-### Database: `src/db.js`
+### Agenda jobs — `src/engine/agendaJobs.js`
 
-- Connects to MongoDB Atlas using `MONGO_URI` env var
-- On connection failure: logs error and continues in **memory-only mode** (Mongoose operations will fail gracefully at the collection level, but the server stays up)
-- Exports `connectDB()` and `getIsConnected()`
+Agenda (backed by the `agendaJobs` Mongo collection) runs **two** repeating jobs every **1 minute** — nothing more:
+- `session-cleanup` → `queueComposer.cleanupExpiredSessions()`
+- `daily-age-update` → `dailyScheduler.runDailyCycle()` (recomputes desk-specific trade age)
 
-### Engine Layer: `src/engine/`
+Agenda does **not** drive trade state transitions; those happen from user actions and from the reply loops.
 
-All business logic lives here. Routes call engines — never the other way around. Key engines:
+### Simulated clock — `src/engine/clock.js`
+
+A simulated trading day runs **09:00 → 18:00**. Real time is compressed (≈1 real second → 3 simulated seconds) so the ~3-hour session spans a full day. `clock_tick` events carry the formatted time and minutes remaining to the 18:00 cutoff. `/api/clock` exposes the current sim time.
+
+### Engine layer highlights (`src/engine/`)
 
 | Engine | Responsibility |
 |--------|---------------|
-| `tradeGenerator.js` | Generates trade objects with desk-specific truths, booking, XML audit |
-| `queueComposer.js` | Builds 20-trade queues; graduated DB/generated allocation; session management |
-| `lifecycle.js` | `LifecycleEngine` class: validates and applies status transitions via `transitions.js` |
-| `transitions.js` | Pure object: maps each status to its allowed next statuses |
-| `truthEngine.js` | Compares truths vs booking/economics; detects MO and Confirmation mismatches |
-| `amendmentEngine.js` | Extracts, attaches, and applies trade amendments |
-| `auditEngine.js` | Writes `AuditLog` entries (fire-and-forget) |
-| `communicationEngine.js` | Schedules and processes CPTY/FO reply queues; holds `_cachedTrades` |
-| `conversationEngine.js` | DB CRUD for `Conversation` documents (email threads) |
-| `foInternalChannel.js` | Opens/writes/processes FO internal channel (`FOCommunication` docs) |
-| `cptyAI.js` | Builds LLM prompt for CPTY response; calls `llmService.js` |
-| `foAI.js` | Builds LLM prompt for FO internal response; calls `llmService.js` |
-| `llmService.js` | Provider abstraction: Gemini → Cerebras; returns text or throws |
-| `offlineResponseEngine.js` | Static fallback response selector when LLM is unavailable |
-| `cptyOfflineResponses.js` | Library of static CPTY response strings |
-| `foOfflineResponses.js` | Library of static FO response strings |
-| `foResponseProfiles.js` | FO personality profiles driving AI context |
-| `scoringEngine.js` | Awards/deducts points per action |
-| `clock.js` | Simulation clock: maps real session time to 9 AM–6 PM trading day |
-| `ageCalculator.js` | Calculates desk-specific trade age in days |
-| `scenarioEngine.js` | Scenario generation helpers |
-| `reconBreakEngine.js` | Reconciliation break logic |
-| `settlementBreakEngine.js` | Settlement break logic |
-| `settlementInteraction.js` | Settlement interaction handler |
-| `confirmationBreakEngine.js` | Confirmation break logic |
-| `reconciliation.js` | Reconciliation engine |
-| `settlement.js` | Settlement logic |
-| `cutoff.js` | Market cutoff logic |
-| `agendaJobs.js` | Agenda job definitions for scheduled/periodic tasks |
-| `dailyScheduler.js` | Daily reset/cleanup scheduler |
-| `queue.js` | In-memory queue helpers (legacy; most logic now in queueComposer) |
-| `queueComposer.js` | DB-backed queue builder (primary) |
-| `aiParser.js` | Parses incoming user email content with AI for intent extraction |
-| `errors.js` | Custom error types (`InvalidTransitionError`, etc.) |
-| `socketEngine.js` | Socket.io server initialization and room management |
+| `tradeGenerator.js` | Build trades with layered truths, booking, settlement details, XML audit; SSI tables |
+| `queueComposer.js` | Compose 20-trade queues (graduated DB/generated split); session lifecycle |
+| `queue.js` | In-memory `DeskQueue` helper (main/break FIFO) |
+| `lifecycle.js` / `transitions.js` | Validate & apply status transitions against the allowed-transition map |
+| `truthEngine.js` | Detect MO / confirmation / settlement mismatches vs truths |
+| `scenarioEngine.js`, `ageCalculator.js`, `cutoff.js`, `dailyScheduler.js` | Scenario mix, desk age, currency cut-offs, daily recompute |
+| `settlement.js`, `settlementInteraction.js`, `settlementBreakEngine.js` | Settlement approval, CPTY interaction, break handling |
+| `confirmationBreakEngine.js`, `reconciliation.js`, `reconBreakEngine.js` | Confirmation & reconciliation break logic |
+| `amendmentEngine.js` | Extract, attach, apply amendments |
+| `communicationEngine.js` / `conversationEngine.js` | Persist conversation messages (+ sanitize), in-memory cache, emit `new_email` |
+| `foInternalChannel.js` | FO internal escalation channel (`FOCommunication`) + scheduled FO replies |
+| `cptyAI.js`, `cptySettlementAI.js`, `foAI.js`, `aiParser.js` | AI actors + deterministic email intent parsing |
+| `offlineResponseEngine.js`, `cptyOfflineResponses.js`, `foOfflineResponses.js`, `foResponseProfiles.js` | Deterministic template fallback with per-counterparty personalities |
+| `llmService.js`, `tutorAI.js` | Gemini provider wrapper; OpenRouter Nemotron tutor |
+| `scoringEngine.js`, `auditEngine.js`, `socketEngine.js`, `errors.js` | Scoring, audit log, Socket.io init, error types |
 
-### Model Layer: `src/models/`
+### Model layer — `src/models/` (9 schemas)
 
-Seven Mongoose schemas — see `DATABASE.md` for full field reference.
+`Trade`, `User`, `Queue`, `Conversation`, `FOCommunication`, `AuditLog`, `UserScore`, `SystemConfig`, `PendingReply`. All cross-references are by **string key** (`tradeRef`, `userId`) — there are no ObjectId `populate` refs. Full field tables in [DATABASE.md](DATABASE.md).
 
-| Model | Collection | Notes |
-|-------|-----------|-------|
-| `Trade.js` | `trades` | Primary entity; complex nested sub-documents |
-| `User.js` | `users` | Trainee accounts |
-| `Queue.js` | `queues` | Active session per user |
-| `Conversation.js` | `conversations` | CPTY/FO email threads |
-| `FOCommunication.js` | `focommunications` | FO internal escalation channels |
-| `AuditLog.js` | `auditlogs` | Per-trade, per-action audit entries |
-| `UserScore.js` | `userscores` | Points and penalties ledger |
+### Route layer — `src/routes/` (11 routers)
 
-### Route Layer: `src/routes/`
+`/api/auth`, `/api/session`, `/api/clock`, `/api/queue`, `/api/trade`, `/api/conversation` (+ `/api/conversations`), `/api/fo-channel`, `/api/audit`, `/api/settlement`, `/api/ssi`, `/api/chat`. Full endpoint spec in [API.md](API.md).
 
-Routes are thin orchestrators: validate input → call engine → return JSON response.
+### Auth middleware — `src/middleware/auth.js`
 
-| File | Mount Point | Auth | Description |
-|------|------------|------|-------------|
-| `authRoutes.js` | `/api/auth` | No | Register + login (rate-limited: 15 req/15min) |
-| `sessionRoutes.js` | `/api/session` | Yes | Session info + logout |
-| `clockRoutes.js` | `/api/clock` | No | Simulation time |
-| `queueRoutes.js` | `/api/queue` | Yes | Generate queue + fetch active queue |
-| `tradeRoutes.js` | `/api/trade` | Yes | Trade list (admin) + action submission |
-| `conversationRoutes.js` | `/api/conversation` + `/api/conversations` | Yes | Send/resolve/fetch email threads |
-| `foChannelRoutes.js` | `/api/fo-channel` | Yes | FO internal channel operations |
-| `auditRoutes.js` | `/api/audit` | Yes | Fetch audit trail per trade |
+Reads a JWT from `Authorization: Bearer <token>` then falls back to the `auth_token` cookie; verifies with `JWT_SECRET`; attaches `{ userId, fullName }` to `req.user`; returns 401 (no token) or 403 (invalid/expired). No role checks — see [Security](SECURITY.md).
 
-### Auth Middleware: `src/middleware/auth.js`
+## Frontend architecture
 
-- Reads token from `Authorization: Bearer <token>` header first, then `auth_token` cookie
-- Verifies with `jsonwebtoken.verify(token, JWT_SECRET)`
-- Returns 401 (no token) or 403 (invalid/expired)
-- Attaches `{ userId, fullName }` to `req.user`
+- **Next.js 16 App Router**, **React 19**, all interactive pages are `"use client"` and wrapped in `<Suspense>` (App Router requires this around `useSearchParams()`).
+- **Tailwind v4** (`globals.css`) plus a page-scoped `communication/page.css`; **react-hot-toast** for notifications.
+- Session helpers in `frontend/src/lib/auth.js`: token in `sessionStorage` (`auth_token`), `authHeaders()`, `saveSession`/`clearSession`. Backend base URL from `NEXT_PUBLIC_BACKEND_URL`.
+- `next.config.mjs` rewrites `/api/:path*` and `/socket.io/:path*` to the backend.
 
----
+Pages: `/` (login), `/dashboard` (desk selector), `/workstation`, `/mo-risk`, `/communication`, `/settlement/electronic`, `/settlement/bilateral`, `/ssi-database`. See [Component Guidelines](COMPONENT_GUIDELINES.md).
 
-## Frontend Architecture
+## Real-time channel
 
-### Technology
-- **Next.js 16.2.9** with **App Router** (`frontend/src/app/`)
-- **React 19.2.4** — all pages use `"use client"` directive
-- **TailwindCSS v4** for login page; inline `<style dangerouslySetInnerHTML>` for complex pages
-- **socket.io-client v4.8.3** for real-time updates
-- **react-hot-toast** for non-blocking notifications (replaced `alert()`)
-- **js-cookie** for cookie read access (write is server-side only now)
-- **Webpack mode forced** (`next dev --webpack`) — Turbopack disabled for Windows compatibility
-
-### Proxy: `next.config.mjs`
-
-```js
-rewrites() → [
-  { source: '/api/:path*', destination: `${BACKEND_URL}/api/:path*` },
-  { source: '/socket.io/:path*', destination: `${BACKEND_URL}/socket.io/:path*` }
-]
+```mermaid
+sequenceDiagram
+    participant U as User (Workstation)
+    participant FE as Frontend
+    participant BE as Backend
+    participant LP as Reply loop (3s)
+    participant DB as MongoDB
+    U->>FE: Send confirmation to CPTY
+    FE->>BE: POST /api/conversation/send
+    BE->>DB: Save message + PendingReply(sendAt=now+delay)
+    BE-->>FE: 200 { success }
+    BE-->>FE: emit new_email (this message)
+    Note over LP: later, when sendAt has passed
+    LP->>DB: find due PendingReply
+    LP->>LP: cptyAI.generate() (Gemini or offline)
+    LP->>DB: persist CPTY reply
+    LP-->>FE: emit new_email (CPTY reply)
+    FE->>FE: refresh inbox / queue
 ```
 
-`BACKEND_URL` defaults to `http://localhost:3002`. This means all `/api/*` calls from the frontend are relative paths — no hardcoded backend URLs in page code.
+Socket auth uses the same JWT (handshake `auth.token` or cookie). Clients auto-join `user_<userId>` and join/leave `desk_<desk>`. Server emits `trade_update` `{tradeRef,currentStatus}` (user room) and `new_email` `{tradeRef,sender,subject,timestamp}` (broadcast). Frontend also polls (15s workstation / 5s communication) as a fallback.
 
-### Pages
+## AI integration
 
-| Route | File | Purpose |
-|-------|------|---------|
-| `/` | `page.js` | Login + Register |
-| `/dashboard` | `dashboard/page.js` | Desk selector (MO / CONFIRMATION / SETTLEMENT) |
-| `/workstation` | `workstation/page.js` | Trade queue table, action panel, audit popup, truth viewer, CSV export |
-| `/communication` | `communication/page.js` | Email mailbox — CPTY inbox, FO channel, compose, reply |
-| `/mo-risk` | `mo-risk/page.js` | MO Termsheet / risk reference document |
+- **CPTY & FO replies:** `cptyAI` / `cptySettlementAI` / `foAI` build a prompt from the trade's truths and mismatches and call `llmService` (**Gemini 2.5 Flash**, rate-limited to ~1 request / 4s with retries). On any failure they fall back to the **deterministic offline template engine** (`offlineResponseEngine` + per-counterparty personalities). Cerebras and Groq keys exist in config but are **not** wired into the active chain.
+- **Tutor:** `tutorAI` calls **OpenRouter (Nemotron 3 Ultra)**, injecting the three `docs/skb/*` knowledge-base files into the system prompt. Served by `POST /api/chat/tutor`.
 
-Each page follows the **Suspense wrapper pattern** to comply with App Router's `useSearchParams()` requirement:
+## Deployment shape
 
-```jsx
-"use client";
-function XxxComponent() { /* all logic, useSearchParams(), state */ }
-export default function XxxPage() {
-  return <Suspense fallback={<div>Loading...</div>}><XxxComponent /></Suspense>;
-}
-```
-
-### Auth Module: `frontend/src/lib/auth.js`
-
-Centralised session helpers — all pages import from here:
-- `saveSession(token, userId, fullName)` — writes `auth_token` to sessionStorage + cookie
-- `loadUserId()` / `loadFullName()` / `getToken()` — reads from sessionStorage
-- `authHeaders()` — returns `{ "Content-Type": "application/json", "Authorization": "Bearer <token>" }`
-- `clearSession()` — removes sessionStorage keys and cookie
-
----
-
-## Real-Time Architecture
-
-Socket.io connects via `NEXT_PUBLIC_BACKEND_URL` (default `http://localhost:3002`). Each client:
-1. Connects on workstation/communication mount with `auth: { token: getToken() }`
-2. Emits `join_desk` with the desk name (joins `desk_<desk>` room)
-3. Listens for `trade_update` → triggers silent queue refresh
-4. Listens for `new_email` → triggers silent queue/inbox refresh
-5. Disconnects on component unmount
-
-Backend emits:
-- `trade_update` with `{ tradeRef, currentStatus }` after every successful trade action
-- `new_email` with `{ tradeRef, sender, subject, timestamp }` when a new email message arrives
-
----
-
-## LLM Integration Flow
-
-```
-User action (e.g., CONFIRM_SEND_TO_CPTY)
-    ↓
-communicationEngine.scheduleCptyReply(trade, tradeRef, delay=4000–12000ms)
-    → push to pendingReplies[]
-    ↓
-setInterval every 3s: communicationEngine.processReplies()
-    → picks a pending reply that has passed its delay
-    → calls cptyAI.generateCptyResponse(trade, conversationHistory)
-        → llmService.generateText(prompt)
-            → tries Gemini (google/genai)
-            → on failure: tries Cerebras
-            → on failure: offlineResponseEngine.getOfflineResponse()
-    → saves reply to Conversation via conversationEngine.createMessage()
-    → emits socket new_email event
-    → updates Trade in DB (cptyResponseReceived, pendingAmendments)
-```
-
-FO AI follows the same flow via `processFOReplies()` and `foAI.generateFOResponse()`.
-
-FO internal channel replies go through `foInternalChannel.processFOInternalReplies()` and update `foEscalation` on the trade document.
-
----
-
-## Background Process Architecture
-
-`server.js` runs 4 persistent `setInterval` loops after startup:
-
-```
-Every 2000ms: Trade Cache Refresh
-  Trade.find({ assignedTo: { $ne: null } }).lean()
-  → rebuilds communicationEngine._cachedTrades as { [tradeRef]: trade }
-
-Every 3000ms: CPTY Reply Processor
-  communicationEngine.processReplies(conversationEngine, cacheLookup, tradeUpdater)
-
-Every 3000ms: FO Reply Processor
-  communicationEngine.processFOReplies(conversationEngine, cacheLookup, tradeUpdater)
-
-Every 3000ms: FO Internal Channel Processor
-  foInternalChannel.processFOInternalReplies(tradeUpdater)
-```
-
-**Important**: `pendingReplies` arrays are **in-memory only** — they are lost on server restart. Any reply scheduled within a 4–12s window will be dropped if the process restarts. See `KNOWN_ISSUES.md` KI-007.
-
----
-
-## Deployment Architecture
-
-```
-docker-compose.yml
-├── backend service  (Dockerfile at root)
-│   └── port 3002 exposed
-└── frontend service  (frontend/Dockerfile)
-    └── port 3000 exposed
-```
-
-For local development, backend and frontend run independently with `npm run dev`. See `DEPLOYMENT.md` for full setup instructions.
- file_path: /workspace/ilabs1/ai/ARCHITECTURE.md
+`docker-compose.yml` defines three services: `mongodb` (27017), `backend` (3002), `frontend` (3001, `BACKEND_URL=http://backend:3002`). See [Deployment](DEPLOYMENT.md).

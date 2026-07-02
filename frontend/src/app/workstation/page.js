@@ -7,6 +7,7 @@ import { loadUserId, getToken, authHeaders, clearSession } from "../../lib/auth"
 import toast from "react-hot-toast";
 import InstructionPanel from "../../components/InstructionPanel";
 import TutorialPanel from "../../components/TutorialPanel";
+import SettlementDesk from "./components/settlement/SettlementDesk";
 
 function WorkstationComponent() {
   const router = useRouter();
@@ -197,12 +198,16 @@ function WorkstationComponent() {
     });
     const data = await res.json();
     setIsGeneratingQueue(false);
-    if (!data.success) return toast.error(data.error || "Complete Your Current Trades First");
+    if (!data.success) {
+      toast.error(data.error || "Complete Your Current Trades First");
+      return false;
+    }
     setQueue(data.trades || []);
     if (data.sessionExpiry) {
       setSessionExpiry(data.sessionExpiry);
       if (data.sessionStart) setSessionStart(data.sessionStart);
     }
+    return true;
   };
 
   const refreshQueue = async () => {
@@ -536,6 +541,9 @@ function WorkstationComponent() {
         </div>
       </div>
 
+      {desk === "SETTLEMENT" ? (
+        <SettlementDesk userId={userId} generateQueue={generateQueue} isGeneratingQueue={isGeneratingQueue} />
+      ) : (
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <button className="btn warning" onClick={generateQueue} disabled={isGeneratingQueue} style={{ margin: 0 }}>
@@ -633,6 +641,7 @@ function WorkstationComponent() {
         {/* Instructions Panel */}
         {desk && <InstructionPanel desk={desk} />}
       </div>
+      )}
 
       {popupState.type === "action" && (
         <div className="popup" style={{display: 'block'}}>

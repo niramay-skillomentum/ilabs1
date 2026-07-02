@@ -1,165 +1,96 @@
-content: # Security
+# Security
 
-> Last updated: 2026-06-27
+> **Purpose:** Document the authentication, authorization, and hardening posture, and the honest list of open gaps.
+> **Audience:** Backend engineers, reviewers, operators.
+> **Last verified:** 2026-07-01 against `src/middleware/auth.js`, `src/routes/authRoutes.js`, `server.js`, `src/engine/socketEngine.js`, `src/engine/communicationEngine.js`.
+> **Related:** [API Reference](API.md) · [Deployment](DEPLOYMENT.md) · [Known Issues](KNOWN_ISSUES.md)
 
 ---
 
-## Authentication
+## Authentication flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend
+    participant BE as Backend
+    U->>FE: email + password
+    FE->>BE: POST /api/auth/login
+    BE->>BE: bcrypt.compare()
+    BE-->>FE: { token } + Set-Cookie auth_token (HttpOnly)
+    FE->>FE: sessionStorage.auth_token = token
+    FE->>BE: request + Authorization: Bearer <token>
+    BE->>BE: jwt.verify(token, JWT_SECRET) → req.user
+    BE-->>FE: protected response
+```
 
 ### JWT
+- Algorithm HS256; secret from **`JWT_SECRET`** with **no fallback** — the server exits at boot if it is unset.
+- Lifetime **3 hours**; payload `{ userId, fullName }`.
+- Delivered both in the login response body and as an `auth_token` cookie.
 
-- **Algorithm**: HS256
-- **Secret**: `JWT_SECRET` env var — **no fallback**. Server exits with `FATAL` at startup if unset.
-- **Token lifetime**: 3 hours (matches session duration)
-- **Payload**: `{ userId, fullName }`
-- **Delivery**: HTTP response body JSON + `auth_token` HttpOnly cookie
+### Cookie
+`auth_token=<JWT>; Path=/; Max-Age=10800; SameSite=Lax; HttpOnly` and **`Secure` in production** (`NODE_ENV === "production"`). The frontend stores the token in `sessionStorage` for its `Authorization` headers; the cookie is the fallback for the socket handshake.
 
-### Cookie Settings
-
-```
-auth_token=<JWT>; Path=/; Max-Age=10800; SameSite=Lax; HttpOnly
-```
-
-- `HttpOnly` ✅ — cookie is **not** accessible from JavaScript
-- `SameSite=Lax` ✅ — protects against CSRF for cross-site navigations
-- `Secure` ❌ — not set in development; **must add in production** (HTTPS only)
-- Frontend reads token from `sessionStorage` exclusively (set via `saveSession()` in `auth.js`)
-
-### Auth Middleware — `src/middleware/auth.js`
-
-Token resolution order:
-1. `Authorization: Bearer <token>` header
-2. `auth_token` cookie (fallback)
-
-Returns:
-- `401` — no token present
-- `403` — token invalid or expired (`JsonWebTokenError`, `TokenExpiredError`)
-
----
+### Middleware — `src/middleware/auth.js`
+Token resolution: `Authorization: Bearer <token>` header, then `auth_token` cookie. Returns `401` when no token is present, `403` when the token is invalid/expired. Attaches `{ userId, fullName }` to `req.user`.
 
 ## Authorization
+- Protected routes use the auth middleware.
+- Trade actions **re-fetch the trade from the DB** by `tradeRef` — the client-supplied trade object is not trusted.
+- **No RBAC.** Every authenticated user has identical capabilities; isolation is by session/`assignedTo`, not roles.
 
-- Every protected route uses `authenticateToken` middleware
-- Backend **always re-fetches the trade from DB** with ownership check (`{ tradeRef, assignedTo: req.user.userId }`) — client cannot spoof trade ownership
-- No role-based access control (RBAC) exists currently — all authenticated users have identical access
+## Passwords
+- bcryptjs, 10 salt rounds; never stored in plaintext; login uses `bcrypt.compare()`. No complexity policy enforced.
 
----
-
-## Password Security
-
-- Hashed with **bcryptjs**, 10 salt rounds
-- Passwords never stored in plaintext
-- Login uses `bcrypt.compare()` (constant-time, resistant to timing attacks)
-- No password complexity requirements enforced yet
-
----
-
-## Rate Limiting
-
-Implemented via `express-rate-limit` v8.5.2:
-
-```js
-// Applied to /api/auth/register and /api/auth/login
-windowMs: 15 * 60 * 1000  // 15 minutes
-limit: 15                   // 15 requests per window per IP
-```
-
-Returns `429 Too Many Requests` when exceeded.
-
----
+## Rate limiting
+`express-rate-limit` on `/api/auth/register` and `/api/auth/login`: **15 requests / 15 minutes / IP**, returning a "Too many requests" error. No rate limiting on other routes.
 
 ## CORS
+- **REST:** a global permissive `cors()` is applied in `server.js` (acceptable in the proxied same-origin dev setup, but should be tightened for a directly-exposed API).
+- **Socket.io:** restricted to `ALLOWED_ORIGINS` (comma-separated) or `http://localhost:3000`, with `credentials: true`.
 
-**Socket.io CORS**:
-```js
-cors: {
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-  credentials: true
-}
-```
+## Input handling
+| Input | Handling |
+|-------|----------|
+| Register/login fields | Presence-checked (400 if missing) |
+| Email | Lowercased/normalized |
+| Trade action `comment` | Required, non-empty (400 otherwise) |
+| Trade ownership | Trade re-fetched server-side by `tradeRef` |
+| Message bodies | **Sanitized with `sanitize-html`** (a constrained allow-list of tags/attributes) before persistence in `communicationEngine` |
 
-Configured via `ALLOWED_ORIGINS` env var (comma-separated). Defaults to `http://localhost:3000`.
-
-**Express CORS**: Not currently configured — Express does not set CORS headers. This is acceptable because the frontend proxies all requests through Next.js rewrites (same-origin from browser perspective).
-
----
-
-## Input Validation
-
-| Input | Validation |
-|-------|-----------|
-| Register fields | `fullName`, `email`, `password` required; returns 400 if missing |
-| Login fields | `email`, `password` required |
-| Email normalization | `email.toLowerCase()` on register and login |
-| Trade action comment | Server-side required check; 400 if empty or missing |
-| Desk parameter | Whitelisted against `["MO", "CONFIRMATION", "SETTLEMENT"]` |
-| Trade ownership | `trade.assignedTo === req.user.userId` enforced on every action |
-| Email body | Stored as-is — no HTML sanitization yet (XSS risk in email rendering) |
-
----
-
-## Environment Variables Security
-
+## Environment variable sensitivity
 | Variable | Sensitivity | Notes |
-|----------|------------|-------|
-| `MONGO_URI` | 🔴 Critical | Contains MongoDB Atlas credentials — never commit |
-| `JWT_SECRET` | 🔴 Critical | Long, random string required; server refuses to start without it |
-| `GEMINI_API_KEY` | 🔴 High | Google AI API key — never commit |
-| `CEREBRAS_API_KEY` | 🔴 High | Cerebras SDK key — never commit |
-| `GROQ_API_KEY` | 🟡 Medium | Optional; not in active provider chain |
-| `ALLOWED_ORIGINS` | 🟢 Low | Comma-separated frontend origins |
-| `PORT` | 🟢 Low | Backend server port (default 3002) |
+|----------|-------------|-------|
+| `MONGO_URI` | Critical | DB credentials — never commit |
+| `JWT_SECRET` | Critical | Required at boot; use a long random value |
+| `GEMINI_API_KEY` | High | CPTY/FO LLM |
+| `OPENROUTER_API_KEY` | High | Tutor LLM |
+| `CEREBRAS_API_KEY` | High | Secondary (not in active chain) |
+| `GROQ_API_KEY` | Medium | Configured, unused |
+| `ALLOWED_ORIGINS`, `PORT`, `NEXT_PUBLIC_BACKEND_URL` | Low | Non-secret config |
 
-Frontend-specific (in `frontend/.env.local`):
+Keep `.env` in `.gitignore`; `.env.example` is the safe template.
 
-| Variable | Sensitivity | Notes |
-|----------|------------|-------|
-| `NEXT_PUBLIC_BACKEND_URL` | 🟢 Low | Public — safe to expose; used in browser-side socket connection |
-| `BACKEND_URL` | 🟢 Low | Server-side only (used in Next.js rewrites config) |
+## Data privacy
+All trade data is synthetic (no real PII). `user.email` doubles as `userId` and appears in audit logs stored in the private DB; it is not exposed in URLs.
 
-**`.env`** should be in `.gitignore`. **`.env.example`** at the repo root provides a safe template with no real credentials.
+## Open gaps (honest list)
+| Area | Status |
+|------|--------|
+| REST CORS is globally permissive | Open — tighten before exposing the API directly |
+| No RBAC | Open — all users are equal |
+| Token in `sessionStorage` | Open — XSS-reachable; the HttpOnly cookie mitigates the primary vector |
+| No password complexity policy | Open |
+| Rate limiting only on auth routes | Open |
 
----
+See [Known Issues](KNOWN_ISSUES.md) for the tracked register.
 
-## Data Privacy
-
-| Issue | Status | Detail |
-|-------|--------|--------|
-| Email in URL params | ✅ Fixed | Email was previously exposed as `?userId=user@email.com` in URL; now stored in `sessionStorage` via `auth.js` |
-| Email as userId | 🟡 Acceptable | `user.email` is used as primary identifier throughout; not exposed in URLs now |
-| Trade data | 🟢 Safe | All trade data is synthetic; no real PII |
-| Audit logs | 🟢 Safe | Contain userId (email) + actions — stored in private DB only |
-
----
-
-## Security Issues Status
-
-| ID | Issue | Severity | Status |
-|----|-------|---------|--------|
-| KI-001 | No rate limiting on auth | High | ✅ Fixed — `express-rate-limit` added |
-| KI-002 | Email in URL query params | High | ✅ Fixed — `auth.js` module, sessionStorage |
-| KI-003 | JWT hardcoded fallback secret | High | ✅ Fixed — fatal error if `JWT_SECRET` unset |
-| KI-004 | `auth_token` not HttpOnly | Medium | ✅ Fixed — `HttpOnly` flag added |
-| KI-005 | Socket.io CORS `*` | Medium | ✅ Fixed — `ALLOWED_ORIGINS` env var |
-| KI-006 | Legacy `uiRoutes.js` unauthenticated | Medium | ✅ Fixed — file deleted |
-| — | Email body XSS | Low | ❌ Open — user messages stored/rendered as-is |
-| — | No `Secure` cookie flag | Low | ❌ Open — needed for HTTPS in production |
-| — | No RBAC | Low | ❌ Open — all users have equal access |
-| — | No input sanitization on email bodies | Low | ❌ Open — potential XSS in message rendering |
-
----
-
-## Production Security Checklist
-
-Before deploying publicly:
-
-- [ ] Set `NODE_ENV=production`
-- [ ] Configure HTTPS (TLS termination via nginx or cloud load balancer)
-- [ ] Add `Secure` flag to auth cookie in `authRoutes.js`
-- [ ] Set `ALLOWED_ORIGINS` to production frontend URL
-- [ ] Rotate `JWT_SECRET` to a cryptographically random 64-char+ string
-- [ ] Sanitize email message bodies before rendering (DOMPurify or equivalent)
-- [ ] Verify `.env` is in `.gitignore` and not in any Docker layer
-- [ ] Review audit logs to ensure no secrets are being logged
-- [ ] Consider opaque UUID-based user IDs instead of email as `userId`
- file_path: /workspace/ilabs1/ai/SECURITY.md
+## Production hardening checklist
+- [ ] `NODE_ENV=production` (enables the `Secure` cookie flag)
+- [ ] HTTPS/TLS termination in front of both services
+- [ ] `ALLOWED_ORIGINS` set to the real frontend origin; tighten REST CORS
+- [ ] Strong random `JWT_SECRET` (64+ chars), rotated
+- [ ] MongoDB network access restricted; least-privilege DB user
+- [ ] Verify `.env` is not baked into any Docker layer
+- [ ] Review audit logs for accidental secret logging

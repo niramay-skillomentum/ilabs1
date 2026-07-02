@@ -5,6 +5,93 @@ const auditEngine = require("../engine/auditEngine");
 const { authenticateToken } = require("../middleware/auth");
 const scoringEngine = require("../engine/scoringEngine");
 
+// --- V2 SETTLEMENT IMPORTS ---
+const InboxEvent = require("../models/InboxEvent");
+const ScenarioManager = require("../engine/settlementScenarioManager");
+const SettlementEngine = require("../engine/settlementEngine");
+const SettlementExecutor = require("../engine/settlementExecutor");
+
+// ======================================
+// V2 SETTLEMENT DESK ENDPOINTS
+// ======================================
+
+// GET all trades for the settlement dashboard
+router.get('/v2/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    // Return trades assigned to user that are in settlement phase
+    const trades = await Trade.find({ 
+      assignedTo: userId,
+      currentStatus: { $in: ['SETTLEMENT_PENDING', 'READY_FOR_APPROVAL', 'SETTLEMENT_BREAK', 'SETTLED'] } 
+    }).lean();
+    res.json(trades);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET single trade workspace details
+router.get('/v2/trade/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    let trade = await Trade.findOne({ _id: req.params.id, assignedTo: userId });
+    
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+
+    // Initialize scenario if it doesn't have one
+    if (!trade.settlementScenario || !trade.settlementScenario.scenarioId) {
+      trade.settlementScenario = ScenarioManager.generateScenario("Beginner");
+      trade.settlementOperationalStatus = "NEEDS_REVIEW";
+      await trade.save();
+    }
+
+    const checklist = ScenarioManager.generateReadinessChecklist(trade);
+    
+    // Fetch inbox events
+    const inbox = await InboxEvent.find({ tradeId: trade._id }).sort({ timestamp: -1 }).lean();
+
+    res.json({ trade, checklist, inbox });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST process user decision/action
+router.post('/v2/trade/:id/action', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { action, decision } = req.body;
+    let trade = await Trade.findOne({ _id: req.params.id, assignedTo: userId });
+    
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+
+    const result = await SettlementEngine.processUserDecision(trade, action, decision);
+    await trade.save();
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST execute settlement
+router.post('/v2/trade/:id/execute', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    let trade = await Trade.findOne({ _id: req.params.id, assignedTo: userId });
+    
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+
+    const result = await SettlementExecutor.executeSettlement(trade);
+    await trade.save();
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 router.post("/select-type", authenticateToken, async (req, res) => {
   try {
     const { tradeRef, selectedType } = req.body;

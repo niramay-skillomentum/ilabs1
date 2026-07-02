@@ -127,6 +127,40 @@ const TradeSchema = new mongoose.Schema({
   },
 
   // ======================================
+  // SETTLEMENT SCENARIO
+  // ======================================
+  settlementOperationalStatus: { type: String, default: "READY" },
+  
+  settlementScenario: {
+    scenarioId: String,
+    scenarioType: String,
+    settlementMethod: String,
+    difficulty: String,
+    hiddenIssue: String,
+    expectedResolution: String,
+    learningObjective: String,
+    possibleOutcomes: [String],
+    checkListModifiers: mongoose.Schema.Types.Mixed,
+    metadata: mongoose.Schema.Types.Mixed
+  },
+  
+  decisionLogs: [{
+    timestamp: { type: Date, default: Date.now },
+    action: String,
+    decision: String,
+    correctness: Boolean,
+    operationalImpact: String,
+    scenarioStage: String,
+    aiFeedback: String,
+    simulatedTimeConsumed: Number
+  }],
+
+  priority: { type: String, default: "Medium" },
+  estimatedResolutionTime: Number,
+  scenarioDifficulty: String,
+  scenarioCompleted: { type: Boolean, default: false },
+
+  // ======================================
   // FO ESCALATION (from Confirmation desk)
   // ======================================
   foEscalation: {

@@ -1,455 +1,176 @@
-content: # API Reference
+# API Reference
 
-> Last updated: 2026-06-27
-
-All API routes are prefixed with `/api`. The Next.js frontend proxies all `/api/*` and `/socket.io/*` requests to the backend at `http://localhost:3002` (configurable via `NEXT_PUBLIC_BACKEND_URL`).
-
-**Authentication**: All 🔒 routes require `Authorization: Bearer <JWT>` header. The middleware also accepts the `auth_token` cookie as a fallback.
-
-**Response format**: All responses are JSON. Success responses include `"success": true`. Error responses include `"error": "<message>"`.
+> **Purpose:** Complete REST + Socket.io reference for the backend.
+> **Audience:** Frontend and backend engineers, integrators.
+> **Last verified:** 2026-07-01 against `src/routes/*` and `src/engine/socketEngine.js`.
+> **Related:** [Architecture](ARCHITECTURE.md) · [Database](DATABASE.md) · [Business Rules](BUSINESS_RULES.md) · [Security](SECURITY.md)
 
 ---
 
-## Auth Routes — `/api/auth`
+All routes are prefixed with `/api`. The Next.js frontend proxies `/api/*` and `/socket.io/*` to the backend (default `http://localhost:3002`, via `NEXT_PUBLIC_BACKEND_URL`).
 
-> Rate-limited: **15 requests per 15 minutes per IP** (via `express-rate-limit`)
+**Authentication:** 🔒 routes require a JWT via `Authorization: Bearer <token>`; the middleware also accepts the `auth_token` cookie as a fallback. On failure: `401 { error: "Authentication required" }` (no token) or `403 { error: "Invalid or expired token" }`.
 
-### `POST /api/auth/register`
+**Response format:** JSON. Success responses generally include `"success": true`; errors include `"error": "<message>"`.
 
-Register a new user account.
-
-**Body**: `{ fullName, email, password }`
-
-**Response** (200):
-```json
-{ "success": true, "message": "Registration successful" }
-```
-
-**Errors**:
-- `400` — missing fields, or email already registered
-
-**Notes**: Password is hashed with bcrypt (10 rounds) before storage. Email is normalized to lowercase.
+**Router mounts:** `/api/auth`, `/api/session`, `/api/clock`, `/api/queue`, `/api/trade`, `/api/conversation` (+ `/api/conversations`), `/api/fo-channel`, `/api/audit`, `/api/settlement`, `/api/ssi`, `/api/chat`.
 
 ---
 
-### `POST /api/auth/login`
+## Auth — `/api/auth`
 
-Authenticate and receive JWT.
+> Rate-limited: **15 requests / 15 minutes / IP** (`express-rate-limit`).
 
-**Body**: `{ email, password }`
+### `POST /api/auth/register` — public
+Body `{ fullName, email, password }` → `200 { success: true, message: "Registration successful" }`. `400` if fields missing or email already registered. Password is bcrypt-hashed; email is lowercased.
 
-**Response** (200):
-```json
-{
-  "success": true,
-  "token": "<JWT>",
-  "user": { "email": "user@example.com", "fullName": "John Doe" }
-}
-```
+### `POST /api/auth/login` — public
+Body `{ email, password }` → `200 { success: true, token, user: { email, fullName } }`. `400` on missing fields / invalid credentials. Also sets `auth_token=<JWT>; Path=/; Max-Age=10800; SameSite=Lax; HttpOnly` (`Secure` in production). Token lifetime **3 hours**.
 
-Also sets cookie: `auth_token=<JWT>; Path=/; Max-Age=10800; SameSite=Lax; HttpOnly`
-
-**Errors**:
-- `400` — missing fields or invalid credentials
-
----
-
-## Session Routes — `/api/session` 🔒
+## Session — `/api/session` 🔒
 
 ### `GET /api/session/info`
-
-Get current session state for the authenticated user.
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "hasActiveSession": true,
-  "userId": "user@example.com",
-  "fullName": "John Doe",
-  "desk": "MO",
-  "queueSize": 20,
-  "sessionStart": "2026-01-01T09:00:00Z",
-  "sessionExpiry": "2026-01-01T12:00:00Z"
-}
-```
-
-If no active session: `{ "success": true, "hasActiveSession": false }`
-
----
+→ `{ success, hasActiveSession, userId, fullName, [desk, queueSize, sessionStart, sessionExpiry] }`.
 
 ### `POST /api/session/logout`
+→ `{ success: true }`. Clears the cookie and ends the session (`isActive = false`, unassigns trades).
 
-End session and clear auth cookie.
-
-**Response** (200):
-```json
-{ "success": true }
-```
-
-Sets cookie: `auth_token=; Path=/; Max-Age=0` (clears it). Calls `queueComposer.endSession(userId)` which sets `isActive = false` and unassigns all trades.
-
----
-
-## Queue Routes — `/api/queue` 🔒
-
-### `POST /api/queue/generate`
-
-Generate a new 20-trade queue for the authenticated user.
-
-**Body**: `{ desk }` — one of: `"MO"`, `"CONFIRMATION"`, `"SETTLEMENT"`
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "desk": "MO",
-  "queueSize": 20,
-  "trades": [ /* array of trade objects */ ],
-  "sessionStart": "...",
-  "sessionExpiry": "..."
-}
-```
-
-**Errors**:
-- `400` — invalid desk value
-- `400` — user already has an active queue (`"Complete your current queue first"`)
-
-**Notes**:
-- Resets simulation clock
-- Triggers graduated DB/generated allocation (see `BUSINESS_RULES.md` SR-09)
-- Creates `Queue` document with `isActive: true`
-
----
-
-### `GET /api/queue/my?desk=<desk>`
-
-Fetch the authenticated user's current active queue.
-
-**Query**: `desk` (optional — if provided and doesn't match active desk, returns 400)
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "desk": "MO",
-  "queueSize": 20,
-  "trades": [ /* array of trade objects */ ],
-  "sessionStart": "...",
-  "sessionExpiry": "..."
-}
-```
-
-**Notes**: Touches `Queue.lastActivity` on every call. Returns 200 with `{ success: true, trades: [] }` if no active session.
-
----
-
-## Trade Routes — `/api/trade` 🔒
-
-### `GET /api/trade/all`
-
-Get all trades in the DB (admin-level endpoint, no pagination).
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "trades": [ /* all trade documents */ ]
-}
-```
-
-**⚠️ Performance Warning**: No pagination — loads all trades. See `PERFORMANCE.md` KP-002.
-
----
-
-### `POST /api/trade/action`
-
-Submit an action on a trade in the authenticated user's queue.
-
-**Body**:
-```json
-{
-  "trade": { "tradeRef": "TRD_1234_abc" },
-  "action": "MO_VALIDATE_PASS",
-  "issueType": "AMOUNT",
-  "comment": "Amount matches FO truth. Validating."
-}
-```
-
-- `trade.tradeRef` — identifies the trade (client-provided; re-fetched from DB server-side)
-- `action` — one of the valid action codes (see table below)
-- `issueType` — optional; used for break-type classification
-- `comment` — **mandatory**; returns 400 if empty
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "queueSize": 19,
-  "trades": [ /* updated trade list */ ]
-}
-```
-
-**Valid Actions**:
-
-| Action | Allowed From Status | Effect |
-|--------|--------------------|-|
-| `MO_VALIDATE_PASS` | `MO_PENDING`, `PENDING_FO_RESPONSE` | → `CONFIRMATION_PENDING` |
-| `MO_RAISE_BREAK` | `MO_PENDING` | → `MO_BREAK_OPEN` |
-| `MO_SEND_TO_FO` | `MO_BREAK_OPEN` | → `PENDING_FO_RESPONSE` |
-| `CONFIRM_TRADE` | `CONFIRMATION_PENDING`, `LIASING_WITH_CPTY` | → `SETTLEMENT_PENDING` |
-| `CONFIRM_RAISE_BREAK` | `LIASING_WITH_CPTY` | → `CONFIRMATION_BREAK` |
-| `CONFIRM_SEND_TO_CPTY` | `CONFIRMATION_PENDING`, `CONFIRMATION_BREAK`, `LIASING_WITH_FO`, `LIASING_WITH_CPTY` | schedules CPTY reply |
-| `CONFIRM_REJECT_CLAIM` | `CONFIRMATION_BREAK` | may trigger CPTY concession |
-| `CONFIRM_REQUEST_EVIDENCE` | `CONFIRMATION_BREAK` | may trigger CPTY concession |
-| `CONFIRM_ESCALATE_TO_FO` | `CONFIRMATION_BREAK` | opens FO channel |
-| `CONFIRM_RAISE_AMENDMENT` | `CONFIRMATION_BREAK` | no status change |
-| `CONFIRM_APPROVE_AMENDMENT` | `CONFIRMATION_BREAK` | applies amendments → `CONFIRMATION_PENDING` |
-| `CONFIRM_RESEND` | `CONFIRMATION_PENDING` | sends resend to CPTY |
-| `SETTLEMENT_APPROVE` | `SETTLEMENT_PENDING` | → `READY_FOR_APPROVAL` |
-| `SETTLEMENT_RAISE_BREAK` | `READY_FOR_APPROVAL` | → `SETTLEMENT_BREAK` |
-| `SETTLEMENT_FOLLOW_UP_CPTY` | `SETTLEMENT_BREAK` | → `LIASING_WITH_CPTY` |
-
-**Special Validations**:
-- `MO_VALIDATE_PASS` from `PENDING_FO_RESPONSE` requires `foResponseReceived === true`
-- `MO_VALIDATE_PASS` with `pendingAmendments` requires `conversation.status === "RESOLVED"`
-- `CONFIRM_RAISE_BREAK` requires `cptyContactCount === 1 && foContactCount === 0`
-- After action: emits `trade_update` Socket.io event; logs to `AuditLog`
-
----
-
-## Conversation Routes — `/api/conversation` 🔒
-
-> Both `/api/conversation/*` and `/api/conversations/*` are registered (legacy compatibility).
-
-### `POST /api/conversation/send`
-
-Send an email message for a trade.
-
-**Body**: `{ tradeRef, sender, message, desk }`
-
-- `sender` — typically the user's name or `"USER"`
-- `message` — email body
-- `desk` — desk context for routing
-
-**Behavior**:
-- MO status trades → email goes to FO, schedules FO reply
-- Other status trades → email goes to CPTY, schedules CPTY reply, increments `cptyContactCount`
-- Transitions `MO_BREAK_OPEN` → `PENDING_FO_RESPONSE` automatically
-- Emits `new_email` Socket.io event
-
-**Response** (200):
-```json
-{ "success": true }
-```
-
----
-
-### `POST /api/conversation/resolve`
-
-Resolve the break conversation for a trade (MO desk only).
-
-**Body**: `{ tradeRef }`
-
-**Requires**: `trade.foResponseReceived === true`
-
-**Effect**:
-1. Accepts all pending amendments and applies them to trade fields
-2. Sets `conversation.status = "RESOLVED"` + `resolvedAt`
-3. Transitions trade to `MO_PENDING`
-
-**Response** (200):
-```json
-{ "success": true, "trade": { /* updated trade */ } }
-```
-
----
-
-### `GET /api/conversation/shared?desk=<desk>`
-
-Get all conversations for a desk's shared inbox (messages from any user on this desk).
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "conversations": [ /* sorted by latest message timestamp, descending */ ]
-}
-```
-
----
-
-### `GET /api/conversation/personal`
-
-Get conversations where the authenticated user sent at least one message.
-
-**Response** (200):
-```json
-{ "success": true, "conversations": [ /* user's sent threads */ ] }
-```
-
----
-
-### `GET /api/conversation/:tradeRef`
-
-Get conversation thread for a specific trade.
-
-**Response** (200):
-```json
-{
-  "success": true,
-  "subject": "Re: Trade TRD_1234_abc",
-  "messages": [
-    { "sender": "USER", "body": "...", "subject": "...", "timestamp": "..." },
-    { "sender": "COUNTERPARTY", "body": "...", "subject": "...", "timestamp": "..." }
-  ]
-}
-```
-
----
-
-## FO Channel Routes — `/api/fo-channel` 🔒
-
-### `GET /api/fo-channel/list?desk=<desk>`
-
-List all FO internal channels for a desk.
-
-**Response** (200):
-```json
-{ "success": true, "conversations": [ /* FOCommunication documents */ ] }
-```
-
----
-
-### `GET /api/fo-channel/:tradeRef`
-
-Get FO internal channel for a specific trade.
-
-**Response** (200):
-```json
-{
-  "channel": { /* FOCommunication document */ },
-  "messages": [ /* message array */ ]
-}
-```
-
----
-
-### `POST /api/fo-channel/send`
-
-Send a message on the FO internal escalation channel.
-
-**Body**: `{ tradeRef, message }`
-
-**Effect**:
-1. Opens `FOCommunication` document if not already open
-2. Saves user message
-3. Schedules FO internal reply (via `foInternalChannel.scheduleFOInternalReply()`)
-4. Transitions trade status if needed (may set `LIASING_WITH_FO`)
-
-**Response** (200):
-```json
-{ "success": true }
-```
-
----
-
-## Audit Routes — `/api/audit` 🔒
-
-### `GET /api/audit/:tradeRef`
-
-Get full audit trail for a specific trade.
-
-**Response** (200):
-```json
-{
-  "trail": [
-    {
-      "tradeRef": "TRD_1234_abc",
-      "action": "MO_VALIDATE_PASS",
-      "userId": "user@example.com",
-      "desk": "MO",
-      "details": "Validated. Amount matches FO truth.",
-      "timestamp": "2026-06-27T09:15:00Z",
-      "isAutomated": false
-    }
-  ],
-  "xmlAudit": "<?xml version=\"1.0\"?>... or null"
-}
-```
-
-The `xmlAudit` field is the XML from the trade's `auditXml` field (generated at creation). The `trail` array is from `AuditLog` entries.
-
----
-
-## Settlement Routes — `/api/settlement` 🔒
-
-### `POST /api/settlement/select-type`
-Validates the user's choice of settlement type (Bilateral vs Electronic). Applies penalty if incorrect.
-
-### `GET /api/settlement/bilateral/:tradeRef`
-Fetches the trade for the Bilateral Settlement Dashboard.
-
-### `POST /api/settlement/bilateral/action`
-Performs an action on a Bilateral Settlement trade (`APPROVE_SETTLEMENT`, `RAISE_BREAK`, `EDIT_SETTLEMENT`, `MAIL_CPTY`).
-
-### `GET /api/settlement/electronic/:tradeRef`
-Fetches the trade for the Electronic Settlement Dashboard.
-
-### `POST /api/settlement/electronic/action`
-Performs an action on an Electronic Settlement trade (`APPROVE_SETTLEMENT`, `RAISE_BREAK`, `EDIT_SETTLEMENT`). Does NOT include `MAIL_CPTY`.
-
----
-
-## Clock Routes — `/api/clock`
+## Clock — `/api/clock` — public
 
 ### `GET /api/clock`
+→ `{ simTime: "HH:MM", timeLeftMinutes }` — minutes until the 18:00 sim cutoff.
 
-Get current simulation time and time remaining (public endpoint — no auth).
+## Queue — `/api/queue` 🔒
 
-**Response** (200):
-```json
-{
-  "simTime": "10:30",
-  "timeLeftMinutes": 150
-}
-```
+### `POST /api/queue/generate`
+Body `{ desk }` where desk ∈ `"MO" | "CONFIRMATION" | "SETTLEMENT"` → `{ success, desk, queueSize, trades[], sessionStart, sessionExpiry }`. `400` on invalid desk, or `{ success:false, error:"Complete your current queue first" }` if an active queue exists. Composes a 20-trade queue (see [Business Rules](BUSINESS_RULES.md)) and creates a `Queue` doc with `isActive:true`.
 
-Simulation clock is calculated from the active user session's `sessionStart`. Frontend also computes this client-side without polling.
+### `GET /api/queue/my?desk=<desk>`
+Fetch the active queue (touches `lastActivity`). Returns the queue, or `400` if there is no active session.
+
+## Trade — `/api/trade` 🔒
+
+### `GET /api/trade/all`
+→ `{ success, trades[] }`. **No pagination** — see [Performance](PERFORMANCE.md).
+
+### `POST /api/trade/action`
+Body `{ trade: { tradeRef }, action, issueType?, comment }`.
+- The trade is **re-fetched from the DB** by `tradeRef` — client-supplied fields are not trusted.
+- `comment` is **mandatory** (`400` if empty).
+- On success: persists the trade, records an `AuditLog` entry, emits `trade_update` to `user_<userId>`, returns `{ success, queueSize, trades[] }`.
+
+**Action → transition map** (exactly as in `tradeRoutes.js`):
+
+| Action | Allowed from | Result |
+|--------|--------------|--------|
+| `MO_VALIDATE_PASS` | `MO_PENDING`, `PENDING_FO_RESPONSE` | → `CONFIRMATION_PENDING` (applies accepted amendments) |
+| `MO_RAISE_BREAK` | `MO_PENDING` | → `MO_BREAK_OPEN` |
+| `MO_SEND_TO_FO` | `MO_BREAK_OPEN` | → `PENDING_FO_RESPONSE` |
+| `CONFIRM_TRADE` | `LIASING_WITH_CPTY` | → `SETTLEMENT_PENDING` |
+| `CONFIRM_RAISE_BREAK` | `LIASING_WITH_CPTY` | → `CONFIRMATION_BREAK` (once only) |
+| `CONFIRM_SEND_TO_CPTY` | `CONFIRMATION_PENDING`, `CONFIRMATION_BREAK`, `LIASING_WITH_FO`, `LIASING_WITH_CPTY` | → `LIASING_WITH_CPTY` (increments `cptyContactCount`, schedules CPTY reply) |
+| `CONFIRM_REJECT_CLAIM` | `CONFIRMATION_BREAK` | → `CONFIRMATION_PENDING` (applies truth if FO supports & booking matches universal) |
+| `CONFIRM_REQUEST_EVIDENCE` | `CONFIRMATION_BREAK` | stays `CONFIRMATION_BREAK` (logs evidence request) |
+| `CONFIRM_ESCALATE_TO_FO` | `CONFIRMATION_BREAK` | → `LIASING_WITH_FO` (opens FO internal channel) |
+| `CONFIRM_RAISE_AMENDMENT` | `CONFIRMATION_BREAK` | stays `CONFIRMATION_BREAK` |
+| `CONFIRM_APPROVE_AMENDMENT` | `CONFIRMATION_BREAK` | → `CONFIRMATION_PENDING` (applies accepted amendments) |
+| `CONFIRM_RESEND` | `CONFIRMATION_PENDING` | → `LIASING_WITH_CPTY` |
+| `SETTLEMENT_APPROVE` | `SETTLEMENT_PENDING`, `LIASING_WITH_CPTY`, `SETTLEMENT_BREAK` | → `SETTLED` (validates SSI match) |
+| `SETTLEMENT_RAISE_BREAK` | `SETTLEMENT_PENDING`, `READY_FOR_APPROVAL`, `LIASING_WITH_CPTY` | → `SETTLEMENT_BREAK` |
+| `SETTLEMENT_FOLLOW_UP_CPTY` | `SETTLEMENT_PENDING`, `SETTLEMENT_BREAK`, `LIASING_WITH_CPTY` | → `LIASING_WITH_CPTY` |
+
+**Extra guards:**
+- `MO_VALIDATE_PASS` from `PENDING_FO_RESPONSE` requires `foResponseReceived === true`.
+- `MO_VALIDATE_PASS` with `pendingAmendments` requires the conversation to be `RESOLVED`.
+- `CONFIRM_RAISE_BREAK` requires `cptyContactCount === 1 && foContactCount === 0`.
+
+## Conversation — `/api/conversation` (+ `/api/conversations`) 🔒
+
+> Both mount paths are registered for compatibility; they serve the same handlers.
+
+### `POST /api/conversation/send`
+Body `{ tradeRef, sender, message, desk }` → `{ success }`. Parses the message (`aiParser`), then: MO / `PENDING_FO_RESPONSE` trades schedule an **FO** reply (and `MO_BREAK_OPEN → PENDING_FO_RESPONSE`); other trades schedule a **CPTY** reply. Emits `new_email` (broadcast).
+
+### `POST /api/conversation/resolve`
+Body `{ tradeRef }`. Requires `foResponseReceived === true`. Marks the conversation `RESOLVED`, accepts + applies pending amendments, transitions to `MO_PENDING` → `{ success, message, newStatus: "MO_PENDING" }`.
+
+### `GET /api/conversation/shared?desk=<desk>`
+→ `{ success, conversations: [{ trade, conversation: { subject, status, messages[] } }] }` for the desk's group inbox.
+
+### `GET /api/conversation/personal`
+→ conversations where the user sent at least one message.
+
+### `GET /api/conversation/:tradeRef`
+→ `{ success, subject, messages[] }`. Message shape: `{ sender: "USER"|"FO"|"COUNTERPARTY", body, subject, timestamp }`.
+
+## FO Channel — `/api/fo-channel` 🔒
+
+### `GET /api/fo-channel/list?desk=<desk>` → `{ success, conversations[] }`
+### `GET /api/fo-channel/:tradeRef` → `{ channel, messages[] }` (or `{ channel: null, messages: [] }`)
+### `POST /api/fo-channel/send`
+Body `{ tradeRef, message }` → `{ success }`. Opens the `FOCommunication` channel, saves the message, increments `foContactCount`, transitions to `LIASING_WITH_FO`/`PENDING_FO_RESPONSE` if needed, and schedules an FO internal reply.
+
+## Audit — `/api/audit` 🔒
+
+### `GET /api/audit/:tradeRef`
+→ `{ trail: [ AuditLog entries ], xmlAudit: "<xml>" | null }`. `trail` is the structured `AuditLog`; `xmlAudit` is the trade's `auditXml` generated at creation.
+
+## Settlement — `/api/settlement` 🔒
+
+### `POST /api/settlement/select-type`
+Body `{ tradeRef, selectedType }` → `{ success, redirect: "/settlement/<type>" }`. Compares against `truths.settlement.settlementType`; a wrong choice applies a **10-point penalty** and returns `400`.
+
+### `POST /api/settlement/edit-ssi`
+Body `{ tradeRef, ssiData }` → `{ success }`. Updates the trade's `settlementDetails`.
+
+### `GET /api/settlement/bilateral/:tradeRef` → `{ success, trade }`
+### `POST /api/settlement/bilateral/action`
+Body `{ tradeRef, action, editData? }` where action ∈ `APPROVE_SETTLEMENT | RAISE_BREAK | EDIT_SETTLEMENT | MAIL_CPTY`. `APPROVE_SETTLEMENT` validates all **9 SSI fields** vs `truths.settlement`; match → `SETTLED`, mismatch → 10-point penalty + `400`. `MAIL_CPTY` transitions `SETTLEMENT_BREAK → LIASING_WITH_CPTY` and emits a socket event.
+
+### `GET /api/settlement/electronic/:tradeRef` → `{ success, trade }`
+### `POST /api/settlement/electronic/action`
+Same as bilateral **without** `MAIL_CPTY`.
+
+The 9 SSI fields: `beneficiaryName, beneficiaryBank, beneficiaryBIC, accountNumber, accountType, currency, settlementMethod, correspondentBank, paymentReference`.
+
+## SSI — `/api/ssi` 🔒
+
+### `GET /api/ssi/search?id=<ssiId>`
+→ `{ success, ssi }` or `404`. Searches the `CPTY_SSIS` and `ENTITY_SSIS` tables (from `tradeGenerator.js`). Powers the SSI Database screen used for settlement self-matching.
+
+## Chat / Tutor — `/api/chat` 🔒
+
+### `POST /api/chat/tutor`
+Body `{ message, desk, tradeContext, history[] }` → `{ reply }`. `400` if `message` missing, `500` on generation failure. Backed by `tutorAI.generateTutorResponse()` (OpenRouter Nemotron 3 Ultra), grounded in the `docs/skb/*` knowledge base.
 
 ---
 
-## Socket.io Events
+## Socket.io
 
-**Connection**: `io(BACKEND_URL, { auth: { token: <JWT> } })`
+**Connect:** `io(BACKEND_URL, { auth: { token: <JWT> } })` — auth also falls back to the `auth_token` cookie. On failure the server emits an `"Authentication error"`.
 
-### Client → Server
+**Client → Server**
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `join_desk` | `"MO"` / `"CONFIRMATION"` / `"SETTLEMENT"` | Join desk broadcast room |
-| `leave_desk` | desk name | Leave desk broadcast room |
+| `join_desk` | desk name | Join `desk_<desk>` room |
+| `leave_desk` | desk name | Leave `desk_<desk>` room |
 
-### Server → Client
+**Server → Client**
 
 | Event | Payload | Trigger |
 |-------|---------|---------|
-| `trade_update` | `{ tradeRef, currentStatus }` | After any successful trade action |
-| `new_email` | `{ tradeRef, sender?, subject?, timestamp? }` | When a new email/message arrives in any conversation |
+| `trade_update` | `{ tradeRef, currentStatus }` | After a successful trade / settlement action (to `user_<userId>`) |
+| `new_email` | `{ tradeRef, sender, subject, timestamp }` | When a message is added to a conversation (broadcast) |
 
-**Room structure**:
-- `desk_<deskName>` — broadcast room for desk-wide events
-- `user_<userId>` — targeted room for user-specific notifications
+**Rooms:** `user_<userId>` (auto-joined) and `desk_<desk>` (joined via `join_desk`).
 
----
-
-## Error Codes
+## Error codes
 
 | Code | Meaning |
 |------|---------|
-| 400 | Bad request — missing fields, validation failure, business rule violation |
-| 401 | No auth token provided |
-| 403 | Invalid or expired JWT |
-| 404 | Resource not found |
-| 500 | Internal server error (unexpected exception) |
- file_path: /workspace/ilabs1/ai/API.md
+| 400 | Bad request — missing fields, validation or business-rule failure |
+| 401 | No auth token |
+| 403 | Invalid/expired token |
+| 404 | Not found |
+| 500 | Internal error |

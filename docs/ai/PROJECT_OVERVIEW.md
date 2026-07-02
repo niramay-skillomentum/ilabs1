@@ -1,150 +1,100 @@
-content: # iLabs1 — Project Overview
+# iLabs — SGB Operations Simulator: Project Overview
 
-> **Product**: SGB Operations Simulator  
-> **Company**: Niramay Skillomentum  
-> **Last Updated**: 2026-06-27
+> **Purpose:** Define what the product is, who it is for, and the shape of the system.
+> **Audience:** New engineers, trainers, and stakeholders.
+> **Product:** SGB Operations Simulator · **Company:** Niramay Skillomentum
+> **Last verified:** 2026-07-01 against the implementation.
 
 ---
 
-## What Is This?
+## What it is
 
-**iLabs1** is a **full-stack financial operations training simulator** that replicates the post-trade lifecycle of a global investment bank. Built by Niramay Skillomentum, it is used as an interactive assessment platform where trainees log in as operations professionals, process realistic trade queues, communicate with simulated Front Office (FO) and Counterparties (CPTY), and are scored on decision quality.
+**iLabs** is a full-stack **financial operations training simulator** that reproduces the post-trade lifecycle of a global investment bank. Trainees log in as operations analysts, work realistic trade queues, exchange messages with simulated **Front Office (FO)** and **Counterparty (CPTY)** actors, and are scored on the quality of their decisions.
 
-The simulator covers three core operations desks:
+The simulator spans the back-office desks a trade passes through after execution:
 
 | Desk | Role |
 |------|------|
-| **Middle Office (MO)** | Validate trades against FO booking records; identify and resolve discrepancies |
-| **Confirmation Desk** | Confirm trades with counterparties; manage CPTY disputes and FO escalations |
-| **Settlement Desk** | Approve trades for settlement; raise and resolve settlement breaks |
+| **Middle Office (MO)** | Validate the booking against front-office records; find and resolve discrepancies |
+| **Confirmation** | Agree trade economics with the counterparty; manage disputes and FO escalations |
+| **Settlement** | Verify settlement instructions (SSI) and approve payment; handle settlement breaks |
+| **Reconciliation (TLM)** | Match ledger entries to bank statements; clear or flag exceptions |
+| **Reporting** | (Selectable desk; minimal workflow implemented) |
 
----
+## Target users
 
-## Target Users
+- Finance graduates and trainees learning bank operations workflows.
+- Operations staff being onboarded to trade-lifecycle processes.
+- Trainers/assessors measuring trainee decision quality.
 
-- Finance graduates and trainees learning investment bank operations workflows
-- Operations professionals being onboarded to trade lifecycle processes
-- Trainers and assessors at financial institutions using the platform to measure trainee decisions
+## The analyst journey
 
----
-
-## Core User Journey
-
-```
-Register / Login
-      ↓
-Dashboard → Select Desk (MO / CONFIRMATION / SETTLEMENT)
-      ↓
-Workstation → Generate Queue (20 trades)
-      ↓
-Investigate trades via Audit Trail and Truth Viewer
-      ↓
-Communicate with FO/CPTY via Communication Mailbox
-      ↓
-Take scored actions (validate, raise break, confirm, settle)
-      ↓
-Session ends at 3-hour mark → scores recorded
+```mermaid
+flowchart TD
+    A[Register / Login] --> B[Dashboard: select desk]
+    B --> C[Workstation: generate queue of 20 trades]
+    C --> D[Investigate: truth viewer, audit trail, MO-Risk termsheet]
+    D --> E[Communicate: mailbox to FO / CPTY - async replies]
+    E --> F[Act: validate / raise break / confirm / settle / reconcile]
+    F --> G[Scored; session ends at 3h / 18:00 sim time]
 ```
 
----
+## Technology stack
 
-## Technology Stack
+| Layer | Technology |
+|-------|-----------|
+| Backend runtime | Node.js (CommonJS) |
+| Backend framework | Express 5 |
+| Database | MongoDB (Mongoose 9 ODM) |
+| Real-time | Socket.io 4 |
+| Job scheduling | Agenda 5 |
+| AI — CPTY & FO replies | Google **Gemini 2.5 Flash** (`@google/genai`) with deterministic offline fallback |
+| AI — Tutor chatbot | **OpenRouter** — Nvidia **Nemotron 3 Ultra** |
+| AI — secondary / unused | Cerebras (secondary fallback), Groq (configured, not wired in) |
+| Auth | JWT (HS256) + bcryptjs |
+| Rate limiting | express-rate-limit |
+| Frontend | Next.js 16 (App Router) + React 19 |
+| Styling | Tailwind CSS v4 (+ typography), react-hot-toast |
+| Client utils | socket.io-client, react-markdown, js-cookie |
+| Containerization | Docker + docker-compose |
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Backend runtime | Node.js (CommonJS) | v18+ |
-| Backend framework | Express | v5.2.1 |
-| Database | MongoDB Atlas (Mongoose ODM) | Mongoose v9.7.0 |
-| Real-time | Socket.io | v4.8.3 |
-| Job scheduling | Agenda | v5.0.0 |
-| AI responses (primary) | Google Gemini | `@google/genai` v2.8.0 |
-| AI responses (secondary) | Cerebras | `@cerebras/cerebras_cloud_sdk` v1.64.1 |
-| AI responses (tertiary) | Groq | `groq-sdk` v1.2.1 (not in active chain) |
-| Auth | JWT (HS256) + bcryptjs | `jsonwebtoken` v9.0.3 |
-| Rate limiting | express-rate-limit | v8.5.2 |
-| Frontend framework | Next.js + React | Next.js 16.2.9, React 19.2.4 |
-| Frontend styling | TailwindCSS | v4 |
-| Frontend notifications | react-hot-toast | v2.6.0 |
-| Cookie handling | js-cookie | v3.0.8 |
-| Containerization | Docker + docker-compose | — |
+See [Architecture](ARCHITECTURE.md) for how these fit together and [Deployment](DEPLOYMENT.md) for versions and env.
 
----
-
-## Repository Layout
+## Repository layout
 
 ```
 ilabs1/
-├── server.js                  # Backend entry point (Express + Socket.io + intervals)
+├── server.js                # Backend entry (Express + Socket.io + background loops)
+├── llmService.js            # Shared Gemini helper (root)
 ├── src/
-│   ├── db.js                  # MongoDB connection
-│   ├── engine/                # ~30 business logic engines
-│   ├── middleware/auth.js     # JWT middleware
-│   ├── models/                # 7 Mongoose schemas
-│   └── routes/                # 8 route groups
-├── frontend/
-│   └── src/app/               # Next.js App Router pages
-│       ├── page.js            # Login/Register
-│       ├── dashboard/         # Desk selector
-│       ├── workstation/       # Trade queue + action panel
-│       ├── communication/     # Email mailbox
-│       └── mo-risk/           # Termsheet reference view
-├── ai/                        # This documentation directory
-├── tests/backend/             # Backend test suite (Jest + Supertest)
-├── Dockerfile                 # Backend container
-├── docker-compose.yml         # Full-stack orchestration
-└── .env.example               # Template environment variables
+│   ├── db.js                # MongoDB connection
+│   ├── middleware/auth.js   # JWT middleware
+│   ├── models/              # 9 Mongoose schemas
+│   ├── routes/              # 11 route groups (mounted under /api/*)
+│   └── engine/              # simulation engines (lifecycle, breaks, AI, comms, queue…)
+├── frontend/                # Next.js App Router application
+│   └── src/app/             # login, dashboard, workstation, mo-risk,
+│                            # communication, settlement/*, ssi-database
+├── docs/                    # Narrative developer docs (numbered) + INDEX
+│   ├── ai/                  # Deep reference docs (this directory)
+│   └── skb/                 # Simulator Knowledge Base (loaded into the AI tutor)
+├── tests/backend/           # Jest + Supertest suite
+├── Dockerfile, frontend/Dockerfile, docker-compose.yml
+└── .env.example
 ```
 
----
+## Key features
 
-## Key Features
+**Simulation engine** — Each session composes exactly **20 trades** (≈12 clean + 8 with breaks) via a graduated DB-allocation formula. Every trade carries layered **truths** (`universal`, `mo`, `confirmation`, `settlement`); MO compares `truths.mo` vs `booking`, Confirmation compares `truths.confirmation` vs current economics, Settlement compares `settlementDetails` vs `truths.settlement`. ~30% of MO-clean trades hide a confirmation-level break that only surfaces at the Confirmation desk. Trade age is desk-specific. See [Business Rules](BUSINESS_RULES.md).
 
-### Simulation Engine
-- **Queue generation**: Every session gets exactly **20 trades** — 12 clean + 8 break trades, composed via a graduated exponential-decay DB allocation formula
-- **Desk-specific truths**: Each trade carries 4 truth layers (`universal`, `mo`, `confirmation`, `settlement`); MO compares `truths.mo` vs `booking`; Confirmation compares `truths.confirmation` vs trade economics
-- **Multi-desk lifecycle**: `MO_PENDING → CONFIRMATION_PENDING → SETTLEMENT_PENDING` is the happy-path flow; break states branch off at each desk
-- **~30% hidden confirmation breaks**: Trades that pass MO cleanly may still have a CPTY-level discrepancy, revealed only at Confirmation desk
-- **Trade age calculation**: Desk-specific age based on `tradeDate` (MO: days since trade date; Confirmation: days since T+1; etc.)
+**Communication system** — A threaded, folder-based mailbox. CPTY and FO replies are generated by Gemini (with a deterministic template fallback) and delivered **asynchronously** through background loops. A separate **FO internal channel** handles Confirmation-desk escalations. All threads persist in MongoDB. See [Architecture](ARCHITECTURE.md).
 
-### Communication System
-- **Email-style mailbox**: Full threaded inbox with CPTY and FO channels; users compose and reply via `Communication` page
-- **AI-powered responses**: CPTY and FO replies are generated by LLM (Gemini → Cerebras → offline fallback) with a 4–12 second simulated delay
-- **FO internal channel**: Separate escalation pathway for Confirmation desk to consult FO on disputes
-- **Conversation persistence**: All threads stored in MongoDB `Conversation` and `FOCommunication` collections
+**Assessment & audit** — Every action requires a mandatory comment (enforced server-side). Each trade has an auto-generated **XML audit trail** (capture, compliance, risk, booking, routing) plus a structured `AuditLog`. A backend **scoring engine** awards points and penalties.
 
-### Assessment & Audit
-- **Mandatory comments**: Every trade action requires a user-typed comment (enforced server-side)
-- **XML audit trail**: Auto-generated XML history per trade covering capture, compliance, risk, booking, and routing events
-- **Structured audit log**: Every user action and system event logged to `AuditLog` collection
-- **Scoring engine**: Backend awards points and penalties based on action correctness (no UI display yet)
+**Infrastructure** — Socket.io pushes `trade_update` and `new_email` events; clients join `user_<id>` and `desk_<desk>` rooms. A simulated clock runs 09:00→18:00 over the 3-hour session. Background `setInterval` loops deliver AI replies and refresh a trade cache; Agenda runs session cleanup and daily age recalculation.
 
-### Infrastructure
-- **Real-time updates**: Socket.io pushes `trade_update` and `new_email` events to clients; clients join `desk_<desk>` and `user_<userId>` rooms
-- **Session timer**: 3 real hours = one simulated trading day (9:00 AM – 6:00 PM); alerts at 60 min and 10 min remaining
-- **Background processors**: Three `setInterval` loops (every 3s) deliver CPTY replies, FO replies, and FO internal channel replies; a 2s loop refreshes the in-memory trade cache
-- **Security hardening**: Rate limiting on auth, HttpOnly cookies, JWT secret validation at startup, CORS restriction, email removed from URL params
+## Related documents
 
----
-
-## Simulation Business Rules (Summary)
-
-| Rule | Value |
-|------|-------|
-| Session duration | 3 real hours |
-| Simulated trading day | 9:00 AM – 6:00 PM |
-| Trades per session | 20 (12 clean + 8 break) |
-| MO break types | AMOUNT, VALUE_DATE, CURRENCY, COUNTERPARTY |
-| Confirmation break types | AMOUNT, VALUE_DATE, CURRENCY (no counterparty) |
-| Confirmation break ratio on clean MO trades | ~30% |
-| LLM reply delay | 4–12 seconds (randomized) |
-| Mandatory comment | Required for every action |
-| Session expiry | Auto-logout at 3h or 6 PM sim time |
-
----
-
-## Branding
-
-- **Product**: SGB Operations Simulator
-- **Title**: `"SGB Operations Simulator | Niramay Skillomentum"`
-- **Copyright**: © Niramay Skillomentum
- file_path: /workspace/ilabs1/ai/PROJECT_OVERVIEW.md
+- [Architecture](ARCHITECTURE.md) · [API Reference](API.md) · [Database](DATABASE.md) · [Business Rules](BUSINESS_RULES.md)
+- [Security](SECURITY.md) · [Deployment](DEPLOYMENT.md) · [Testing](TESTING.md) · [Performance](PERFORMANCE.md)
+- Narrative onboarding: [../01_Project_Overview.md](../01_Project_Overview.md) · Knowledge base for the tutor: [../skb/simulator_workflow_guide.md](../skb/simulator_workflow_guide.md)

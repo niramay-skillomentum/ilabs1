@@ -1,177 +1,135 @@
 # Simulator Workflow Guide
 
-## 1. Simulator Overview
-
-### Purpose of the Simulator
-The Investment Banking Operations Simulator is designed to train users in the end-to-end lifecycle of a trade through the Middle Office (MO), Confirmation, and Settlement desks. Its primary goal is to provide a realistic, hands-on environment where users learn by doing—identifying breaks, making decisions, communicating with stakeholders (like the Front Office or Counterparties), and ensuring trades settle successfully.
-
-### What Users Will Learn
-- **Trade Validation:** How to compare economic and non-economic details of a trade against reference documents (like a Trade Ticket).
-- **Break Resolution:** How to identify discrepancies, raise breaks, and escalate issues.
-- **Workflow Progression:** Understanding how a trade moves sequentially from MO to Confirmation and finally to Settlement.
-- **Decision Making:** How to choose the correct course of action when faced with exceptions (e.g., amend, reject, reconfirm, approve).
-
-### Overall Trade Lifecycle in the Simulator
-Trades follow a strict, linear progression in the simulator:
-1. **Trade Created:** The trade is injected into the simulator.
-2. **MO Desk:** The user validates the trade. Any discrepancies cause an *MO Break*. Once resolved and validated, the trade moves forward.
-3. **Confirmation Desk:** The trade is confirmed with the counterparty. If details don't match, a *Confirmation Break* occurs. Once matched, it moves to Settlement.
-4. **Settlement Desk:** The trade undergoes bilateral or electronic settlement. Mismatched instructions lead to a *Settlement Break*. Once resolved, the trade is marked *Settled*.
+> **Purpose:** Explain, end to end, how a trade moves through the iLabs — SGB Operations Simulator and exactly which actions the analyst takes at each desk.
+> **Audience:** Trainees on the simulator, and the AI Tutor (this file is loaded into the tutor's knowledge base at runtime).
+> **Last verified:** 2026-07-01 against the implementation.
+> **Related:** [Screen & Feature Guide](screen_and_feature_guide.md) · [Troubleshooting & FAQs](troubleshooting_and_faqs.md)
 
 ---
 
-## 2. Trade Lifecycle States
+## 1. What the simulator is
 
-The simulator uses a rigid state machine. Here is every lifecycle state and what it means:
+iLabs — SGB Operations Simulator trains **securities/FX back-office operations analysts**. You work a queue of trades and move each one safely through its post-execution lifecycle across four desks:
 
-1. **Trade Created**
-   - *Meaning:* The trade has been generated and is waiting to enter the active queues.
-   - *Exit:* Automatically transitions to *MO Pending*.
+**Middle Office (MO) → Confirmation → Settlement → Reconciliation (TLM)**
 
-2. **MO Pending**
-   - *Meaning:* The trade appears in the Middle Office queue, awaiting validation by the user.
-   - *Exit:* The user either clicks "Mark Validated" (moving it to *Confirmation Pending*) or "Raise Break" (moving it to *MO Break*).
+Every trade has a hidden **truth** (the economically correct values). Your job is to detect when the booked trade disagrees with the truth (a **break**), investigate it by talking to the **Counterparty (CPTY)** and the **Front Office (FO)**, correct it through amendments, and only then advance it. The simulator scores your accuracy.
 
-3. **MO Break**
-   - *Meaning:* A discrepancy was found between the Trade Details and the Trade Ticket. The user must resolve this.
-   - *Exit:* The user communicates with the Front Office (FO), amends the trade if necessary, and then marks it validated to move to *Confirmation Pending*.
+> The tutor never gives you the answer directly. It asks questions that lead you to inspect the trade, its truth, and the messages yourself.
 
-4. **Validated**
-   - *Meaning:* The Middle Office has successfully validated the trade.
-   - *Exit:* Automatically moves to *Confirmation Pending*.
+## 2. The session
 
-5. **Confirmation Pending**
-   - *Meaning:* The trade is in the Confirmation desk queue. The user must send a confirmation to the counterparty.
-   - *Exit:* If the counterparty agrees, it moves to *Confirmed*. If not, it moves to *Confirmation Break*.
+- A session gives you a queue of **20 trades** for one desk (roughly **12 clean and 8 with breaks**).
+- A session lasts **3 hours** of real time and is paced by a **simulated clock running 09:00 → 18:00**.
+- You may only have **one active desk queue at a time** — finish (or let expire) your current queue before generating a new one.
+- Every action requires a **comment** — it is mandatory and recorded in the audit trail.
 
-6. **Confirmation Break**
-   - *Meaning:* The counterparty disagreed with the confirmation details.
-   - *Exit:* The user requests evidence, reviews documents, escalates to FO if needed, amends the trade, and reconfirms. Once agreed, it moves to *Confirmed*.
+## 3. Trade lifecycle — the real states
 
-7. **Confirmed**
-   - *Meaning:* Both parties agree on the trade details.
-   - *Exit:* Automatically moves to *Settlement Pending*.
+Trades move only along allowed transitions (a strict state machine). These are the **actual** statuses. There is **no** "Validated" status and **no** "Confirmed" status — those were never real.
 
-8. **Settlement Pending**
-   - *Meaning:* The trade is in the Settlement desk. The user must verify settlement instructions.
-   - *Exit:* If instructions match and payment is successful, it moves to *Ready for Approval* or *Settled*. If they fail, it moves to *Settlement Break*.
+| Phase | Statuses |
+|---|---|
+| Middle Office | `MO_PENDING`, `MO_BREAK_OPEN`, `PENDING_FO_RESPONSE` |
+| Confirmation | `CONFIRMATION_PENDING`, `CONFIRMATION_BREAK`, `LIASING_WITH_CPTY`, `LIASING_WITH_FO` |
+| Settlement | `SETTLEMENT_PENDING`, `READY_FOR_APPROVAL`, `SETTLEMENT_BREAK`, `SETTLED` |
+| Reconciliation (TLM) | `RECON_PENDING`, `RECON_CLEARED`, `UNMATCHED_BY_USER`, `CLOSED` |
 
-9. **Settlement Break**
-   - *Meaning:* A failure occurred during settlement (e.g., SSI mismatch, insufficient funds).
-   - *Exit:* The user investigates, updates SSI, or resolves the issue, and retries settlement. 
+```mermaid
+stateDiagram-v2
+    [*] --> MO_PENDING
+    MO_PENDING --> MO_BREAK_OPEN: Raise Break
+    MO_PENDING --> CONFIRMATION_PENDING: Validate / Pass
+    MO_BREAK_OPEN --> PENDING_FO_RESPONSE: Send to FO
+    PENDING_FO_RESPONSE --> MO_PENDING: FO responded
+    CONFIRMATION_PENDING --> LIASING_WITH_CPTY: Send to CPTY
+    LIASING_WITH_CPTY --> SETTLEMENT_PENDING: Confirm Trade
+    LIASING_WITH_CPTY --> CONFIRMATION_BREAK: Raise Break
+    CONFIRMATION_BREAK --> LIASING_WITH_FO: Escalate to FO
+    CONFIRMATION_BREAK --> CONFIRMATION_PENDING: Approve Amendment / Reject Claim
+    LIASING_WITH_FO --> CONFIRMATION_PENDING: FO admits & amends
+    SETTLEMENT_PENDING --> SETTLED: Approve Settlement
+    SETTLEMENT_PENDING --> SETTLEMENT_BREAK: Raise Break
+    SETTLEMENT_BREAK --> LIASING_WITH_CPTY: Mail / Follow-up CPTY
+    SETTLED --> RECON_PENDING
+    RECON_PENDING --> RECON_CLEARED: Matched
+    RECON_PENDING --> UNMATCHED_BY_USER: Marked unmatched
+    RECON_CLEARED --> CLOSED
+```
 
-10. **Ready for Approval**
-    - *Meaning:* The settlement is staged and requires final authorization.
-    - *Exit:* User clicks "Approve Settlement" to move it to *Settled*.
+## 4. A key mechanic: replies are asynchronous
 
-11. **Settled**
-    - *Meaning:* The lifecycle is complete. Funds/assets have been exchanged.
-    - *Exit:* Terminal state.
+When you message a counterparty or the front office, **they do not answer instantly**. The AI actor replies a few seconds later, and the reply appears in your **Communication** mailbox (with a notification). The normal rhythm is therefore: *send a message → keep working other trades → come back when the reply arrives.*
 
----
+## 5. Middle Office (MO) desk
 
-## 3. MO Desk Workflow
+The MO desk checks that what was **booked** matches the **MO truth** (the front-office ticket). Fields that can break here: **amount, value date, currency, counterparty**.
 
-### Purpose
-The Middle Office (MO) Desk is the first line of defense. The user's job is to ensure that the Trade Details in the system exactly match the original Trade Ticket provided by the Front Office.
+Actions (these are the real action names):
 
-### MO Workflow
-1. **Trade Appears in MO Queue:** User selects a trade.
-2. **Validation:** User compares the Trade Details on the screen against the Trade Ticket document.
-3. **Decision Point:** 
-   - *Match:* User clicks "Mark Validated".
-   - *Mismatch:* User clicks "Raise Break".
-4. **Handling an MO Break:**
-   - User clicks "Send Mail" to notify the Front Office (FO) of the discrepancy.
-   - FO responds via the simulator mailbox.
-   - If the FO confirms an error, the user clicks "Amend Trade" and corrects the erroneous fields.
-   - Once amended and correct, the user clicks "Mark Validated".
-5. **Completion:** The trade moves to the Confirmation Desk.
+- **`MO_VALIDATE_PASS`** — the booking is correct → moves `MO_PENDING → CONFIRMATION_PENDING`. If the trade is in `PENDING_FO_RESPONSE`, you can only pass once the FO has responded; if amendments are pending, the related conversation must be resolved first.
+- **`MO_RAISE_BREAK`** — you found a discrepancy → `MO_PENDING → MO_BREAK_OPEN`.
+- **`MO_SEND_TO_FO`** — escalate the break to the front office → `MO_BREAK_OPEN → PENDING_FO_RESPONSE`. The FO replies asynchronously.
 
-### Every State Transition (MO)
-- `MO Pending` → (User: Mark Validated) → `Validated` → `Confirmation Pending`
-- `MO Pending` → (User: Raise Break) → `MO Break`
-- `MO Break` → (User: Send Mail to FO, Amend, Mark Validated) → `Validated` → `Confirmation Pending`
+Resolving an MO break:
+1. Compare the booking against the MO truth (use the **Truth viewer** and the **MO-Risk termsheet**).
+2. If the **booking** is wrong, email the FO. The FO reply may **admit the error** — the simulator auto-extracts the corrected values into **pending amendments**, which you approve; approving applies them. Then `MO_VALIDATE_PASS`.
+3. If the **ticket/records** were right all along (the FO says "our booking is correct"), do **not** amend — just `MO_VALIDATE_PASS`.
 
----
+## 6. Confirmation desk
 
-## 4. Confirmation Desk Workflow
+The Confirmation desk agrees the trade economics with the counterparty. Breakable fields here: **amount, value date, currency** (counterparty is **not** disputed at confirmation).
 
-### Purpose
-To ensure that the counterparty agrees with the trade details validated by the MO.
+Actions:
 
-### Confirmation Workflow
-1. **Trade Arrives from MO:** The trade appears in the Confirmation Queue.
-2. **Send Confirmation:** The user reviews the details and clicks "Send Confirmation".
-3. **Counterparty Response (Simulated):** The counterparty compares the confirmation against their truth.
-4. **Decision Point:**
-   - *Match:* Trade becomes *Confirmed* and moves to Settlement.
-   - *Mismatch:* Trade becomes a *Confirmation Break*.
-5. **Handling a Confirmation Break:**
-   - User clicks "Request Evidence" from the counterparty.
-   - User reviews the provided documents.
-   - User clicks "Escalate to FO" to ask for a decision based on the evidence.
-   - The FO provides a decision via mail.
-   - If required, the user clicks "Amend" to change the trade details.
-   - The user clicks "Reconfirm".
-6. **Completion:** Once both parties match, the trade moves to the Settlement Desk.
+- **`CONFIRM_SEND_TO_CPTY`** — send a confirmation to the counterparty → moves the trade into `LIASING_WITH_CPTY`. The CPTY replies asynchronously in the mailbox.
+- **`CONFIRM_TRADE`** — the trade is agreed → `LIASING_WITH_CPTY → SETTLEMENT_PENDING`.
+- **`CONFIRM_RAISE_BREAK`** — you found a genuine discrepancy → `CONFIRMATION_BREAK`. Allowed **once**, only after the first CPTY contact.
+- **`CONFIRM_REQUEST_EVIDENCE`** — ask the CPTY for supporting evidence (stays in `CONFIRMATION_BREAK`; the CPTY sends it asynchronously).
+- **`CONFIRM_ESCALATE_TO_FO`** — open the **internal FO channel** → `LIASING_WITH_FO`. If the FO admits a booking error, amendments are auto-applied and the trade returns to `CONFIRMATION_PENDING`.
+- **`CONFIRM_RAISE_AMENDMENT`** / **`CONFIRM_APPROVE_AMENDMENT`** — raise / approve an economic correction. Approving applies accepted amendments and returns to `CONFIRMATION_PENDING`.
+- **`CONFIRM_REJECT_CLAIM`** — reject the counterparty's claim (used when the FO supports your booking and it matches the universal truth) → `CONFIRMATION_PENDING`.
+- **`CONFIRM_RESEND`** — re-send the confirmation after a correction → back to `LIASING_WITH_CPTY`.
 
----
+Typical confirmation-break loop: raise break → request evidence and/or escalate to FO → wait for the async reply → approve the correct amendment (or reject the claim) → resend / confirm.
 
-## 5. Settlement Desk Workflow
+## 7. Settlement desk
 
-### Bilateral Settlement
+Once confirmed, the trade must settle to the correct **Standard Settlement Instructions (SSI)**.
 
-1. **Queue & Workstation:** Trade arrives in the Settlement queue. The workstation displays Settlement Instructions (SSIs), Payment Status, and Documents.
-2. **Verification:** The user checks if our SSIs match the counterparty's SSIs.
-3. **Handling a Settlement Break:**
-   - A break occurs if SSIs mismatch or funds fail.
-   - *Investigation:* User checks the Audit Timeline and Mailbox. User may need to contact the counterparty or internal static data team.
-   - *Resolution:* User clicks "Update SSI" if our static data was wrong, or informs the counterparty if theirs was wrong.
-   - *Action:* User clicks "Retry Settlement".
-4. **Completion:** Once resolved, the user clicks "Approve Settlement" (if required) and the trade is marked *Settled*.
+1. **Select the settlement type** — electronic or bilateral. Choosing the wrong type costs points. The correct choice opens the matching screen: `/settlement/electronic` or `/settlement/bilateral`.
+2. On the settlement screen you compare the **system SSI** against the **truth SSI** across **9 fields**: beneficiaryName, beneficiaryBank, beneficiaryBIC, accountNumber, accountType, currency, settlementMethod, correspondentBank, paymentReference.
+3. Actions:
+   - **`SETTLEMENT_APPROVE`** — approve payment. The simulator validates all 9 SSI fields against the truth; a mismatch is a **10-point penalty** and the approval is rejected. A correct match → `SETTLED`.
+   - **`SETTLEMENT_RAISE_BREAK`** — flag a settlement discrepancy → `SETTLEMENT_BREAK`.
+   - **`SETTLEMENT_FOLLOW_UP_CPTY`** / **Mail CPTY** (bilateral only) — chase the counterparty → `LIASING_WITH_CPTY`.
+   - **Edit SSI** — correct the system SSI fields (electronic: editable only while in `SETTLEMENT_BREAK`; bilateral: editable until settled).
 
-### Electronic Settlement
+**How the settlement counterparty behaves:** when you email the CPTY at the settlement desk, it only ever replies with its **SSI ID** — it never says whether your details match or where the break is. You must look that ID up yourself in the **SSI Database** (`/ssi-database`) and compare field by field.
 
-1. **Settlement Dashboard:** Shows trades routing through a central matching utility (e.g., Euroclear/DTCC).
-2. **Exception Queue:** Trades that fail to match appear here.
-3. **Matching Process:** The simulator automatically attempts to match based on predefined rules. Exceptions happen when fields like Quantity or Price fall outside tolerance.
-4. **Resolution:** User reviews Exception Details, identifies the offending field, and forces an amendment or accepts the counterparty's value based on simulator logic.
-5. **Completion:** Once matched in the utility, the trade is marked *Settled*.
+**Cutoff:** if the currency's cut-off time has already passed on the value date when you approve, settlement rolls to the next business day (the value date shifts +1).
 
----
+## 8. Reconciliation (TLM) desk
 
-## 6. Simulator Rules
+After settlement, trades reconcile ledger entries against bank statements:
 
-To ensure a structured learning environment, the simulator enforces the following strict rules:
+- `SETTLED → RECON_PENDING`. Entries auto-match on amount + currency + reference.
+- Unmatched items must be matched manually, or explicitly **marked unmatched** (`UNMATCHED_BY_USER`) for genuine exceptions (timing differences, missing statements).
+- When everything is matched, the break closes: `RECON_PENDING → RECON_CLEARED → CLOSED`.
 
-- **Strict Linearity:** A trade CANNOT skip desks. It must flow MO -> Confirmation -> Settlement.
-- **Dependency:** Confirmation starts *only* after MO validation is complete. Settlement starts *only* after Confirmation is complete.
-- **Single Active Queue:** A user can only actively work on one desk queue at a time.
-- **Multiple Amendments:** A trade can be amended multiple times if previous amendments did not fully resolve the break.
-- **No Manual State Jumping:** Users cannot force a trade to "Settled" without going through the required actions (e.g., raising a break, sending an email, validating).
-- **One Truth:** The simulator's automated responses act as the absolute truth for a given scenario.
+## 9. Scoring (how you are graded)
 
----
+- Correctly validating a clean trade: **+5**.
+- Correctly raising a break: **+3**.
+- Selecting an issue type when raising a break: **+2**.
+- **Penalties:** approving settlement with mismatched SSI, or choosing the wrong settlement type, each apply a **10-point penalty**.
 
-## 7. Scoring
+The lesson the score enforces: **investigate before you act.** Read the truth, gather the CPTY/FO evidence, apply the right amendment, and only then advance the trade.
 
-The simulator evaluates the user based on their actions, not just the final outcome.
+## 10. Golden rules
 
-### How Score is Calculated
-- **Investigation Quality:** Did the user accurately identify the correct field that caused the break?
-- **Communication:** Did the user send the correct email template to the correct party (e.g., FO vs. Counterparty)?
-- **Resolution Accuracy:** Was the amendment correct based on the evidence?
-- **Time:** How quickly was the trade processed from creation to settlement?
-
-### Good Decisions (Increase Score)
-- Identifying a break correctly and immediately.
-- Escalating to the correct party with the right context.
-- Amending the trade with accurate data.
-- Approving settlement only when all details match.
-
-### Bad Decisions (Decrease Score)
-- Clicking "Mark Validated" when there is a mismatch between the Trade Details and Trade Ticket.
-- Amending a trade without receiving confirmation/instruction from the FO.
-- Sending unnecessary emails or escalating to the wrong party.
-- Updating SSIs with incorrect information during a Settlement Break.
+1. No manual state jumping — you can only take the actions the current status allows.
+2. There is one truth per trade; validate against it, don't guess.
+3. Replies are asynchronous — send, move on, return when the mailbox updates.
+4. Amend only when the **booking** is wrong; if the **records/ticket** were right, just pass.
+5. At settlement, self-match the SSI using the SSI Database — the counterparty won't do it for you.
