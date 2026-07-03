@@ -1,4 +1,16 @@
 export default function FolderNav({ channel, currentFolder, switchFolder }) {
+  // Internal System Mailbox: Inbox only — no Group Inbox, Sent, Drafts or Deleted.
+  if (channel === "SYSTEM") {
+    return (
+      <div className="folder-nav">
+        <div className="folder-item active">
+          <span className="folder-icon">🖥️</span>
+          <span>System Inbox</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="folder-nav">
       {[

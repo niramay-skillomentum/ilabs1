@@ -10,6 +10,7 @@ const dailyScheduler = require("./src/engine/dailyScheduler");
 const communicationEngine = require("./src/engine/communicationEngine");
 const conversationEngine = require("./src/engine/conversationEngine");
 const foInternalChannel = require("./src/engine/foInternalChannel");
+const systemWorkflowEngine = require("./src/engine/systemWorkflowEngine");
 const { startAgenda } = require("./src/engine/agendaJobs");
 const { initSocket } = require("./src/engine/socketEngine");
 
@@ -73,6 +74,11 @@ setInterval(() => {
   );
 }, 3000);
 
+// SYSTEM WORKFLOW PROCESSOR (amendment + verification/approval bot)
+setInterval(() => {
+  systemWorkflowEngine.processJobs();
+}, 3000);
+
 // Cache refresh: periodically load assigned trades
 setInterval(async () => {
   try {
@@ -114,6 +120,7 @@ app.use("/api/conversations", require("./src/routes/conversationRoutes"));
 app.use("/api/fo-channel", require("./src/routes/foChannelRoutes"));
 app.use("/api/audit", require("./src/routes/auditRoutes"));
 app.use("/api/settlement", require("./src/routes/settlementRoutes"));
+app.use("/api/system-mailbox", require("./src/routes/systemMailboxRoutes"));
 app.use("/api/ssi", require("./src/routes/ssiRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));
 

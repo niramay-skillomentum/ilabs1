@@ -24,7 +24,7 @@ function ThreadEmail({ msg, sender, toLabel, isLatest, snippet, formatDateFull }
 export default function MessageThread({
   selectedTradeRef, currentTrade, buildSubject, currentMessages,
   openReplyModal, resolveState, resolveConversation, getSenderInfo,
-  userId, desk, channel, getRecipientLabel, formatDateFull, isResolving
+  userId, desk, channel, getRecipientLabel, formatDateFull, isResolving, readOnly
 }) {
   if (!selectedTradeRef || !currentTrade) {
     return (
@@ -50,15 +50,21 @@ export default function MessageThread({
           </div>
         </div>
 
-        {/* Actions Bar */}
-        <div className="email-actions-bar">
-          <button className="btn-action primary" onClick={openReplyModal}>↩ Reply</button>
-          <button className="btn-action resolve" disabled={resolveState.disabled || isResolving}
-            onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
-            {isResolving ? "Resolving..." : resolveState.text}
-          </button>
-          <span className="resolve-status">{resolveState.statusText}</span>
-        </div>
+        {/* Actions Bar — hidden for the read-only System Mailbox */}
+        {readOnly ? (
+          <div className="email-actions-bar">
+            <span className="resolve-status">🖥️ System notification — read only</span>
+          </div>
+        ) : (
+          <div className="email-actions-bar">
+            <button className="btn-action primary" onClick={openReplyModal}>↩ Reply</button>
+            <button className="btn-action resolve" disabled={resolveState.disabled || isResolving}
+              onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
+              {isResolving ? "Resolving..." : resolveState.text}
+            </button>
+            <span className="resolve-status">{resolveState.statusText}</span>
+          </div>
+        )}
 
         {/* Email Thread */}
         <div className="email-thread">

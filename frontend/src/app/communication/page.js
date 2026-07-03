@@ -118,6 +118,25 @@ function CommunicationComponent() {
   }, [mapConversations]);
 
   // ========================================
+  // LOAD INTERNAL SYSTEM MAILBOX (Inbox-only)
+  // ========================================
+  const loadSystemInbox = useCallback(() => {
+    return fetch(`/api/system-mailbox/list`, { headers: { "Authorization": "Bearer " + getToken() } })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) return [];
+        const newDataStr = JSON.stringify(data.conversations);
+        if (newDataStr === lastRenderedInboxDataStr.current) return inboxDataRef.current;
+        lastRenderedInboxDataStr.current = newDataStr;
+        const mapped = mapConversations(data.conversations);
+        setInboxData(mapped);
+        inboxDataRef.current = mapped;
+        return mapped;
+      })
+      .catch(() => []);
+  }, [mapConversations]);
+
+  // ========================================
   // LOAD CONVERSATION
   // ========================================
   const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll) => {
@@ -126,6 +145,12 @@ function CommunicationComponent() {
     const data = currentInboxData || inboxDataRef.current;
     const inboxItem = data.find(i => i.trade.tradeRef === tradeRef);
     if (inboxItem) setCurrentTrade(inboxItem.trade);
+
+    // System mailbox messages are already loaded with the inbox list — no per-thread fetch.
+    if (ch === "SYSTEM") {
+      setCurrentMessages(inboxItem ? inboxItem.conversation.messages : []);
+      return;
+    }
 
     const endpoint = ch === "FO" ? `/api/fo-channel/${tradeRef}` : `/api/conversation/${tradeRef}`;
     fetch(endpoint, { headers: { "Authorization": "Bearer " + getToken() } })
@@ -216,6 +241,15 @@ function CommunicationComponent() {
             setComposeModalOpen(true);
           }
         });
+    } else if (ch === "SYSTEM") {
+      // Internal System Mailbox
+      setIsLoading(true);
+      loadSystemInbox().then((mapped) => {
+        setIsLoading(false);
+        if (tRef) {
+          setTimeout(() => loadConversation(tRef, ch, mapped, true), 300);
+        }
+      });
     } else {
       // Normal load
       setIsLoading(true);
@@ -236,7 +270,8 @@ function CommunicationComponent() {
       console.log("New email via websocket:", data);
       const folder = currentFolderRef.current;
       let refreshPromise = Promise.resolve();
-      if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
+      if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
+      else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
       else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
 
       refreshPromise.then(() => {
@@ -247,13 +282,23 @@ function CommunicationComponent() {
       });
     });
 
+    // Internal System Mailbox notifications
+    socket.on("new_system_mail", () => {
+      if (ch !== "SYSTEM") return;
+      loadSystemInbox().then(() => {
+        const currentSel = selectedTradeRefRef.current;
+        if (currentSel) loadConversation(currentSel, ch, null, false);
+      });
+    });
+
     socketRef.current = socket;
 
     // 5-second polling fallback
     const pollInterval = setInterval(() => {
       const folder = currentFolderRef.current;
       let refreshPromise = Promise.resolve();
-      if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
+      if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
+      else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
       else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
 
       refreshPromise.then(() => {
@@ -304,6 +349,7 @@ function CommunicationComponent() {
   };
 
   const folderTitle = () => {
+    if (channel === "SYSTEM") return "System Notifications";
     if (channel === "FO") return "Front Office Communications";
     const titles = { inbox: "Inbox", group: "Group Inbox", sent: "Sent", drafts: "Drafts", deleted: "Deleted Items" };
     return titles[currentFolder] || currentFolder;
@@ -540,11 +586,11 @@ function CommunicationComponent() {
       {/* ========== HEADER ========== */}
       <div className="header">
         <div className="header-left">
-          <div className="header-logo">{channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB OpsMail"}</div>
+          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB OpsMail"}</div>
         </div>
         <div className="header-right">
           <div className="header-user">
-            {channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userId}`}
+            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userId}`}
           </div>
           <div className="header-date">{todayDate}</div>
           <button className="btn-close-tab" onClick={closeMailbox}>✕ Close</button>
@@ -567,7 +613,7 @@ function CommunicationComponent() {
           currentMessages={currentMessages} openReplyModal={openReplyModal} resolveState={resolveState}
           resolveConversation={resolveConversation} getSenderInfo={getSenderInfo} userId={userId}
           desk={desk} channel={channel} getRecipientLabel={getRecipientLabel} formatDateFull={formatDateFull}
-          isResolving={isResolving}
+          isResolving={isResolving} readOnly={channel === "SYSTEM"}
         />
       </div>
 

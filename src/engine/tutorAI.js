@@ -72,7 +72,7 @@ ${tradeContext ? JSON.stringify(tradeContext, null, 2) : "No specific trade sele
         model: "nvidia/nemotron-3-ultra-550b-a55b:free",
         messages: messages,
         temperature: 0.5,
-        max_tokens: 500
+        max_tokens: 2000
       })
     });
 

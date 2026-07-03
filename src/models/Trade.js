@@ -89,6 +89,13 @@ const TradeSchema = new mongoose.Schema({
   },
 
   // ======================================
+  // SYSTEM VERIFICATION (Automated Approval Workflow)
+  // Populated by the System Verification Bot when a trade is
+  // rejected during automated verification (REJECTED_REVERIFY).
+  // ======================================
+  verificationErrors: { type: [String], default: [] },
+
+  // ======================================
   // AMENDMENTS
   // ======================================
   pendingAmendments: { type: Array, default: [] },

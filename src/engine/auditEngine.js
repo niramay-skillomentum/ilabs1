@@ -15,7 +15,7 @@ try {
 /**
  * Record an audit event
  */
-async function recordEvent(tradeRef, actor, action, details = "") {
+async function recordEvent(tradeRef, actor, action, details = "", isAutomated = false) {
 
   const event = {
     tradeRef,
@@ -23,7 +23,7 @@ async function recordEvent(tradeRef, actor, action, details = "") {
     action,
     details: typeof details === "object" ? JSON.stringify(details) : details,
     timestamp: new Date(),
-    isAutomated: false
+    isAutomated: !!isAutomated
   };
 
   if (getIsConnected() && AuditLog) {

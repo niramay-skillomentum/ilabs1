@@ -276,27 +276,24 @@ function WorkstationComponent() {
     setPopupState({ type: null });
   };
 
-  const handleSaveSSI = async () => {
+  const handleSendToSystemAmendment = async () => {
     try {
-      const res = await fetch("/api/settlement/edit-ssi", {
+      const res = await fetch("/api/settlement/amend", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({
-          tradeRef: popupState.trade.tradeRef,
-          ssiData: ssiFormData
-        })
+        body: JSON.stringify({ tradeRef: popupState.trade.tradeRef })
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("SSI Updated Successfully");
+        toast.success("Sent to System for Amendment. The trade is now PENDING_AMENDMENT — check the System Mailbox for confirmation.");
         setIsEditingSSI(false);
         refreshQueueSilent();
         setPopupState({type: null});
       } else {
-        toast.error(data.error || "Failed to update SSI");
+        toast.error(data.error || "Failed to send for amendment");
       }
     } catch (err) {
-      toast.error("Error saving SSI");
+      toast.error("Error sending to system for amendment");
     }
   };
 
@@ -527,6 +524,12 @@ function WorkstationComponent() {
         <div>
           {desk === "MO" && <button className="btn" onClick={openTermsheet} style={{background:"#f59e0b", color:"white", marginRight: "10px"}}>📄 View Termsheet</button>}
           <button className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
+          {desk === "SETTLEMENT" && (
+            <button className="btn" style={{background:"#0f766e", color:"white", marginLeft:"10px"}}
+              onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
+              🖥️ System Mailbox
+            </button>
+          )}
           <span className="session-timer">{sessionTimerStr}</span>
           <button className="btn warning" onClick={refreshQueue} disabled={isRefreshingQueue}>
             {isRefreshingQueue ? "Refreshing..." : "Refresh"}
@@ -712,11 +715,8 @@ function WorkstationComponent() {
         <div className="popup" style={{display: 'block', width: '600px'}}>
           <h3 style={{marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px'}}>
             Standard Settlement Instructions 
-            {popupState.trade.currentStatus === 'SETTLEMENT_BREAK' && !isEditingSSI && (
-              <button onClick={() => {
-                setSsiFormData(popupState.trade.settlementDetails || {});
-                setIsEditingSSI(true);
-              }} style={{marginLeft: "15px", padding: "4px 8px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer"}}>Edit SSI</button>
+            {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
+              <button onClick={handleSendToSystemAmendment} style={{marginLeft: "15px", padding: "4px 8px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer"}}>Send to System for Amendment</button>
             )}
           </h3>
           <div style={{fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#334155'}}>
@@ -764,7 +764,7 @@ function WorkstationComponent() {
             ) : (
               <>
                 <button className="btn secondary" onClick={() => setIsEditingSSI(false)}>Cancel Edit</button>
-                <button className="btn primary" onClick={handleSaveSSI}>Save Changes</button>
+                <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
               </>
             )}
           </div>

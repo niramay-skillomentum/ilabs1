@@ -11,6 +11,7 @@ export const buildSubject = (trade) => {
 };
 
 export const getSenderInfo = (sender, trade) => {
+  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@sgb.com", initials: "SY", color: "#0f766e" };
   if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#c4314b" };
   if (sender === "COUNTERPARTY" || sender === "CPTY") {
     const cpName = trade ? trade.counterparty : "Counterparty";
