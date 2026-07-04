@@ -11,7 +11,8 @@ function SsiDatabaseComponent() {
 
   const [userId, setUserId] = useState(null);
   const [desk, setDesk] = useState("Settlement");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [alertCode, setAlertCode] = useState("");
+  const [acronymCode, setAcronymCode] = useState("");
   const [ssiResult, setSsiResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -46,12 +47,14 @@ function SsiDatabaseComponent() {
   }, [searchParams]);
 
   const handleSearch = () => {
-    if (!searchQuery.trim()) return;
+    if (!alertCode.trim() || !acronymCode.trim()) {
+      return toast.error("Both Alert Code and Acronym Code are required");
+    }
     setIsLoading(true);
     setHasSearched(true);
     setSsiResult(null);
 
-    fetch(`/api/ssi/search?id=${encodeURIComponent(searchQuery.trim())}`, {
+    fetch(`/api/ssi/search-codes?alertCode=${encodeURIComponent(alertCode.trim())}&acronymCode=${encodeURIComponent(acronymCode.trim())}`, {
       headers: { "Authorization": "Bearer " + getToken() }
     })
       .then(res => res.json())
@@ -86,25 +89,42 @@ function SsiDatabaseComponent() {
         <div style={{ width:"35%", borderRight:"1px solid #ddd", background:"white", display:"flex", flexDirection:"column", padding:"20px" }}>
           <h3 style={{ marginTop: 0, marginBottom: "20px", color: "#333" }}>Search Instructions</h3>
           <p style={{ fontSize: "14px", color: "#555", marginBottom: "20px" }}>
-            Enter the unique SSI ID provided by the counterparty or your entity to retrieve standard settlement instructions.
+            Enter the <strong>Alert Code</strong> (6-character alphanumeric) and <strong>Acronym Code</strong> (6-digit numeric) provided by the counterparty to retrieve standard settlement instructions.
           </p>
-          <div style={{ display:"flex", gap:"10px", marginBottom: "20px" }}>
+          
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "4px" }}>Alert Code</label>
             <input 
-              placeholder="e.g., CITI-01, GS-LON-02"
-              style={{ flex: 1, padding:"10px", border:"1px solid #ddd", borderRadius:"4px", color:"#333", backgroundColor:"#fff" }}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="e.g., A1B2C3"
+              style={{ width: "100%", boxSizing: "border-box", padding:"10px", border:"1px solid #ddd", borderRadius:"4px", color:"#333", backgroundColor:"#fff", fontFamily: "monospace", fontSize: "15px", letterSpacing: "2px" }}
+              value={alertCode}
+              onChange={e => setAlertCode(e.target.value.toUpperCase())}
               onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+              maxLength={6}
             />
-            <button 
-              onClick={handleSearch}
-              style={{ padding: "10px 16px", background: "#0B1F3A", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
-            >
-              Search
-            </button>
           </div>
+          
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "4px" }}>Acronym Code</label>
+            <input 
+              placeholder="e.g., 100245"
+              style={{ width: "100%", boxSizing: "border-box", padding:"10px", border:"1px solid #ddd", borderRadius:"4px", color:"#333", backgroundColor:"#fff", fontFamily: "monospace", fontSize: "15px", letterSpacing: "2px" }}
+              value={acronymCode}
+              onChange={e => setAcronymCode(e.target.value.replace(/\D/g, ""))}
+              onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+              maxLength={6}
+            />
+          </div>
+          
+          <button 
+            onClick={handleSearch}
+            disabled={isLoading}
+            style={{ padding: "12px 16px", background: "#0B1F3A", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold", fontSize: "14px", width: "100%" }}
+          >
+            {isLoading ? "Searching..." : "Search SSI Database"}
+          </button>
 
-          <div style={{ flex:1, overflowY:"auto" }}>
+          <div style={{ flex:1, overflowY:"auto", marginTop: "20px" }}>
             {isLoading && (
               <div style={{ padding: "40px 20px", textAlign: "center", color: "#555" }}>
                 <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "8px" }}>Searching Database...</div>
@@ -115,7 +135,7 @@ function SsiDatabaseComponent() {
             
             {!isLoading && hasSearched && !ssiResult && (
               <div style={{ padding: "20px", textAlign: "center", color: "#d9534f", background: "#fdf2f2", border: "1px solid #d9534f", borderRadius: "4px" }}>
-                <strong>No SSI found</strong> matching "{searchQuery}". Please verify the ID.
+                <strong>No SSI found</strong> matching the provided codes. Please verify the Alert Code and Acronym Code from the counterparty.
               </div>
             )}
 
@@ -132,7 +152,7 @@ function SsiDatabaseComponent() {
           <div style={{ background:"white", border:"1px solid #ddd", padding:"24px", flex:1, overflowY:"auto", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
             {!ssiResult ? (
               <div style={{ color:"#777", textAlign:"center", marginTop:"100px", fontSize: "16px" }}>
-                Enter an SSI ID on the left to view instruction details.
+                Enter both codes on the left to view instruction details.
               </div>
             ) : (
               <SsiViewer ssi={ssiResult} />
@@ -149,8 +169,13 @@ function SsiViewer({ ssi }) {
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "2px solid #0B1F3A", paddingBottom: "12px" }}>
         <h2 style={{ margin: 0, color: "#0B1F3A" }}>Standard Settlement Instruction (SSI)</h2>
-        <div style={{ background: "#0B1F3A", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "14px", fontWeight: "bold" }}>
-          ID: {ssi.ssiId}
+        <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ background: "#0B1F3A", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "14px", fontWeight: "bold" }}>
+            Alert: {ssi.alertCode}
+          </div>
+          <div style={{ background: "#1E3A5F", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "14px", fontWeight: "bold" }}>
+            Acronym: {ssi.acronymCode}
+          </div>
         </div>
       </div>
       

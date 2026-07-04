@@ -88,10 +88,8 @@ async function scheduleAmendment(trade, userId, desk, settlementType) {
 }
 
 async function scheduleVerification(trade, userId, desk) {
-  applyTransition(trade, "PENDING_APPROVAL");
-  trade.verificationErrors = [];
-  await trade.save();
-
+  // The transition to PENDING_APPROVAL is already handled and saved by the caller (tradeRoutes.js).
+  // We only need to create the scheduled job for the Verification Bot.
   await SystemJob.create({
     tradeRef: trade.tradeRef,
     jobType: "VERIFICATION",
@@ -100,12 +98,6 @@ async function scheduleVerification(trade, userId, desk) {
     sendAt: new Date(Date.now() + VERIFICATION_DELAY_MS)
   });
 
-  await auditEngine.recordEvent(
-    trade.tradeRef, userId, "SETTLEMENT_SENT_FOR_APPROVAL",
-    "AMENDED → PENDING_APPROVAL | Sent for Approval (System Verification Bot)"
-  );
-
-  emit("trade_update", userId, { tradeRef: trade.tradeRef, currentStatus: trade.currentStatus });
   return trade;
 }
 
@@ -151,8 +143,13 @@ function validateTrade(trade) {
 // ======================================
 
 async function processAmendment(job) {
+  console.log(`[SystemAmendmentBot] Starting amendment for trade: ${job.tradeRef}`);
+  
   const trade = await Trade.findOne({ tradeRef: job.tradeRef });
-  if (!trade || trade.currentStatus !== "PENDING_AMENDMENT") return;
+  if (!trade || trade.currentStatus !== "PENDING_AMENDMENT") {
+    console.log(`[SystemAmendmentBot] Trade ${job.tradeRef} is no longer in PENDING_AMENDMENT. Skipping.`);
+    return;
+  }
 
   const sys = trade.settlementDetails || {};
   const truth = trade.truths?.settlement || {};
@@ -221,13 +218,19 @@ async function processAmendment(job) {
 // ======================================
 
 async function processVerification(job) {
+  console.log(`[SystemVerificationBot] Starting verification for trade: ${job.tradeRef}`);
+  
   const trade = await Trade.findOne({ tradeRef: job.tradeRef });
-  if (!trade || trade.currentStatus !== "PENDING_APPROVAL") return;
+  if (!trade || trade.currentStatus !== "PENDING_APPROVAL") {
+    console.log(`[SystemVerificationBot] Trade ${job.tradeRef} is no longer in PENDING_APPROVAL. Skipping.`);
+    return;
+  }
 
   const errors = validateTrade(trade);
 
   if (errors.length === 0) {
-    applyTransition(trade, "APPROVED");
+    // All parameters match — settle the trade directly
+    applyTransition(trade, "SETTLED");
     trade.verificationErrors = [];
     await trade.save();
 
@@ -235,27 +238,42 @@ async function processVerification(job) {
       userId: job.userId,
       tradeRef: trade.tradeRef,
       from: "System",
-      subject: `Trade Approved — ${trade.tradeRef}`,
+      subject: `Trade Settled — ${trade.tradeRef}`,
       body:
         `Verification successful for trade ${trade.tradeRef}.\n\n` +
         `All settlement details, SSI, counterparty information and mandatory ` +
         `fields passed the automated verification checks.\n\n` +
-        `Status: APPROVED\nThe trade is now eligible for settlement.`,
-      action: "APPROVED"
+        `Status: SETTLED\nThe trade has been settled successfully.`,
+      action: "SETTLED"
     });
 
     await auditEngine.recordEvent(
       trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_PASSED",
-      "PENDING_APPROVAL → APPROVED | Automated verification passed",
+      "PENDING_APPROVAL → SETTLED | Automated verification passed — trade settled",
       true
     );
 
-    emit("trade_update", job.userId, { tradeRef: trade.tradeRef, currentStatus: "APPROVED" });
-    emit("new_system_mail", job.userId, { tradeRef: trade.tradeRef, action: "APPROVED" });
+    emit("trade_update", job.userId, { tradeRef: trade.tradeRef, currentStatus: "SETTLED" });
+    emit("new_system_mail", job.userId, { tradeRef: trade.tradeRef, action: "SETTLED" });
   } else {
-    applyTransition(trade, "REJECTED_REVERIFY");
+    // Verification failed — revert to SETTLEMENT_PENDING
+    applyTransition(trade, "SETTLEMENT_PENDING");
     trade.verificationErrors = errors;
     if (trade.markModified) trade.markModified("verificationErrors");
+    
+    // Check if user session is still active; if expired, unassign trade to pool
+    const Queue = require("../models/Queue");
+    const userQueue = await Queue.findOne({ userId: job.userId, isActive: true });
+    if (!userQueue) {
+      // Session expired — unassign to general pool
+      trade.assignedTo = null;
+      await auditEngine.recordEvent(
+        trade.tradeRef, "System", "SETTLEMENT_UNASSIGNED",
+        "Session expired — trade returned to general pool with SETTLEMENT_PENDING",
+        true
+      );
+    }
+    
     await trade.save();
 
     const reasons = errors.map((e, i) => `  ${i + 1}. ${e}`).join("\n");
@@ -263,21 +281,21 @@ async function processVerification(job) {
       userId: job.userId,
       tradeRef: trade.tradeRef,
       from: "System",
-      subject: `Verification Failed — ${trade.tradeRef}`,
+      subject: `Settlement Rejected — ${trade.tradeRef}`,
       body:
         `Automated verification failed for trade ${trade.tradeRef}.\n\n` +
         `The following validation issues were found:\n${reasons}\n\n` +
-        `Status: REJECTED_REVERIFY\nPlease review and correct the trade details, then resubmit for approval.`,
+        `Status: SETTLEMENT_PENDING\nThe trade has been reverted. Please review and correct the settlement details.`,
       action: "VERIFICATION_FAILED"
     });
 
     await auditEngine.recordEvent(
       trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_FAILED",
-      `PENDING_APPROVAL → REJECTED_REVERIFY | ${errors.length} issue(s): ${errors.join("; ")}`,
+      `PENDING_APPROVAL → SETTLEMENT_PENDING | ${errors.length} issue(s): ${errors.join("; ")}`,
       true
     );
 
-    emit("trade_update", job.userId, { tradeRef: trade.tradeRef, currentStatus: "REJECTED_REVERIFY" });
+    emit("trade_update", job.userId, { tradeRef: trade.tradeRef, currentStatus: "SETTLEMENT_PENDING" });
     emit("new_system_mail", job.userId, { tradeRef: trade.tradeRef, action: "VERIFICATION_FAILED" });
   }
 }

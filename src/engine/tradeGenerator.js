@@ -26,7 +26,36 @@ const SETTLEMENT_TYPES = ["ELECTRONIC", "BILATERAL"];
 const DIRECTIONS = ["BUY", "SELL"];
 const SSI_BICS = ["CITIUS33", "HSBCGB2L", "DEUTDEFF", "CHASUS33", "BNPADEFF", "BARCGB2L", "MSUS33", "UBSWCHZH"];
 
-const CPTY_SSIS = {
+// Generate deterministic alertCode (6-char alphanumeric) and acronymCode (6-digit numeric) from ssiId
+function generateSSICodes(ssiId) {
+  let hash = 0;
+  for (let i = 0; i < ssiId.length; i++) {
+    hash = ((hash << 5) - hash + ssiId.charCodeAt(i)) | 0;
+  }
+  const absHash = Math.abs(hash);
+  const alphaChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let alertCode = "";
+  let h = absHash;
+  for (let i = 0; i < 6; i++) {
+    alertCode += alphaChars[h % alphaChars.length];
+    h = Math.floor(h / alphaChars.length) + (i + 1) * 7;
+  }
+  const acronymCode = String(100000 + (absHash % 900000));
+  return { alertCode, acronymCode };
+}
+
+// Attach alertCode + acronymCode to each SSI entry
+function enrichSSIs(ssiDict) {
+  for (const key in ssiDict) {
+    ssiDict[key] = ssiDict[key].map(ssi => {
+      const codes = generateSSICodes(ssi.ssiId);
+      return { ...ssi, alertCode: codes.alertCode, acronymCode: codes.acronymCode };
+    });
+  }
+  return ssiDict;
+}
+
+const CPTY_SSIS = enrichSSIs({
   "CITI": [
     { ssiId: "CPTY-CITI-01", beneficiaryName: "Citigroup Global Markets Inc", beneficiaryBank: "Citibank N.A. New York", beneficiaryBIC: "CITIUS33", accountNumber: "10293847", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
     { ssiId: "CPTY-CITI-02", beneficiaryName: "Citigroup Global Markets Ltd", beneficiaryBank: "Citibank N.A. London", beneficiaryBIC: "CITIGB2L", accountNumber: "39481920", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. London"  },
@@ -75,9 +104,10 @@ const CPTY_SSIS = {
     { ssiId: "CPTY-UBS-03", beneficiaryName: "UBS AG London Branch", beneficiaryBank: "UBS AG London Branch", beneficiaryBIC: "UBSWGB2L", accountNumber: "77007700", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "UBS AG London Branch"  },
     { ssiId: "CPTY-UBS-04", beneficiaryName: "UBS Europe SE", beneficiaryBank: "UBS Europe SE Frankfurt", beneficiaryBIC: "UBSWDEFF", accountNumber: "66006600", accountType: "Vostro", settlementMethod: "TARGET2", correspondentBank: "UBS Europe SE Frankfurt"  }
   ]
-};
+});
 
-const ENTITY_SSIS = {
+
+const ENTITY_SSIS = enrichSSIs({
   "GS London": [
     { ssiId: "ENT-GSLONDON-01", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "GS Bank PLC London", beneficiaryBIC: "GSGB2L", accountNumber: "12312312", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "GS Bank PLC London"  },
     { ssiId: "ENT-GSLONDON-02", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "HSBC Bank PLC", beneficiaryBIC: "HSBCGB2L", accountNumber: "45645645", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank PLC"  },
@@ -108,7 +138,7 @@ const ENTITY_SSIS = {
     { ssiId: "ENT-GSFRANKFURT-03", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "Commerzbank AG", beneficiaryBIC: "COBADEFF", accountNumber: "50506060", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Commerzbank AG"  },
     { ssiId: "ENT-GSFRANKFURT-04", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "DZ Bank AG", beneficiaryBIC: "GENODEF1", accountNumber: "70708080", accountType: "Vostro", settlementMethod: "TARGET2", correspondentBank: "DZ Bank AG"  }
   ]
-};
+});
 
 const MO_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY", "COUNTERPARTY"];
 // Confirmation breaks: no counterparty mismatch per user feedback

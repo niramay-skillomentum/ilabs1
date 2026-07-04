@@ -21,11 +21,15 @@ export const getDeskInstructions = (desk) => {
     SETTLEMENT: {
       title: "Settlement Desk Workflow",
       steps: [
-        { title: "Verify SSI", desc: "Check the Standard Settlement Instructions using the 'SSI Database'. Ensure the Beneficiary details and methods match." },
-        { title: "Select Type", desc: "Click 'Select Settlement Type' to categorize as Bilateral or Electronic." },
-        { title: "Final Approval", desc: "If correct, 'Approve Settlement'. If the SSIs are incorrect, raise a 'Setts Break' and 'Follow-up' with the Counterparty." }
+        { title: "1. Mail CPTY", desc: "Select a trade in SETTLEMENT_PENDING and click 'Mail CPTY' to request settlement reference codes from the Counterparty." },
+        { title: "2. Receive Codes", desc: "The Counterparty will reply with an Alert Code (6-char alphanumeric) and an Acronym Code (6-digit numeric). Check your 📧 Mailbox." },
+        { title: "3. Search SSI Database", desc: "Open the 'SSI Database' and enter BOTH codes to retrieve the standard settlement instructions." },
+        { title: "4. Compare SSI", desc: "Compare the SSI Database results against the trade's SSI (use 'View SSI' button on the trade row)." },
+        { title: "5a. Match → Approve", desc: "If all fields match, click 'Approve Settlement'. The system bot will verify and settle the trade automatically." },
+        { title: "5b. Mismatch → Break", desc: "If there are discrepancies, click 'Setts Break'. Then open 'View SSI' and click 'Send to System for Amendment'. The system will correct the trade and notify you." },
+        { title: "6. Post-Amendment", desc: "After amendment, the trade becomes AMENDED. Click 'Approve Settlement' to send for verification again." }
       ],
-      tips: "Pay special attention to the Currency and Settlement Method. A wrong SSI leads to failed payments."
+      tips: "Always search the SSI Database using BOTH codes from the Counterparty. Pay close attention to Beneficiary Name, BIC, Account Number, and Settlement Method."
     },
     TLM: {
       title: "TLM Desk Workflow",

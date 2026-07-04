@@ -10,6 +10,7 @@ const foInternalChannel = require("../engine/foInternalChannel");
 const amendmentEngine = require("../engine/amendmentEngine");
 const { authenticateToken } = require("../middleware/auth");
 const { getIo } = require("../engine/socketEngine");
+const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
 
 // ======================================
 // GET ALL TRADES (DB-BACKED)
@@ -70,9 +71,9 @@ router.post("/action", authenticateToken, async (req, res) => {
       CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
       CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
 
-      SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "SETTLEMENT_BREAK"],
-      SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "READY_FOR_APPROVAL", "LIASING_WITH_CPTY"],
-      SETTLEMENT_FOLLOW_UP_CPTY: ["SETTLEMENT_PENDING", "SETTLEMENT_BREAK", "LIASING_WITH_CPTY"]
+      SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
+      SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
+      SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
     };
 
     if (!allowedActions[action] || !allowedActions[action].includes(currentStatus)) {
@@ -294,24 +295,48 @@ router.post("/action", authenticateToken, async (req, res) => {
         break;
 
       case "SETTLEMENT_APPROVE":
-        if (sessionTrade.truths?.settlement?.settlementType === 'BILATERAL') {
-          const truthEngineObj = require("../engine/truthEngine");
-          const mismatches = truthEngineObj.getSettlementMismatches(sessionTrade);
-          if (mismatches.length > 0) {
-            await scoringEngine.applyPenalty(userId, sessionTrade.tradeRef, 15, "Tried to approve Bilateral settlement with incorrect SSI details");
-            return res.status(400).json({ success: false, error: "Cannot approve: SSI details do not match the expected standard instructions." });
-          }
-        }
-        nextStatus = "SETTLED";
+        // User sends for approval → bot will verify
+        nextStatus = "PENDING_APPROVAL";
         nextDesk = "SETTLEMENT";
-        break;
+        
+        // After lifecycle transition + save, schedule the verification bot
+        // We handle this inline before the generic transition below
+        {
+          const tradeObj = sessionTrade.toObject ? sessionTrade.toObject() : sessionTrade;
+          const updatedTrade = LifecycleEngine.transition(tradeObj, nextStatus);
+          sessionTrade.currentStatus = updatedTrade.currentStatus;
+          sessionTrade.nextDesk = nextDesk;
+          await sessionTrade.save();
+          
+          // Schedule verification bot job
+          await systemWorkflowEngine.scheduleVerification(sessionTrade, userId, "SETTLEMENT");
+          
+          // Audit
+          auditEngine.recordEvent(
+            sessionTrade.tradeRef, userId, action,
+            comment || "User sent trade for approval"
+          ).catch(e => console.warn("DB audit:", e.message));
+          
+          const activeQueue = await queueComposer.getActiveQueue(userId);
+          const trades = activeQueue ? activeQueue.trades : [];
+          res.json({ success: true, queueSize: trades.length, trades });
+          
+          try {
+            const io = getIo();
+            io.to(`user_${userId}`).emit("trade_update", {
+              tradeRef: sessionTrade.tradeRef,
+              currentStatus: updatedTrade.currentStatus
+            });
+          } catch (err) {}
+          return; // Skip the generic transition below
+        }
 
       case "SETTLEMENT_RAISE_BREAK":
         nextStatus = "SETTLEMENT_BREAK";
         nextDesk = "SETTLEMENT";
         break;
 
-      case "SETTLEMENT_FOLLOW_UP_CPTY":
+      case "SETTLEMENT_MAIL_CPTY":
         nextStatus = "LIASING_WITH_CPTY";
         nextDesk = "SETTLEMENT";
 
@@ -319,16 +344,16 @@ router.post("/action", authenticateToken, async (req, res) => {
           sessionTrade.tradeRef,
           userId,
           comment,
-          "Settlement Follow-up"
+          "Settlement SSI Inquiry",
+          "SETTLEMENT"
         );
 
         communicationEngine.scheduleReply(
           sessionTrade.tradeRef,
-          "RE: Settlement Follow-up",
-          "Awaiting settlement confirmation",
+          "RE: Settlement SSI Inquiry",
+          comment,
           "SETTLEMENT"
         );
-
         break;
 
       case "SETTLEMENT_SEND_BACK_TO_MO":

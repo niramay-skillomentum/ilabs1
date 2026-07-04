@@ -9,41 +9,55 @@ const llmService = require("./llmService");
 const offlineResponseEngine = require("./offlineResponseEngine");
 const truthEngine = require("./truthEngine");
 
-function getSsiId(trade) {
-  if (!trade) return "UNKNOWN-SSI-ID";
-  let ssiId = trade.truths?.settlement?.ssiId;
+function getSSICodes(trade) {
+  if (!trade) return { alertCode: "UNKNWN", acronymCode: "000000" };
   
-  if (!ssiId) {
-    const { CPTY_SSIS, ENTITY_SSIS } = require("./tradeGenerator");
-    const allDicts = [CPTY_SSIS, ENTITY_SSIS];
-    let foundSsi = null;
+  const { CPTY_SSIS, ENTITY_SSIS } = require("./tradeGenerator");
+  const allDicts = [CPTY_SSIS, ENTITY_SSIS];
+  let foundSsi = null;
+  
+  // First try matching by the truth ssiId
+  const truthSsiId = trade.truths?.settlement?.ssiId;
+  if (truthSsiId) {
+    for (const dict of allDicts) {
+      for (const key in dict) {
+        const match = dict[key].find(s => s.ssiId === truthSsiId);
+        if (match) { foundSsi = match; break; }
+      }
+      if (foundSsi) break;
+    }
+  }
+  
+  // Fallback: match by counterparty/entity + account number
+  if (!foundSsi) {
     for (const dict of allDicts) {
       const ssiList = dict[trade.counterparty] || dict[trade.entity];
       if (ssiList) {
         foundSsi = ssiList.find(s => s.accountNumber === trade.truths?.settlement?.accountNumber);
         if (!foundSsi) foundSsi = ssiList[0];
       }
-      if (foundSsi) {
-        ssiId = foundSsi.ssiId;
-        break;
-      }
+      if (foundSsi) break;
     }
-    if (!ssiId) ssiId = "UNKNOWN-SSI-ID";
   }
-  return ssiId;
+  
+  if (!foundSsi) return { alertCode: "UNKNWN", acronymCode: "000000" };
+  return { alertCode: foundSsi.alertCode, acronymCode: foundSsi.acronymCode };
 }
 
 // ======================================
 // GEMINI SYSTEM PROMPT FOR CPTY
 // ======================================
 function buildCPTYSystemPrompt(trade, parsedIntent) {
-  const ssiId = getSsiId(trade);
+  const codes = getSSICodes(trade);
 
   let context = `You are a Counterparty Operations professional replying to a bank's Settlement desk.
 You are responding about Trade ${trade.tradeRef}.
 
-OUR STANDARD SETTLEMENT INSTRUCTION (SSI) ID: ${ssiId}
-(Note: You MUST ONLY provide this SSI ID. Do NOT list out the individual fields like bank name or account number. Do NOT confirm if details match or if there are any breaks. Tell them to use our standard SSI ID "${ssiId}" and look it up in their SSI Database to verify on their end.)`;
+OUR SETTLEMENT REFERENCE CODES:
+  - Alert Code: ${codes.alertCode}
+  - Acronym Code: ${codes.acronymCode}
+
+(Note: You MUST provide BOTH the Alert Code and Acronym Code. Do NOT list out individual SSI fields like bank name or account number. Do NOT confirm if details match or if there are any breaks. Tell them to use both codes to look up our standard settlement instructions in their SSI Database to verify on their end.)`;
 
   if (parsedIntent && parsedIntent.intent) {
     context += `\nParsed User Intent: ${parsedIntent.intent}`;
@@ -54,7 +68,7 @@ OUR STANDARD SETTLEMENT INSTRUCTION (SSI) ID: ${ssiId}
 RULES:
 - Reply professionally, like a real counterparty operations desk would in an Outlook email.
 - CRITICAL: Do NOT say whether our records match or if there are breaks. The bank must do the matching themselves.
-- CRITICAL: Only provide the SSI ID.
+- CRITICAL: Only provide the Alert Code and Acronym Code. Never reveal SSI field values.
 - Keep responses concise (2-4 sentences).
 - Sign off with a realistic name and title.
 
@@ -95,11 +109,11 @@ async function generateResponse(parsedIntent, tradeRef, userMessage) {
 
   // ── ATTEMPT 2: Offline Engine (guaranteed) ──
   console.log("🔄 CPTY Response: Using offline engine for", tradeRef);
-  const ssiId = getSsiId(trade);
+  const codes = getSSICodes(trade);
   return {
     action: "IMMEDIATE_ANSWER",
     subject: "RE: Trade Inquiry",
-    body: `Our standard settlement instruction (SSI) ID is ${ssiId}. Please refer to this ID in your SSI Database.`
+    body: `Thank you for reaching out regarding this trade.\n\nPlease use the following reference codes to look up our standard settlement instructions in your SSI Database:\n\n  Alert Code: ${codes.alertCode}\n  Acronym Code: ${codes.acronymCode}\n\nKindly verify the settlement details on your end using both codes.\n\nBest regards,\nOperations Desk`
   };
 }
 

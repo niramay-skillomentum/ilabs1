@@ -30,7 +30,6 @@ function WorkstationComponent() {
   const [isRefreshingQueue, setIsRefreshingQueue] = useState(false);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [settlementTypeSelection, setSettlementTypeSelection] = useState("BILATERAL");
   const [isEditingSSI, setIsEditingSSI] = useState(false);
   const [ssiFormData, setSsiFormData] = useState({});
 
@@ -235,9 +234,9 @@ function WorkstationComponent() {
     CONFIRM_RAISE_AMENDMENT: ["CONFIRMATION_BREAK"],
     CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
     CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
-    SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "SETTLEMENT_BREAK"],
-    SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "READY_FOR_APPROVAL", "LIASING_WITH_CPTY"],
-    SETTLEMENT_FOLLOW_UP_CPTY: ["SETTLEMENT_PENDING", "SETTLEMENT_BREAK", "LIASING_WITH_CPTY"]
+    SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
+    SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
+    SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
   };
 
   const handleOpenAction = (action) => {
@@ -254,12 +253,6 @@ function WorkstationComponent() {
     }
     setPopupState({ type: "action", action });
     setComment("");
-  };
-
-  const handleOpenSettlementType = () => {
-    if (!selectedTrade) return toast.error("Select trade first");
-    setPopupState({ type: "settlement_type" });
-    setSettlementTypeSelection("BILATERAL");
   };
 
   const submitAction = async () => {
@@ -294,31 +287,6 @@ function WorkstationComponent() {
       }
     } catch (err) {
       toast.error("Error sending to system for amendment");
-    }
-  };
-
-  const submitSettlementType = async () => {
-    setIsSubmittingAction(true);
-    const res = await fetch("/api/settlement/select-type", {
-      method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: selectedTrade.tradeRef, selectedType: settlementTypeSelection })
-    });
-    const data = await res.json();
-    setIsSubmittingAction(false);
-    
-    if (!res.ok || !data.success) {
-      toast.error(data.error || "Incorrect Settlement Type");
-      setPopupState({ type: null }); // allow them to retry by reopening modal
-      return;
-    }
-    
-    setPopupState({ type: null });
-    if (data.redirect) {
-      toast.success("Correct Settlement Type!");
-      window.open(data.redirect + "?tradeRef=" + selectedTrade.tradeRef, "_blank");
-    } else {
-      toast.success("Bilateral confirmed! Please verify SSI manually.", { duration: 4000 });
-      refreshQueueSilent();
     }
   };
 
@@ -419,10 +387,10 @@ function WorkstationComponent() {
 
   const startSettlementCptyFlow = () => {
     if (!selectedTrade) return toast.error("Select trade first");
-    if (!allowed['SETTLEMENT_FOLLOW_UP_CPTY'] || !allowed['SETTLEMENT_FOLLOW_UP_CPTY'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+    if (!allowed['SETTLEMENT_MAIL_CPTY'] || !allowed['SETTLEMENT_MAIL_CPTY'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
     const mailParams = new URLSearchParams({
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
-      composeAction: "SETTLEMENT_FOLLOW_UP_CPTY"
+      composeAction: "SETTLEMENT_MAIL_CPTY"
     });
     window.open("/communication?" + mailParams.toString(), "_blank");
   };
@@ -615,12 +583,10 @@ function WorkstationComponent() {
             )}
             {desk === "SETTLEMENT" && (
               <>
+                <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_FOLLOW_UP_CPTY')}>Follow-up</button>
-                <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                <button className="btn warning" onClick={handleOpenSettlementType}>Select Settlement Type</button>
                 <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
               </>
             )}
@@ -645,27 +611,6 @@ function WorkstationComponent() {
           <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
             <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSubmittingAction}>Cancel</button>
             <button className="btn primary" onClick={submitAction} disabled={isSubmittingAction}>
-              {isSubmittingAction ? "Submitting..." : "Submit"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {popupState.type === "settlement_type" && (
-        <div className="popup" style={{display: 'block'}}>
-          <h3 style={{marginBottom: '10px'}}>Choose Settlement Type</h3>
-          <div style={{color: '#475569', fontSize: '14px', marginBottom: '15px'}}>Select the correct settlement type to process this trade.</div>
-          <select 
-            value={settlementTypeSelection} 
-            onChange={(e) => setSettlementTypeSelection(e.target.value)}
-            style={{width: '100%', padding: '12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', marginTop: '10px'}}
-          >
-            <option value="BILATERAL">Bilateral</option>
-            <option value="ELECTRONIC">Electronic</option>
-          </select>
-          <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
-            <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSubmittingAction}>Cancel</button>
-            <button className="btn primary" onClick={submitSettlementType} disabled={isSubmittingAction}>
               {isSubmittingAction ? "Submitting..." : "Submit"}
             </button>
           </div>
