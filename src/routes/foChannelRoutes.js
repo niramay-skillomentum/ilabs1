@@ -72,13 +72,17 @@ router.post("/send", authenticateToken, express.json(), async (req, res) => {
       try {
         const { getIo } = require("../engine/socketEngine");
         const io = getIo();
-        if (io) io.emit("new_email", { tradeRef: tradeRef });
+        if (io) {
+          const owner = trade?.assignedTo;
+          if (owner) io.to(`user_${owner}`).emit("new_email", { tradeRef });
+          else io.emit("new_email", { tradeRef });
+        }
       } catch (err) {}
     }
 
     const deskContext = trade.currentStatus === "PENDING_FO_RESPONSE" ? "MO" : "CONFIRMATION";
     await foInternalChannel.openChannel(tradeRef, req.user.userId, deskContext);
-    await foInternalChannel.sendMessage(tradeRef, req.user.userId, message, "USER");
+    await foInternalChannel.sendMessage(tradeRef, req.user.userId, message, "USER", trade?.assignedTo);
     
     // Auto schedule an FO reply based on user's new message
     foInternalChannel.scheduleFOInternalReply(tradeRef, trade, message, deskContext);

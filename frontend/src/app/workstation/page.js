@@ -1,12 +1,178 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { loadUserId, getToken, authHeaders, clearSession } from "../../lib/auth";
 import toast from "react-hot-toast";
 import InstructionPanel from "../../components/InstructionPanel";
 import TutorialPanel from "../../components/TutorialPanel";
+
+// ============ Module-scope stable constants (F2) ============
+const format = (d) => d ? new Date(d).toLocaleDateString() : "";
+
+// Static stylesheet — hoisted so it isn't re-created on every render.
+const WORKSTATION_STYLE = `
+        body { font-family: 'Inter', sans-serif; background: #f0f4f8; margin: 0; color: #1e293b; }
+        .topbar { padding: 16px 30px; background: linear-gradient(135deg, #0B1F3A 0%, #1E3A5F 100%); color: white; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .clock { font-size: 14px; font-weight: 500; margin: 0 15px; }
+        .session-timer { font-size: 13px; padding: 4px 10px; border-radius: 4px; background: rgba(255,255,255,0.15); margin: 0 10px; }
+        .container { width: 96%; max-width: 1600px; margin: 24px auto; }
+        .table-container { height: 550px; overflow: auto; background: white; border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #cbd5e1; }
+        table { border-collapse: collapse; width: 100%; min-width: 1500px; font-size: 12px; }
+        th { position: sticky; top: 0; background: #1e293b; color: #f8fafc; padding: 6px 10px; font-weight: 600; text-align: left; border-bottom: 2px solid #0f172a; border-right: 1px solid #334155; z-index: 10; white-space: nowrap; }
+        td { padding: 4px 10px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; color: #334155; white-space: nowrap; }
+        tbody tr:nth-child(even) td { background-color: #f8fafc; }
+        tbody tr:hover td { background-color: #e0e7ff; cursor: pointer; }
+        .num { text-align: right; font-family: 'Consolas', 'Courier New', monospace; }
+        .action-bar { background: white; padding: 16px; margin-top: 20px; display: flex; justify-content: space-between; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0; }
+        .btn { padding: 10px 18px; margin: 4px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; border-radius: 6px; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn:active { transform: translateY(0); }
+        .primary { background: #0B1F3A; color: white; }
+        .primary:hover { background: #1E3A5F; }
+        .secondary { background: #e2e8f0; color: #1e293b; }
+        .secondary:hover { background: #cbd5e1; }
+        .warning { background: #f59e0b; color: white; }
+        .warning:hover { background: #d97706; }
+        .popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); padding: 24px; border-radius: 16px; width: 450px; z-index: 999; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.4); }
+        .popup h3 { margin-top: 0; color: #0f172a; font-size: 18px; }
+        .popup textarea, .popup input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; margin-top: 10px; resize: vertical; }
+        .popup textarea:focus, .popup input:focus { outline: none; border-color: #3b82f6; }
+        .popup textarea { height: 100px; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 998; }
+        #auditContent { max-height: 300px; overflow-y: auto; margin: 15px 0; padding-right: 10px; }
+        .audit-card { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 12px; margin-bottom: 10px; border-radius: 4px 8px 8px 4px; font-size: 13px; }
+        .audit-card.system { border-left-color: #8b5cf6; background: #f5f3ff; }
+        .audit-header { display: flex; justify-content: space-between; color: #64748b; margin-bottom: 4px; font-size: 11px; }
+        .audit-action { font-weight: 600; color: #0f172a; margin-bottom: 2px; }
+        .audit-details { color: #475569; }
+        .xml-section { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; margin-top: 10px; }
+      `;
+
+// Which trade statuses each action is valid from.
+const allowed = {
+  MO_VALIDATE_PASS: ["MO_PENDING", "PENDING_FO_RESPONSE"],
+  MO_RAISE_BREAK: ["MO_PENDING"],
+  MO_SEND_TO_FO: ["MO_BREAK_OPEN"],
+  CONFIRM_TRADE: ["LIASING_WITH_CPTY"],
+  CONFIRM_RAISE_BREAK: ["LIASING_WITH_CPTY"],
+  CONFIRM_SEND_TO_CPTY: ["CONFIRMATION_PENDING", "CONFIRMATION_BREAK", "LIASING_WITH_FO", "LIASING_WITH_CPTY"],
+  CONFIRM_REJECT_CLAIM: ["CONFIRMATION_BREAK"],
+  CONFIRM_REQUEST_EVIDENCE: ["CONFIRMATION_BREAK"],
+  CONFIRM_ESCALATE_TO_FO: ["CONFIRMATION_BREAK"],
+  CONFIRM_RAISE_AMENDMENT: ["CONFIRMATION_BREAK"],
+  CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
+  CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
+  SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
+  SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
+  SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
+};
+
+// ============ SessionClock (F1) ============
+// Owns the 1 Hz tick so the parent (and the trade blotter) no longer re-renders
+// every second. Renders the timer/clock spans with the Refresh button (passed as
+// children) between them to preserve the original header layout.
+const SessionClock = memo(function SessionClock({ sessionExpiry, sessionStart, onExpire, children }) {
+  const [simTime, setSimTime] = useState("");
+  const [sessionTimerStr, setSessionTimerStr] = useState("");
+  const alert1hrShown = useRef(false);
+  const alert10minShown = useRef(false);
+
+  useEffect(() => {
+    if (!sessionExpiry || !sessionStart) return;
+    const interval = setInterval(() => {
+      const diff = new Date(sessionExpiry) - new Date();
+      if (diff <= 0) {
+        toast.error("🚨 Session expired (3 hours). Logging off.");
+        if (onExpire) onExpire();
+        return;
+      }
+      const hrs = Math.floor(diff / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      setSessionTimerStr(`Session: ${hrs}h ${mins}m ${secs}s remaining`);
+
+      const elapsedMs = new Date() - new Date(sessionStart);
+      const currentSimTime = new Date();
+      currentSimTime.setHours(9, 0, 0, 0);
+      currentSimTime.setTime(currentSimTime.getTime() + elapsedMs);
+      const pad = (n) => String(n).padStart(2, "0");
+      setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth()+1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
+
+      const totalMinutesLeft = Math.floor(diff / (1000 * 60));
+      if (totalMinutesLeft <= 60 && !alert1hrShown.current) {
+        toast("⚠️ 1 hour remaining in simulation day", { icon: "⚠️" });
+        alert1hrShown.current = true;
+      }
+      if (totalMinutesLeft <= 10 && !alert10minShown.current) {
+        toast("⏳ 10 minutes remaining — wrap up trades", { icon: "⏳" });
+        alert10minShown.current = true;
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionExpiry, sessionStart, onExpire]);
+
+  return (
+    <>
+      <span className="session-timer">{sessionTimerStr}</span>
+      {children}
+      <span className="clock">{simTime}</span>
+    </>
+  );
+});
+
+// ============ TradeRow (F1) ============
+// Memoized so a queue refresh (which replaces every row object) only re-renders
+// rows whose displayed data actually changed. Comparison is by value, not by
+// object reference, because refreshQueueSilent produces fresh objects each poll.
+const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewSSI }) {
+  return (
+    <tr>
+      <td><input type="checkbox" checked={isSelected} onChange={() => onToggle(t)} /></td>
+      <td>{t.tradeRef}</td>
+      <td>{t.currentStatus}</td>
+      <td>{t.nextDesk}</td>
+      <td className="num">{t.age}</td>
+      <td>{format(t.tradeDate)}</td>
+      <td>{format(t.valueDate)}</td>
+      <td>{t.counterparty}</td>
+      <td>{t.entity}</td>
+      <td>{t.foRegion}</td>
+      <td>{t.product}</td>
+      <td>{t.tradeType}</td>
+      {desk !== "SETTLEMENT" && <td>{t.settlementType}</td>}
+      {desk === "SETTLEMENT" && (
+        <td>
+          <button className="btn secondary" style={{padding: "4px 8px", fontSize: "11px", margin: 0}} onClick={(e) => { e.stopPropagation(); onViewSSI(t); }}>View SSI</button>
+        </td>
+      )}
+      <td>{t.direction}</td>
+      <td>{t.currency}</td>
+      <td className="num">{t.amount ? t.amount.toLocaleString() : ''}</td>
+    </tr>
+  );
+}, (prev, next) =>
+  prev.isSelected === next.isSelected &&
+  prev.desk === next.desk &&
+  prev.onToggle === next.onToggle &&
+  prev.onViewSSI === next.onViewSSI &&
+  prev.t.tradeRef === next.t.tradeRef &&
+  prev.t.currentStatus === next.t.currentStatus &&
+  prev.t.nextDesk === next.t.nextDesk &&
+  prev.t.age === next.t.age &&
+  prev.t.tradeDate === next.t.tradeDate &&
+  prev.t.valueDate === next.t.valueDate &&
+  prev.t.counterparty === next.t.counterparty &&
+  prev.t.entity === next.t.entity &&
+  prev.t.foRegion === next.t.foRegion &&
+  prev.t.product === next.t.product &&
+  prev.t.tradeType === next.t.tradeType &&
+  prev.t.settlementType === next.t.settlementType &&
+  prev.t.direction === next.t.direction &&
+  prev.t.currency === next.t.currency &&
+  prev.t.amount === next.t.amount
+);
 
 function WorkstationComponent() {
   const router = useRouter();
@@ -18,8 +184,6 @@ function WorkstationComponent() {
   const [selectedTrade, setSelectedTrade] = useState(null);
   const [sessionExpiry, setSessionExpiry] = useState(null);
   const [sessionStart, setSessionStart] = useState(null);
-  const [simTime, setSimTime] = useState("");
-  const [sessionTimerStr, setSessionTimerStr] = useState("");
 
   const [popupState, setPopupState] = useState({ type: null, action: null });
   const [comment, setComment] = useState("");
@@ -33,9 +197,28 @@ function WorkstationComponent() {
   const [isEditingSSI, setIsEditingSSI] = useState(false);
   const [ssiFormData, setSsiFormData] = useState({});
 
-  const alert1hrShown = useRef(false);
-  const alert10minShown = useRef(false);
   const socketRef = useRef(null);
+  const refreshTimerRef = useRef(null);
+
+  const refreshQueueSilent = useCallback(async (dsk) => {
+    try {
+      const res = await fetch(`/api/queue/my?desk=${encodeURIComponent(dsk || desk)}`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setQueue(data.trades || []);
+        if (data.sessionExpiry) {
+          setSessionExpiry(data.sessionExpiry);
+          if (data.sessionStart) setSessionStart(data.sessionStart);
+        }
+      }
+    } catch (e) {}
+  }, [desk]);
+
+  // (F4) Debounce so a burst of new_email/trade_update events collapses into one fetch.
+  const scheduleRefresh = useCallback((dsk) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => refreshQueueSilent(dsk), 300);
+  }, [refreshQueueSilent]);
 
   useEffect(() => {
     const uid = loadUserId();
@@ -85,44 +268,15 @@ function WorkstationComponent() {
     socket.emit("join_desk", dsk);
 
     socket.on("trade_update", () => {
-      refreshQueueSilent(dsk);
+      scheduleRefresh(dsk);
     });
 
     socket.on("new_email", () => {
-      refreshQueueSilent(dsk);
+      scheduleRefresh(dsk);
     });
 
     return () => socket.disconnect();
   }, [searchParams]);
-
-  useEffect(() => {
-    if (!sessionExpiry || !sessionStart) return;
-    const interval = setInterval(() => {
-      const diff = new Date(sessionExpiry) - new Date();
-      if (diff <= 0) {
-        toast.error("🚨 Session expired (3 hours). Logging off.");
-        logout();
-        return;
-      }
-      const hrs = Math.floor(diff / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-      setSessionTimerStr(`Session: ${hrs}h ${mins}m ${secs}s remaining`);
-
-      // 1 real hour = 1 simulated hour. Sim time starts at 9:00 AM on sessionStart.
-      const elapsedMs = new Date() - new Date(sessionStart);
-      const currentSimTime = new Date();
-      currentSimTime.setHours(9, 0, 0, 0); // Start at 9:00 AM
-      currentSimTime.setTime(currentSimTime.getTime() + elapsedMs);
-      
-      const pad = (n) => String(n).padStart(2, "0");
-      setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth()+1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
-
-      const totalMinutesLeft = Math.floor(diff / (1000 * 60));
-      handleAlerts(totalMinutesLeft);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [sessionExpiry, sessionStart]);
 
   // Keep selectedTrade in sync with the latest queue updates
   // Uses targeted field comparison instead of expensive JSON.stringify (KP-005)
@@ -145,49 +299,39 @@ function WorkstationComponent() {
     }
   }, [queue, selectedTrade]);
 
-  // Sturdy Background Polling Fallback (ensures UI is never stale)
-  useEffect(() => {
-    if (!desk) return;
-    const pollInterval = setInterval(() => {
-      refreshQueueSilent(desk);
-    }, 15000); // Poll every 15 seconds silently
-    return () => clearInterval(pollInterval);
-  }, [desk]);
+  // Stable handlers for the memoized TradeRow (F1/F2).
+  const handleToggleSelect = useCallback((t) => {
+    setSelectedTrade(prev => prev?.tradeRef === t.tradeRef ? null : t);
+  }, []);
 
-  const handleAlerts = (mins) => {
-    if (mins <= 60 && !alert1hrShown.current) {
-      toast("⚠️ 1 hour remaining in simulation day", { icon: "⚠️" });
-      alert1hrShown.current = true;
-    }
-    if (mins <= 10 && !alert10minShown.current) {
-      toast("⏳ 10 minutes remaining — wrap up trades", { icon: "⏳" });
-      alert10minShown.current = true;
-    }
-    if (mins <= 0) {
-      toast.error("📛 Market Closed — Logging off");
-      logout();
-    }
-  };
-
-  const refreshQueueSilent = async (dsk) => {
-    try {
-      const res = await fetch(`/api/queue/my?desk=${encodeURIComponent(dsk || desk)}`, { headers: authHeaders() });
-      const data = await res.json();
-      if (data.success) {
-        setQueue(data.trades || []);
-        if (data.sessionExpiry) {
-          setSessionExpiry(data.sessionExpiry);
-          if (data.sessionStart) setSessionStart(data.sessionStart);
-        }
-      }
-    } catch (e) {}
-  };
-
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await fetch("/api/session/logout", { method: "POST", headers: authHeaders(), body: JSON.stringify({}) });
     clearSession();
     router.push("/");
-  };
+  }, [router]);
+
+  // (F3) Polling fallback that runs ONLY while the socket is disconnected —
+  // when the socket is healthy, live events drive updates and polling pauses.
+  useEffect(() => {
+    if (!desk) return;
+    const socket = socketRef.current;
+    let pollId = null;
+    const startPoll = () => { if (!pollId) pollId = setInterval(() => refreshQueueSilent(desk), 15000); };
+    const stopPoll = () => { if (pollId) { clearInterval(pollId); pollId = null; } };
+
+    if (socket) {
+      socket.on("connect", stopPoll);
+      socket.on("disconnect", startPoll);
+      if (!socket.connected) startPoll();
+    } else {
+      startPoll();
+    }
+
+    return () => {
+      stopPoll();
+      if (socket) { socket.off("connect", stopPoll); socket.off("disconnect", startPoll); }
+    };
+  }, [desk, refreshQueueSilent]);
 
   const generateQueue = async () => {
     setIsGeneratingQueue(true);
@@ -216,27 +360,6 @@ function WorkstationComponent() {
       if (data.sessionStart) setSessionStart(data.sessionStart);
     }
     toast.success("Queue refreshed");
-  };
-
-  const format = (d) => d ? new Date(d).toLocaleDateString() : "";
-
-  // Action Logic
-  const allowed = {
-    MO_VALIDATE_PASS: ["MO_PENDING", "PENDING_FO_RESPONSE"],
-    MO_RAISE_BREAK: ["MO_PENDING"],
-    MO_SEND_TO_FO: ["MO_BREAK_OPEN"],
-    CONFIRM_TRADE: ["LIASING_WITH_CPTY"],
-    CONFIRM_RAISE_BREAK: ["LIASING_WITH_CPTY"],
-    CONFIRM_SEND_TO_CPTY: ["CONFIRMATION_PENDING", "CONFIRMATION_BREAK", "LIASING_WITH_FO", "LIASING_WITH_CPTY"],
-    CONFIRM_REJECT_CLAIM: ["CONFIRMATION_BREAK"],
-    CONFIRM_REQUEST_EVIDENCE: ["CONFIRMATION_BREAK"],
-    CONFIRM_ESCALATE_TO_FO: ["CONFIRMATION_BREAK"],
-    CONFIRM_RAISE_AMENDMENT: ["CONFIRMATION_BREAK"],
-    CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
-    CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
-    SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
-    SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
-    SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
   };
 
   const handleOpenAction = (action) => {
@@ -435,9 +558,9 @@ function WorkstationComponent() {
     setPopupState({ type: "truth" });
   };
 
-  const viewSSI = (trade) => {
+  const viewSSI = useCallback((trade) => {
     setPopupState({ type: "ssi", trade });
-  };
+  }, []);
 
   const openTermsheet = () => {
     window.open(`/mo-risk?desk=${encodeURIComponent(desk)}`, "_blank");
@@ -447,43 +570,7 @@ function WorkstationComponent() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html:`
-        body { font-family: 'Inter', sans-serif; background: #f0f4f8; margin: 0; color: #1e293b; }
-        .topbar { padding: 16px 30px; background: linear-gradient(135deg, #0B1F3A 0%, #1E3A5F 100%); color: white; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .clock { font-size: 14px; font-weight: 500; margin: 0 15px; }
-        .session-timer { font-size: 13px; padding: 4px 10px; border-radius: 4px; background: rgba(255,255,255,0.15); margin: 0 10px; }
-        .container { width: 96%; max-width: 1600px; margin: 24px auto; }
-        .table-container { height: 550px; overflow: auto; background: white; border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #cbd5e1; }
-        table { border-collapse: collapse; width: 100%; min-width: 1500px; font-size: 12px; }
-        th { position: sticky; top: 0; background: #1e293b; color: #f8fafc; padding: 6px 10px; font-weight: 600; text-align: left; border-bottom: 2px solid #0f172a; border-right: 1px solid #334155; z-index: 10; white-space: nowrap; }
-        td { padding: 4px 10px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; color: #334155; white-space: nowrap; }
-        tbody tr:nth-child(even) td { background-color: #f8fafc; }
-        tbody tr:hover td { background-color: #e0e7ff; cursor: pointer; }
-        .num { text-align: right; font-family: 'Consolas', 'Courier New', monospace; }
-        .action-bar { background: white; padding: 16px; margin-top: 20px; display: flex; justify-content: space-between; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0; }
-        .btn { padding: 10px 18px; margin: 4px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; border-radius: 6px; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn:active { transform: translateY(0); }
-        .primary { background: #0B1F3A; color: white; }
-        .primary:hover { background: #1E3A5F; }
-        .secondary { background: #e2e8f0; color: #1e293b; }
-        .secondary:hover { background: #cbd5e1; }
-        .warning { background: #f59e0b; color: white; }
-        .warning:hover { background: #d97706; }
-        .popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); padding: 24px; border-radius: 16px; width: 450px; z-index: 999; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.4); }
-        .popup h3 { margin-top: 0; color: #0f172a; font-size: 18px; }
-        .popup textarea, .popup input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; margin-top: 10px; resize: vertical; }
-        .popup textarea:focus, .popup input:focus { outline: none; border-color: #3b82f6; }
-        .popup textarea { height: 100px; }
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 998; }
-        #auditContent { max-height: 300px; overflow-y: auto; margin: 15px 0; padding-right: 10px; }
-        .audit-card { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 12px; margin-bottom: 10px; border-radius: 4px 8px 8px 4px; font-size: 13px; }
-        .audit-card.system { border-left-color: #8b5cf6; background: #f5f3ff; }
-        .audit-header { display: flex; justify-content: space-between; color: #64748b; margin-bottom: 4px; font-size: 11px; }
-        .audit-action { font-weight: 600; color: #0f172a; margin-bottom: 2px; }
-        .audit-details { color: #475569; }
-        .xml-section { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; margin-top: 10px; }
-      `}}/>
+      <style dangerouslySetInnerHTML={{__html: WORKSTATION_STYLE}}/>
 
       {popupState.type && <div className="overlay" onClick={() => setPopupState({type: null})}></div>}
 
@@ -498,11 +585,11 @@ function WorkstationComponent() {
               🖥️ System Mailbox
             </button>
           )}
-          <span className="session-timer">{sessionTimerStr}</span>
-          <button className="btn warning" onClick={refreshQueue} disabled={isRefreshingQueue}>
-            {isRefreshingQueue ? "Refreshing..." : "Refresh"}
-          </button>
-          <span className="clock">{simTime}</span>
+          <SessionClock sessionExpiry={sessionExpiry} sessionStart={sessionStart} onExpire={logout}>
+            <button className="btn warning" onClick={refreshQueue} disabled={isRefreshingQueue}>
+              {isRefreshingQueue ? "Refreshing..." : "Refresh"}
+            </button>
+          </SessionClock>
           <button className="btn secondary" onClick={logout}>Logoff</button>
         </div>
       </div>
@@ -531,29 +618,14 @@ function WorkstationComponent() {
             </thead>
             <tbody>
               {queue.map(t => (
-                <tr key={t.tradeRef}>
-                  <td><input type="checkbox" checked={selectedTrade?.tradeRef === t.tradeRef} onChange={() => setSelectedTrade(selectedTrade?.tradeRef === t.tradeRef ? null : t)} /></td>
-                  <td>{t.tradeRef}</td>
-                  <td>{t.currentStatus}</td>
-                  <td>{t.nextDesk}</td>
-                  <td className="num">{t.age}</td>
-                  <td>{format(t.tradeDate)}</td>
-                  <td>{format(t.valueDate)}</td>
-                  <td>{t.counterparty}</td>
-                  <td>{t.entity}</td>
-                  <td>{t.foRegion}</td>
-                  <td>{t.product}</td>
-                  <td>{t.tradeType}</td>
-                  {desk !== "SETTLEMENT" && <td>{t.settlementType}</td>}
-                  {desk === "SETTLEMENT" && (
-                    <td>
-                      <button className="btn secondary" style={{padding: "4px 8px", fontSize: "11px", margin: 0}} onClick={(e) => { e.stopPropagation(); viewSSI(t); }}>View SSI</button>
-                    </td>
-                  )}
-                  <td>{t.direction}</td>
-                  <td>{t.currency}</td>
-                  <td className="num">{t.amount ? t.amount.toLocaleString() : ''}</td>
-                </tr>
+                <TradeRow
+                  key={t.tradeRef}
+                  t={t}
+                  desk={desk}
+                  isSelected={selectedTrade?.tradeRef === t.tradeRef}
+                  onToggle={handleToggleSelect}
+                  onViewSSI={viewSSI}
+                />
               ))}
             </tbody>
           </table>

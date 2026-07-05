@@ -44,8 +44,8 @@ function MoRiskComponent() {
       setDesk(dsk || "Risk");
     }
 
-    // Load trades
-    fetch("/api/trade/all", {
+    // Load trades (endpoint is bounded; request the max page for the risk view)
+    fetch("/api/trade/all?limit=500", {
       headers: { "Authorization": "Bearer " + getToken() }
     })
       .then(res => res.json())

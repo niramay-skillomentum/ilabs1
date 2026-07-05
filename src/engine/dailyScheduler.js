@@ -16,23 +16,28 @@ class DailyScheduler {
       const now = new Date();
       const trades = await Trade.find({}).lean();
 
-      let updated = 0;
+      // Accumulate changed ages and flush in a single bulkWrite instead of
+      // N sequential round-trips.
+      const ops = [];
       for (const trade of trades) {
         if (trade.tradeDate) {
           const desk = trade.nextDesk || "MO";
           const newAge = ageCalculator.calculateAge(trade.tradeDate, now, desk);
 
           if (newAge !== trade.age) {
-            await Trade.updateOne(
-              { tradeRef: trade.tradeRef },
-              { $set: { age: newAge } }
-            );
-            updated++;
+            ops.push({
+              updateOne: {
+                filter: { tradeRef: trade.tradeRef },
+                update: { $set: { age: newAge } }
+              }
+            });
           }
         }
       }
 
-      console.log(`Daily evaluation complete — ${updated} trade(s) age-updated`);
+      if (ops.length) await Trade.bulkWrite(ops, { ordered: false });
+
+      console.log(`Daily evaluation complete — ${ops.length} trade(s) age-updated`);
     } catch (err) {
       console.error("Daily cycle error:", err.message);
     }

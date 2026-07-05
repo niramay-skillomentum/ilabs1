@@ -16,4 +16,7 @@ const ConversationSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Personal-inbox query: Conversation.find({ "messages.sender": userId })
+ConversationSchema.index({ "messages.sender": 1 });
+
 module.exports = mongoose.model("Conversation", ConversationSchema);

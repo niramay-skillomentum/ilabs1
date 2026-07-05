@@ -1,9 +1,7 @@
 const { GoogleGenAI } = require("@google/genai");
+const rateLimiter = require("./rateLimiter");
 
 let ai = null;
-let lastCallTime = 0;
-// 15 requests per minute limit for free tier -> 1 request per 4 seconds
-const MIN_DELAY_MS = 4000; 
 
 function getClient() {
   if (!ai && process.env.GEMINI_API_KEY) {
@@ -28,15 +26,10 @@ async function generateResponse(systemInstruction, prompt) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const now = Date.now();
-      const timeSinceLastCall = now - lastCallTime;
-      if (timeSinceLastCall < MIN_DELAY_MS) {
-        await new Promise(resolve => setTimeout(resolve, MIN_DELAY_MS - timeSinceLastCall));
-      }
-      
-      // Update last call time just before we make the request
-      lastCallTime = Date.now();
-      
+      // Token-bucket limiter: allows bounded concurrency up to the provider
+      // quota instead of a single process-wide 4s gate.
+      await rateLimiter.take();
+
       const response = await client.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,

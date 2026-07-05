@@ -64,12 +64,17 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
     try {
       const io = getIo();
       if (io) {
-        io.emit("new_email", {
+        // (B4) Scope to the trade owner's room; broadcast only if unknown.
+        const ownerDoc = await Trade.findOne({ tradeRef }).select("assignedTo").lean();
+        const owner = ownerDoc?.assignedTo;
+        const payload = {
           tradeRef,
           sender,
           subject: subject || `Trade ${tradeRef}`,
           timestamp: new Date()
-        });
+        };
+        if (owner) io.to(`user_${owner}`).emit("new_email", payload);
+        else io.emit("new_email", payload);
       }
     } catch (err) {
       console.log("Socket emit failed", err.message);

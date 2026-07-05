@@ -52,12 +52,10 @@ router.post("/send", authenticateToken, async (req, res) => {
       const { getIo } = require("../engine/socketEngine");
       const io = getIo();
       if (io) {
-        io.emit("new_email", {
-          tradeRef,
-          sender,
-          subject: subject || `Trade ${tradeRef}`,
-          timestamp: new Date()
-        });
+        const payload = { tradeRef, sender, subject: subject || `Trade ${tradeRef}`, timestamp: new Date() };
+        const owner = trade?.assignedTo;
+        if (owner) io.to(`user_${owner}`).emit("new_email", payload);
+        else io.emit("new_email", payload);
       }
     } catch (err) {}
   } else {
@@ -87,12 +85,10 @@ router.post("/send", authenticateToken, async (req, res) => {
       const { getIo } = require("../engine/socketEngine");
       const io = getIo();
       if (io) {
-        io.emit("new_email", {
-          tradeRef,
-          sender,
-          subject: subject || `Trade ${tradeRef}`,
-          timestamp: new Date()
-        });
+        const payload = { tradeRef, sender, subject: subject || `Trade ${tradeRef}`, timestamp: new Date() };
+        const owner = trade?.assignedTo;
+        if (owner) io.to(`user_${owner}`).emit("new_email", payload);
+        else io.emit("new_email", payload);
       }
     } catch (err) {}
 

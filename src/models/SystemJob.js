@@ -24,9 +24,13 @@ const SystemJobSchema = new mongoose.Schema({
   settlementType: { type: String }, // BILATERAL | ELECTRONIC (context only)
 
   // When the job becomes eligible for processing
-  sendAt: { type: Date, required: true, index: true },
+  sendAt: { type: Date, required: true },
 
   payload: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
+
+// processJobs polls { sendAt: {$lte} } sorted by sendAt; this single-field index
+// serves that query AND auto-reaps orphaned jobs 1h after their scheduled time.
+SystemJobSchema.index({ sendAt: 1 }, { expireAfterSeconds: 3600 });
 
 module.exports = mongoose.model("SystemJob", SystemJobSchema);

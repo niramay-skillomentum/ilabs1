@@ -115,6 +115,18 @@ class QueueComposer {
       }
     }
 
+    // Resolve the settlement initial state ONCE (reused by every generation
+    // path below) instead of querying SystemConfig twice per build.
+    let settlementInitialState = "SETTLEMENT_PENDING";
+    if (desk === "SETTLEMENT") {
+      try {
+        const config = await SystemConfig.findOne({ key: "SETTLEMENT_INITIAL_STATE" });
+        if (config && config.value) settlementInitialState = config.value;
+      } catch (e) {
+        console.error("Error fetching SETTLEMENT_INITIAL_STATE config:", e);
+      }
+    }
+
     // 2. Count unassigned trades in DB for this desk
     const moStatuses = ["MO_PENDING", "MO_BREAK_OPEN", "PENDING_FO_RESPONSE"];
     const confirmStatuses = ["CONFIRMATION_PENDING", "CONFIRMATION_BREAK", "LIASING_WITH_CPTY", "LIASING_WITH_FO"];
@@ -197,18 +209,6 @@ class QueueComposer {
     if (remainingClean > 0 || remainingBreaks > 0) {
       console.log(`🔧 Generating: ${remainingClean} clean + ${remainingBreaks} break`);
 
-      let settlementInitialState = "SETTLEMENT_PENDING";
-      if (desk === "SETTLEMENT") {
-        try {
-          const config = await SystemConfig.findOne({ key: "SETTLEMENT_INITIAL_STATE" });
-          if (config && config.value) {
-            settlementInitialState = config.value;
-          }
-        } catch (e) {
-          console.error("Error fetching SETTLEMENT_INITIAL_STATE config:", e);
-        }
-      }
-
       const generated = tradeGenerator.generateTrades(remainingClean, remainingBreaks, desk, settlementInitialState);
       const saved = await tradeGenerator.saveGeneratedTrades(generated);
 
@@ -228,17 +228,6 @@ class QueueComposer {
     if (queue.length < TOTAL_TRADES) {
       const shortage = TOTAL_TRADES - queue.length;
       console.log(`⚠️ Queue short by ${shortage}. Generating filler trades.`);
-      let settlementInitialState = "SETTLEMENT_PENDING";
-      if (desk === "SETTLEMENT") {
-        try {
-          const config = await SystemConfig.findOne({ key: "SETTLEMENT_INITIAL_STATE" });
-          if (config && config.value) {
-            settlementInitialState = config.value;
-          }
-        } catch (e) {
-          console.error("Error fetching SETTLEMENT_INITIAL_STATE config:", e);
-        }
-      }
 
       const filler = tradeGenerator.generateTrades(
         Math.ceil(shortage * 0.6),
@@ -263,11 +252,17 @@ class QueueComposer {
     });
 
     // Mark all trades as assigned to this user and persist the recalculated age
+    // in a single bulkWrite instead of up to 20 sequential round-trips.
     const tradeRefs = queue.map(t => t.tradeRef);
-    for (const t of queue) {
-      await Trade.updateOne(
-        { tradeRef: t.tradeRef },
-        { $set: { assignedTo: userId, age: t.age } }
+    if (queue.length) {
+      await Trade.bulkWrite(
+        queue.map(t => ({
+          updateOne: {
+            filter: { tradeRef: t.tradeRef },
+            update: { $set: { assignedTo: userId, age: t.age } }
+          }
+        })),
+        { ordered: false }
       );
     }
 

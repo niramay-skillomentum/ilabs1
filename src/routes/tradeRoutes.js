@@ -17,10 +17,23 @@ const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
 // ======================================
 router.get("/all", authenticateToken, async (req, res) => {
   try {
-    const trades = await Trade.find({}).select('tradeRef tradeDate valueDate currentStatus nextDesk amount currency counterparty direction entity foRegion product tradeType settlementType age truths pendingAmendments').sort({ _id: -1 });
+    // Bound the result set — this feeds the MO-risk page and must not return
+    // the whole collection unboundedly. Page via ?limit & ?skip.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+    const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+
+    const trades = await Trade.find({})
+      .select('tradeRef tradeDate valueDate currentStatus nextDesk amount currency counterparty direction entity foRegion product tradeType settlementType age truths pendingAmendments')
+      .sort({ _id: -1 })
+      .skip(skip)
+      .limit(limit + 1) // fetch one extra to detect more pages
+      .lean();
+
+    const hasMore = trades.length > limit;
     res.json({
       success: true,
-      trades: trades
+      trades: hasMore ? trades.slice(0, limit) : trades,
+      hasMore
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

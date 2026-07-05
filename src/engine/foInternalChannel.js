@@ -11,7 +11,9 @@ const FOCommunication = require("../models/FOCommunication");
 const PendingReply = require("../models/PendingReply");
 const Trade = require("../models/Trade");
 
-let isProcessingFOInternal = false;
+// Batch cap per tick (mirrors communicationEngine); atomic claim removes the
+// need for an in-process latch, so multiple instances can drain safely.
+const MAX_PER_TICK = 25;
 
 /**
  * Open an internal FO channel for a trade.
@@ -34,7 +36,7 @@ async function openChannel(tradeRef, userId, desk) {
 /**
  * Send a message on the internal FO channel.
  */
-async function sendMessage(tradeRef, sender, message, senderRole = "USER") {
+async function sendMessage(tradeRef, sender, message, senderRole = "USER", owner = null) {
   const channel = await FOCommunication.findOne({ tradeRef });
   if (!channel) return null;
 
@@ -47,11 +49,15 @@ async function sendMessage(tradeRef, sender, message, senderRole = "USER") {
 
   channel.messages.push(msg);
   await channel.save();
-  
+
+  // (B4) Scope to the trade owner's room; broadcast only if owner unknown.
   try {
     const { getIo } = require("./socketEngine");
     const io = getIo();
-    if (io) io.emit("new_email", { tradeRef });
+    if (io) {
+      if (owner) io.to(`user_${owner}`).emit("new_email", { tradeRef });
+      else io.emit("new_email", { tradeRef });
+    }
   } catch (err) {}
 
   return msg;
@@ -82,24 +88,27 @@ async function scheduleFOInternalReply(tradeRef, trade, userMessage, escalationC
  * Called on interval from server.js.
  */
 async function processFOInternalReplies(saveTrade) {
-  if (isProcessingFOInternal) return;
+  for (let i = 0; i < MAX_PER_TICK; i++) {
+    let reply;
+    try {
+      reply = await PendingReply.findOneAndDelete(
+        { replyType: "FO_INTERNAL", sendAt: { $lte: new Date() } },
+        { sort: { sendAt: 1 } }
+      ).lean();
+    } catch (err) {
+      console.warn("FO internal claim error:", err.message);
+      break; // DB unavailable — stop this tick, retry next interval
+    }
+    if (!reply) break; // drained
+    try {
+      await handleFoInternalReply(reply, saveTrade);
+    } catch (err) {
+      console.error("Error processing FO internal reply:", reply.tradeRef, err.message);
+    }
+  }
+}
 
-  const now = new Date();
-
-  isProcessingFOInternal = true;
-  try {
-    const readyReplies = await PendingReply.find({
-      replyType: "FO_INTERNAL",
-      sendAt: { $lte: now }
-    }).lean();
-
-    if (readyReplies.length === 0) return;
-
-    const randomIndex = Math.floor(Math.random() * readyReplies.length);
-    const reply = readyReplies[randomIndex];
-
-    await PendingReply.findByIdAndDelete(reply._id);
-
+async function handleFoInternalReply(reply, saveTrade) {
     const trade = await Trade.findOne({ tradeRef: reply.tradeRef });
     if (!trade) return;
 
@@ -120,8 +129,8 @@ async function processFOInternalReplies(saveTrade) {
       foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth, reply.deskContext);
     }
 
-    // Send FO's response on the internal channel
-    await sendMessage(reply.tradeRef, "FO_DESK", foResponseText, "FO");
+    // Send FO's response on the internal channel (scoped to the trade owner)
+    await sendMessage(reply.tradeRef, "FO_DESK", foResponseText, "FO", trade.assignedTo);
 
     // Update trade's FO escalation status
     trade.foEscalation = trade.foEscalation || {};
@@ -164,14 +173,6 @@ async function processFOInternalReplies(saveTrade) {
 
     if (trade.markModified) trade.markModified("foEscalation");
     if (saveTrade) await saveTrade(trade);
-
-  } catch (err) {
-    console.error("Error processing FO internal reply:", err);
-    // Note: in a real robust system, we would either not delete until success
-    // or we'd retry. For this simulation, we'll just log it.
-  } finally {
-    isProcessingFOInternal = false;
-  }
 }
 
 /**

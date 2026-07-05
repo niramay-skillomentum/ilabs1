@@ -167,4 +167,8 @@ const TradeSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Hot pool/queue query: buildQueue filters { nextDesk, assignedTo, currentStatus }.
+// (assignedTo also keeps its single-field index inline for owner lookups.)
+TradeSchema.index({ nextDesk: 1, assignedTo: 1, currentStatus: 1 });
+
 module.exports = mongoose.model("Trade", TradeSchema);

@@ -22,13 +22,15 @@ const PORT = process.env.PORT || 3002;
 // Note: 1-minute cron-like tasks have been moved to Agenda
 // ======================================
 
+// On-demand single-trade fetch (indexed by unique tradeRef). Lean matches the
+// old cache shape, so downstream processor mutation code is unchanged.
+const getTradeByRef = (tradeRef) => Trade.findOne({ tradeRef }).lean();
+
 // COMMUNICATION REPLY PROCESSORS
 setInterval(() => {
   communicationEngine.processReplies(
     conversationEngine,
-    (tradeRef) => {
-      return communicationEngine._cachedTrades?.[tradeRef] || null;
-    },
+    getTradeByRef,
     async (trade) => {
       await Trade.updateOne({ tradeRef: trade.tradeRef }, {
         $set: {
@@ -44,9 +46,7 @@ setInterval(() => {
 setInterval(() => {
   communicationEngine.processFOReplies(
     conversationEngine,
-    (tradeRef) => {
-      return communicationEngine._cachedTrades?.[tradeRef] || null;
-    },
+    getTradeByRef,
     async (trade) => {
       await Trade.updateOne({ tradeRef: trade.tradeRef }, {
         $set: {
@@ -79,21 +79,8 @@ setInterval(() => {
   systemWorkflowEngine.processJobs();
 }, 3000);
 
-// Cache refresh: periodically load assigned trades
-setInterval(async () => {
-  try {
-    const assignedTrades = await Trade.find({ assignedTo: { $ne: null } }).lean();
-    if (!communicationEngine._cachedTrades) {
-      communicationEngine._cachedTrades = {};
-    }
-    communicationEngine._cachedTrades = {};
-    assignedTrades.forEach(t => {
-      communicationEngine._cachedTrades[t.tradeRef] = t;
-    });
-  } catch (err) {
-    // Silent
-  }
-}, 2000);
+// (B1) The fleet-wide 2s cache refresh was removed — processors now fetch the
+// single trade they need on demand via getTradeByRef (indexed findOne).
 
 // ======================================
 // STARTUP VALIDATION

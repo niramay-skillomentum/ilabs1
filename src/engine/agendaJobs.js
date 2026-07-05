@@ -43,8 +43,8 @@ async function startAgenda() {
   console.log("📅 Agenda Background Jobs Started");
 
   // Schedule repeatable jobs
-  await agenda.every("1 minute", "session-cleanup");
-  await agenda.every("1 minute", "daily-age-update");
+  await agenda.every("5 minutes", "session-cleanup");
+  await agenda.every("0 0 * * *", "daily-age-update"); // midnight — age only changes at a date boundary
 }
 
 // Graceful shutdown
