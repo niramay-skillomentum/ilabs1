@@ -107,7 +107,7 @@ export const workstationConfig: Workstation[] = [
   },
   {
     id: "tlm",
-    title: "Trade Lifecycle Manager",
+    title: "Reconciliation Operations",
     description: "Monitor and visualize the complete operational journey of every trade across all desks.",
     icon: "Network",
     accentColor: "cyan",
@@ -134,7 +134,7 @@ export const workstationConfig: Workstation[] = [
       "Operational Timeline",
       "Audit Exploration"
     ],
-    buttonLabel: "Open Trade Lifecycle Manager",
+    buttonLabel: "Open Reconciliation Operations",
     navigationRoute: "TLM"
   },
   {

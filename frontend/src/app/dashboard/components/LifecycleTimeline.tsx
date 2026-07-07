@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircle } from './Icons';
+import { Card } from '../../../components/ui/Card';
 
 interface LifecycleTimelineProps {
   hoveredStage: string | null;
@@ -7,54 +8,59 @@ interface LifecycleTimelineProps {
 
 export const LifecycleTimeline: React.FC<LifecycleTimelineProps> = ({ hoveredStage }) => {
   const stages = [
-    { id: 'booking', label: 'Trade Booking' },
-    { id: 'mo', label: 'Middle Office' },
-    { id: 'confirmation', label: 'Confirmation' },
-    { id: 'settlement', label: 'Settlement' },
-    { id: 'tlm', label: 'Trade Lifecycle Manager' },
-    { id: 'recon', label: 'Reconciliation' },
-    { id: 'completed', label: 'Completed' },
+    { id: 'booking', label: 'Trade Booking', department: 'Front Office' },
+    { id: 'mo', label: 'Trade Validation', department: 'Middle Office' },
+    { id: 'confirmation', label: 'Confirmation', department: 'Back Office' },
+    { id: 'settlement', label: 'Settlement', department: 'Back Office' },
+    { id: 'tlm', label: 'Reconciliation Operations', department: 'Back Office' },
+    { id: 'completed', label: 'Completed', department: '' },
   ];
 
   return (
-    <div className="bg-[#0f172a] border border-[#1e293b] rounded-lg p-6 shadow-sm mb-8 overflow-x-auto">
-      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Trade Lifecycle Workflow</h3>
-      
-      <div className="flex items-center justify-between min-w-[800px]">
+    <Card className="mb-8 overflow-x-auto">
+      <h3 className="text-caption text-[var(--color-text-secondary)] uppercase tracking-wider mb-8">Trade Lifecycle Workflow</h3>
+
+      <div className="flex items-start justify-between min-w-[800px] px-4 pb-4">
         {stages.map((stage, index) => {
           const isHovered = hoveredStage === stage.id;
           const isCompleted = stage.id === 'completed';
-          
+
           return (
             <React.Fragment key={stage.id}>
-              <div className="flex flex-col items-center gap-3 relative z-10 w-24">
+              <div className="flex flex-col items-center gap-4 relative z-10 w-28 group cursor-default pt-2">
                 <div className={`
-                  w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-150
-                  ${isHovered 
-                    ? 'border-blue-500 bg-blue-500/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+                  w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                  ${isHovered
+                    ? 'border-[var(--color-secondary)] bg-yellow-50 text-[var(--color-primary)] shadow-md scale-110'
                     : isCompleted
-                      ? 'border-green-500/50 bg-green-500/10 text-green-500'
-                      : 'border-[#334155] bg-[#1e293b] text-slate-400'
+                      ? 'border-[var(--color-success)] bg-green-50 text-[var(--color-success)]'
+                      : 'border-[var(--color-border)] bg-slate-50 text-[var(--color-text-muted)] group-hover:border-[var(--color-secondary)] group-hover:text-[var(--color-primary)]'
                   }
                 `}>
-                  {isCompleted ? <CheckCircle className="w-5 h-5" /> : <span className="text-sm font-semibold">{index + 1}</span>}
+                  {isCompleted ? <CheckCircle className="w-6 h-6" /> : <span className="text-base font-bold">{index + 1}</span>}
                 </div>
-                <span className={`text-xs font-medium text-center leading-tight transition-colors duration-150
-                  ${isHovered ? 'text-blue-400' : 'text-slate-400'}
-                `}>
-                  {stage.label}
-                </span>
+                <div className="flex flex-col items-center gap-1">
+                  <span className={`text-sm font-medium text-center leading-tight transition-colors duration-300
+                    ${isHovered ? 'text-[var(--color-primary)] font-semibold' : 'text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]'}
+                  `}>
+                    {stage.label}
+                  </span>
+                  {stage.department && (
+                    <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-center">
+                      {stage.department}
+                    </span>
+                  )}
+                </div>
               </div>
-              
+
               {index < stages.length - 1 && (
-                <div className="flex-1 h-[2px] bg-[#334155] relative -top-4 mx-2">
-                  {/* Highlight the connection if hovered? (Optional) */}
+                <div className={`flex-1 h-0.5 relative top-8 mx-1 transition-colors duration-300 ${isHovered ? 'bg-[var(--color-secondary)]' : 'bg-[var(--color-border)]'}`}>
                 </div>
               )}
             </React.Fragment>
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 };
