@@ -50,10 +50,13 @@ const TradeSchema = new mongoose.Schema({
       // No counterparty mismatch at confirmation level
     },
     settlement: {
+      ssiId: String,
+      ssiRefId: String,            // MongoDB _id → SSIReference (truth record)
       amount: Number,
       valueDate: Date,
       currency: String,
       counterparty: String,
+      counterpartyName: String,
       beneficiaryName: String,
       beneficiaryBank: String,
       beneficiaryBIC: String,
@@ -61,11 +64,23 @@ const TradeSchema = new mongoose.Schema({
       accountType: String,
       settlementMethod: String,
       correspondentBank: String,
+      intermediaryBank: String,
+      intermediaryBIC: String,
+      intermediaryAccount: String,
       paymentReference: String,
       settlementDate: Date,
-      settlementType: String
+      settlementType: String,
+      alertCode: String,
+      alertAcronym: String,
+      country: String,
+      field72: String,
+      abaRoutingNumber: String
     }
   },
+
+  // SSI reference traceability — links snapshots back to master SSI records
+  truthSSIRefId: { type: String, default: null },
+  presentedSSIRefId: { type: String, default: null },
 
   booking: {
     amount: Number,
@@ -75,6 +90,7 @@ const TradeSchema = new mongoose.Schema({
   },
 
   settlementDetails: {
+    ssiRefId: String,              // MongoDB _id → SSIReference (presented record)
     beneficiaryName: String,
     beneficiaryBank: String,
     beneficiaryBIC: String,
@@ -83,9 +99,18 @@ const TradeSchema = new mongoose.Schema({
     currency: String,
     settlementMethod: String,
     correspondentBank: String,
+    intermediaryBank: String,
+    intermediaryBIC: String,
+    intermediaryAccount: String,
     paymentReference: String,
     settlementDate: Date,
-    settlementType: String
+    settlementType: String,
+    counterpartyName: String,
+    alertCode: String,
+    alertAcronym: String,
+    country: String,
+    field72: String,
+    abaRoutingNumber: String
   },
 
   // ======================================

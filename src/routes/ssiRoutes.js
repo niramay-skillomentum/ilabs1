@@ -1,51 +1,74 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
-const { CPTY_SSIS, ENTITY_SSIS } = require("../engine/tradeGenerator");
+const ssiRepository = require("../engine/ssiRepository");
 
-// Legacy single-ID search (backward compatibility)
-router.get("/search", authenticateToken, (req, res) => {
+// ======================================
+// SSI ROUTES
+// All SSI lookups query the MongoDB SSIReference collection.
+// The SSI Database is a Static Data system — it ONLY returns
+// records imported from the SSI Reference Excel file.
+// No in-memory fallback. No fake data.
+// ======================================
+
+// Single-ID search (for traceability lookups from trade details)
+router.get("/search", authenticateToken, async (req, res) => {
   const ssiId = req.query.id;
   if (!ssiId) {
     return res.status(400).json({ success: false, error: "SSI ID is required" });
   }
 
-  const allDicts = [CPTY_SSIS, ENTITY_SSIS];
-  
-  for (const dict of allDicts) {
-    for (const key in dict) {
-      const ssiList = dict[key];
-      const found = ssiList.find(ssi => ssi.ssiId === ssiId);
-      if (found) {
-        return res.json({ success: true, ssi: found });
-      }
+  try {
+    const ssi = await ssiRepository.findByRefId(ssiId);
+    if (ssi) {
+      const snapshot = ssiRepository.createSnapshot(ssi);
+      return res.json({ success: true, ssi: snapshot });
     }
+  } catch (err) {
+    console.error("[SSI Search] Error:", err.message);
   }
 
-  return res.status(404).json({ success: false, error: "SSI not found in database" });
+  return res.status(404).json({ success: false, error: "SSI not found in reference database" });
 });
 
 // Dual-code search (Alert Code + Acronym Code)
-router.get("/search-codes", authenticateToken, (req, res) => {
+// This is the primary search used by the SSI Database page.
+router.get("/search-codes", authenticateToken, async (req, res) => {
   const { alertCode, acronymCode } = req.query;
   
   if (!alertCode || !acronymCode) {
     return res.status(400).json({ success: false, error: "Both Alert Code and Acronym Code are required" });
   }
 
-  const allDicts = [CPTY_SSIS, ENTITY_SSIS];
-  
-  for (const dict of allDicts) {
-    for (const key in dict) {
-      const ssiList = dict[key];
-      const found = ssiList.find(ssi => ssi.alertCode === alertCode.trim() && ssi.acronymCode === acronymCode.trim());
-      if (found) {
-        return res.json({ success: true, ssi: found });
-      }
+  try {
+    const ssi = await ssiRepository.findByAlertCodes(alertCode, acronymCode);
+    if (ssi) {
+      const snapshot = ssiRepository.createSnapshot(ssi);
+      return res.json({ success: true, ssi: snapshot });
     }
+  } catch (err) {
+    console.error("[SSI Search-Codes] Error:", err.message);
   }
 
-  return res.status(404).json({ success: false, error: "No SSI found matching both codes. Please verify the Alert Code and Acronym Code." });
+  return res.status(404).json({ 
+    success: false, 
+    error: "No SSI found matching both codes. Please verify the Alert Code and Acronym Code from the counterparty's confirmation." 
+  });
+});
+
+// Reference data traceability lookup
+// Returns the master SSI record for a given MongoDB reference ID
+router.get("/reference/:refId", authenticateToken, async (req, res) => {
+  try {
+    const ssi = await ssiRepository.findByRefId(req.params.refId);
+    if (!ssi) {
+      return res.status(404).json({ success: false, error: "SSI reference not found" });
+    }
+    const snapshot = ssiRepository.createSnapshot(ssi);
+    return res.json({ success: true, ssi: snapshot });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 module.exports = router;

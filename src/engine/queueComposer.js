@@ -62,6 +62,11 @@ function isBreakTrade(trade, desk) {
     return truthEngine.getConfirmationMismatches(trade).length > 0;
   }
 
+  if (desk === "SETTLEMENT") {
+    const truthEngine = require("./truthEngine");
+    return truthEngine.getSettlementMismatches(trade).length > 0;
+  }
+
   const moTruth = trade.truths?.mo;
   if (!moTruth || !trade.booking) return false;
   return (
@@ -209,7 +214,7 @@ class QueueComposer {
     if (remainingClean > 0 || remainingBreaks > 0) {
       console.log(`🔧 Generating: ${remainingClean} clean + ${remainingBreaks} break`);
 
-      const generated = tradeGenerator.generateTrades(remainingClean, remainingBreaks, desk, settlementInitialState);
+      const generated = await tradeGenerator.generateTrades(remainingClean, remainingBreaks, desk, settlementInitialState);
       const saved = await tradeGenerator.saveGeneratedTrades(generated);
 
       const genClean = saved.filter(t => !isBreakTrade(t, desk));
@@ -229,7 +234,7 @@ class QueueComposer {
       const shortage = TOTAL_TRADES - queue.length;
       console.log(`⚠️ Queue short by ${shortage}. Generating filler trades.`);
 
-      const filler = tradeGenerator.generateTrades(
+      const filler = await tradeGenerator.generateTrades(
         Math.ceil(shortage * 0.6),
         Math.floor(shortage * 0.4),
         desk,

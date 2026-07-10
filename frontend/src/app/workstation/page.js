@@ -728,65 +728,125 @@ function WorkstationComponent() {
         </div>
       )}
 
-      {popupState.type === "ssi" && popupState.trade && (
-        <div className="popup" style={{display: 'block', width: '600px'}}>
-          <h3 style={{marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px'}}>
-            Standard Settlement Instructions 
-            {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
-              <button onClick={handleSendToSystemAmendment} style={{marginLeft: "15px", padding: "4px 8px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer"}}>Send to System for Amendment</button>
-            )}
-          </h3>
-          <div style={{fontFamily: 'monospace', fontSize: '13px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', color: '#334155'}}>
-            {!isEditingSSI ? (
-              <>
-                <div style={{marginBottom: '16px'}}>
-                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Currency & Method</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Currency:</strong> {popupState.trade.currency}</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Settlement Method:</strong> {popupState.trade.settlementDetails?.settlementMethod}</div>
-                </div>
-                <div style={{marginBottom: '16px'}}>
-                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Beneficiary Customer</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Name:</strong> {popupState.trade.settlementDetails?.beneficiaryName}</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Account Number:</strong> {popupState.trade.settlementDetails?.accountNumber}</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Account Type:</strong> {popupState.trade.settlementDetails?.accountType}</div>
-                </div>
-                <div style={{marginBottom: '16px'}}>
-                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Beneficiary Institution</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Bank Name:</strong> {popupState.trade.settlementDetails?.beneficiaryBank}</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>BIC / SWIFT:</strong> {popupState.trade.settlementDetails?.beneficiaryBIC}</div>
-                </div>
-                <div style={{marginBottom: '16px'}}>
-                  <div style={{color: '#64748b', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px'}}>Intermediary / Correspondent</div>
-                  <div><strong style={{display: 'inline-block', width: '150px', color: '#0f172a'}}>Correspondent Bank:</strong> {popupState.trade.settlementDetails?.correspondentBank}</div>
-                </div>
-              </>
-            ) : (
-              <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
-                {["beneficiaryName", "accountNumber", "accountType", "beneficiaryBank", "beneficiaryBIC", "settlementMethod", "correspondentBank"].map(field => (
-                  <div key={field} style={{display: "flex", alignItems: "center"}}>
-                    <label style={{width: "180px", fontWeight: "bold"}}>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
-                    <input 
-                      style={{flex: 1, padding: "6px", border: "1px solid #cbd5e1", borderRadius: "4px"}}
-                      value={ssiFormData[field] || ""}
-                      onChange={e => setSsiFormData({...ssiFormData, [field]: e.target.value})}
-                    />
-                  </div>
-                ))}
+      {popupState.type === "ssi" && popupState.trade && (() => {
+        const sd = popupState.trade.settlementDetails || {};
+        const isCorrespondent = !!(sd.intermediaryBank || sd.intermediaryBIC || sd.intermediaryAccount);
+        const settlType = isCorrespondent ? "CORRESPONDENT" : "DIRECT";
+        const LINE = "═".repeat(62);
+        const DASH = "─".repeat(62);
+
+        return (
+          <div className="popup" style={{display: 'block', width: '680px', maxHeight: '90vh', overflowY: 'auto', padding: '0'}}>
+            <div style={{padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isCorrespondent ? '#1E3A5F' : '#0B1F3A'}}>
+              <h3 style={{margin: 0, color: 'white', fontSize: '15px'}}>
+                Standard Settlement Instruction ({settlType})
+              </h3>
+              <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
+                  <button onClick={handleSendToSystemAmendment} style={{padding: "4px 10px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer", fontWeight: 600}}>Send to System for Amendment</button>
+                )}
+                <span style={{background: isCorrespondent ? '#f59e0b' : '#22c55e', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700}}>
+                  {settlType}
+                </span>
               </div>
-            )}
+            </div>
+
+            <div style={{fontFamily: "'Consolas', 'Courier New', monospace", fontSize: '13px', backgroundColor: '#fdfdfd', padding: '20px 24px', color: '#1e293b', lineHeight: '1.7'}}>
+              {!isEditingSSI ? (
+                <>
+                  {/* Header */}
+                  <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
+                  <div style={{fontWeight: 'bold', fontSize: '14px', padding: '4px 0', background: '#f1f5f9', textAlign: 'center'}}>
+                    STANDARD SETTLEMENT INSTRUCTION ({settlType} SETTLEMENT)
+                  </div>
+                  <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
+
+                  {/* Currency & Asset Class */}
+                  <div style={{padding: '8px 0'}}>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Currency:</strong> {sd.currency || popupState.trade.currency}</div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Asset Class:</strong> {popupState.trade.product || 'FX / Cash'}</div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Settlement Method:</strong> {sd.settlementMethod || 'SWIFT'}</div>
+                    {sd.counterpartyName && (
+                      <div><strong style={{display: 'inline-block', width: '200px'}}>Counterparty:</strong> {sd.counterpartyName}</div>
+                    )}
+                  </div>
+                  <div style={{color: '#cbd5e1', letterSpacing: '1px'}}>{DASH}</div>
+
+                  {/* Agent Bank Section (Correspondent only) */}
+                  {isCorrespondent && (
+                    <>
+                      <div style={{padding: '8px 0'}}>
+                        <div style={{color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px'}}>▎ Agent / Intermediary Bank</div>
+                        <div><strong style={{display: 'inline-block', width: '200px'}}>Agent Bank (Inter):</strong> <span style={{color: '#0f172a'}}>{sd.intermediaryBIC || ''} ({sd.intermediaryBank || sd.correspondentBank || ''})</span></div>
+                        <div><strong style={{display: 'inline-block', width: '200px'}}>Account at Agent:</strong> <span style={{color: '#0f172a'}}>{sd.intermediaryAccount || ''}</span></div>
+                      </div>
+                      <div style={{color: '#cbd5e1', letterSpacing: '1px'}}>{DASH}</div>
+                    </>
+                  )}
+
+                  {/* Beneficiary Bank Section */}
+                  <div style={{padding: '8px 0'}}>
+                    <div style={{color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px'}}>▎ Beneficiary Bank</div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Beneficiary Bank:</strong> <span style={{color: '#0f172a'}}>{sd.beneficiaryBIC || ''} ({sd.beneficiaryBank || ''})</span></div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Account Number/IBAN:</strong> <span style={{color: '#0f172a'}}>{sd.accountNumber || ''}</span></div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Beneficiary Name:</strong> <span style={{color: '#0f172a'}}>{sd.beneficiaryName || ''}</span></div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Account Type:</strong> <span style={{color: '#0f172a'}}>{sd.accountType || ''}</span></div>
+                    {sd.country && (
+                      <div><strong style={{display: 'inline-block', width: '200px'}}>Country:</strong> <span style={{color: '#0f172a'}}>{sd.country}</span></div>
+                    )}
+                  </div>
+                  <div style={{color: '#cbd5e1', letterSpacing: '1px'}}>{DASH}</div>
+
+                  {/* Notes */}
+                  <div style={{padding: '8px 0'}}>
+                    <div style={{color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px'}}>▎ Notes</div>
+                    <div style={{color: '#475569'}}>
+                      {isCorrespondent
+                        ? `Route via ${sd.intermediaryBank || sd.correspondentBank || 'Agent Bank'}. ${sd.intermediaryBank || 'Agent'} will credit ${sd.beneficiaryBank || 'Beneficiary Bank'}'s ledger before final credit.`
+                        : `Direct settlement. Funds credit the beneficiary's account directly at ${sd.beneficiaryBank || 'the beneficiary bank'}.`
+                      }
+                    </div>
+                    {sd.field72 && (
+                      <div style={{marginTop: '4px', color: '#64748b', fontSize: '12px'}}>Field 72: {sd.field72}</div>
+                    )}
+                  </div>
+                  <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
+
+                  {/* Ref IDs */}
+                  {popupState.trade.truthSSIRefId && (
+                    <div style={{marginTop: '8px', fontSize: '11px', color: '#94a3b8'}}>
+                      Truth Ref: {popupState.trade.truthSSIRefId} | Presented Ref: {popupState.trade.presentedSSIRefId}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
+                  {["beneficiaryName", "accountNumber", "accountType", "beneficiaryBank", "beneficiaryBIC", "settlementMethod", "correspondentBank", "intermediaryBank", "intermediaryBIC", "intermediaryAccount"].map(field => (
+                    <div key={field} style={{display: "flex", alignItems: "center"}}>
+                      <label style={{width: "180px", fontWeight: "bold"}}>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+                      <input 
+                        style={{flex: 1, padding: "6px", border: "1px solid #cbd5e1", borderRadius: "4px"}}
+                        value={ssiFormData[field] || ""}
+                        onChange={e => setSsiFormData({...ssiFormData, [field]: e.target.value})}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{display: 'flex', justifyContent: 'flex-end', padding: '12px 24px', gap: '10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc'}}>
+              {!isEditingSSI ? (
+                <button className="btn secondary" onClick={() => setPopupState({type: null})}>Close</button>
+              ) : (
+                <>
+                  <button className="btn secondary" onClick={() => setIsEditingSSI(false)}>Cancel Edit</button>
+                  <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
+                </>
+              )}
+            </div>
           </div>
-          <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '20px', gap: '10px'}}>
-            {!isEditingSSI ? (
-              <button className="btn secondary" onClick={() => setPopupState({type: null})}>Close</button>
-            ) : (
-              <>
-                <button className="btn secondary" onClick={() => setIsEditingSSI(false)}>Cancel Edit</button>
-                <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }

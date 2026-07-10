@@ -9,6 +9,7 @@
 const Trade = require("../models/Trade");
 const AuditLog = require("../models/AuditLog");
 const ageCalculator = require("./ageCalculator");
+const ssiRepository = require("./ssiRepository");
 
 // ============================
 // REFERENCE DATA
@@ -405,9 +406,10 @@ function generateXmlAudit(trade) {
  * @param {boolean} hasConfirmationBreak - Whether to inject a confirmation-level break
  * @param {string} settlementInitialState - Configured initial state for settlement
  * @param {boolean} hasSettlementBreak - Whether to inject a settlement-level break
+ * @param {Object|null} ssiPairData - Pre-selected SSI pair from ssiRepository (null = use in-memory fallback)
  * @returns {Object} Trade object (not yet saved to DB)
  */
-function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false, settlementInitialState = "SETTLEMENT_PENDING", hasSettlementBreak = false) {
+function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false, settlementInitialState = "SETTLEMENT_PENDING", hasSettlementBreak = false, ssiPairData = null) {
   const now = new Date();
   const tradeDate = new Date(now);
 
@@ -418,8 +420,11 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   const maxDaysAgo = desk === "CONFIRMATION" ? 2 : 1;
   tradeDate.setDate(tradeDate.getDate() - Math.floor(Math.random() * (maxDaysAgo + 1)));
 
-  const currency = pick(CURRENCIES);
-  const product = pick(PRODUCTS);
+  // When reference data is available, the SSI pair carries the resolved
+  // currency and counterparty from the chain: Product → Security → Currency → Counterparty → SSI.
+  // Otherwise, fall back to random picks from hardcoded arrays.
+  const currency = (ssiPairData && ssiPairData.currency) ? ssiPairData.currency : pick(CURRENCIES);
+  const product = (ssiPairData && ssiPairData.product) ? ssiPairData.product : pick(PRODUCTS);
   const direction = pick(DIRECTIONS);
   const entity = pick(ENTITIES);
   const foRegion = pick(REGIONS);
@@ -446,7 +451,8 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   valueDate.setDate(tradeDate.getDate() + 2);
 
   const baseAmount = generateRealisticAmount(currency);
-  const initialCounterparty = pick(COUNTERPARTIES);
+  // Use counterparty from reference data chain when available
+  const initialCounterparty = (ssiPairData && ssiPairData.counterpartyName) ? ssiPairData.counterpartyName : pick(COUNTERPARTIES);
 
   // 1. UNIVERSAL TRUTH (The Absolute Correct Economics)
   const universalTruth = {
@@ -528,47 +534,94 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   }
 
   // 4. SETTLEMENT DETAILS GENERATION
-  const ssiList = direction === "BUY" ? CPTY_SSIS[initialCounterparty] : ENTITY_SSIS[entity];
-  const selectedSSI = pick(ssiList);
-  
-  const sBeneficiaryName = selectedSSI.beneficiaryName;
-  const sBeneficiaryBank = selectedSSI.beneficiaryBank;
-  const sBeneficiaryBIC = selectedSSI.beneficiaryBIC;
-  const sAccountNumber = selectedSSI.accountNumber;
-  const sAccountType = selectedSSI.accountType;
-  const sSettlementMethod = selectedSSI.settlementMethod;
-  const sCorrespondentBank = selectedSSI.correspondentBank;
+  // Uses reference data from MongoDB when available (ssiPairData),
+  // falls back to in-memory dictionaries when MongoDB is unavailable.
   const sPaymentReference = "TRD" + Math.floor(Math.random() * 900000) + 100000;
   const sSettlementDate = universalTruth.valueDate;
-  const sSettlementType = derivedSettlementType;
 
-  let bookingBeneficiaryName = sBeneficiaryName;
-  let bookingBeneficiaryBank = sBeneficiaryBank;
-  let bookingBeneficiaryBIC = sBeneficiaryBIC;
-  let bookingAccountNumber = sAccountNumber;
-  let bookingAccountType = sAccountType;
-  let bookingSettlementCurrency = universalTruth.currency;
-  let bookingSettlementMethod = sSettlementMethod;
-  let bookingCorrespondentBank = sCorrespondentBank;
-  let bookingPaymentReference = sPaymentReference;
-  let bookingSettlementDate = bookingValueDate;
+  let truthSettlement;
+  let presentedSettlement;
+  let truthSSIRefId = null;
+  let presentedSSIRefId = null;
 
-  if (hasSettlementBreak) {
-    const breakFields = ["beneficiaryName", "beneficiaryBank", "beneficiaryBIC", "accountNumber", "accountType", "currency", "settlementMethod", "correspondentBank", "paymentReference", "settlementDate"];
-    const field = pick(breakFields);
-    if (field === "beneficiaryName") bookingBeneficiaryName = "WRONG NAME";
-    else if (field === "beneficiaryBank") bookingBeneficiaryBank = "WRONG BANK";
-    else if (field === "beneficiaryBIC") bookingBeneficiaryBIC = "WRONGBIC";
-    else if (field === "accountNumber") bookingAccountNumber = "99999999";
-    else if (field === "accountType") bookingAccountType = "Vostro";
-    else if (field === "currency") bookingSettlementCurrency = pick(CURRENCIES.filter(c => c !== universalTruth.currency));
-    else if (field === "settlementMethod") bookingSettlementMethod = "CHAPS";
-    else if (field === "correspondentBank") bookingCorrespondentBank = "WRONG CORRESPONDENT";
-    else if (field === "paymentReference") bookingPaymentReference = "WRONG_REF";
-    else if (field === "settlementDate") {
-      const d = new Date(bookingSettlementDate);
-      d.setDate(d.getDate() + 1);
-      bookingSettlementDate = d;
+  if (ssiPairData) {
+    // ── REFERENCE DATA PATH (MongoDB-backed) ──
+    // Both truthSSI and presentedSSI are complete, valid, immutable snapshots.
+    // For break trades: they are two DIFFERENT valid SSI records.
+    // For clean trades: they are the SAME SSI record.
+    // Neither is ever modified. Ever.
+    truthSSIRefId = ssiPairData.truthSSIRefId;
+    presentedSSIRefId = ssiPairData.presentedSSIRefId;
+
+    truthSettlement = {
+      ...ssiPairData.truthSSI,
+      ssiRefId: ssiPairData.truthSSIRefId,
+      amount: universalTruth.amount,
+      valueDate: universalTruth.valueDate,
+      currency: universalTruth.currency,
+      counterparty: universalTruth.counterparty,
+      paymentReference: sPaymentReference,
+      settlementDate: sSettlementDate,
+      settlementType: ssiPairData.settlementType || derivedSettlementType
+    };
+
+    presentedSettlement = {
+      ...ssiPairData.presentedSSI,
+      ssiRefId: ssiPairData.presentedSSIRefId,
+      currency: universalTruth.currency,
+      paymentReference: sPaymentReference,
+      settlementDate: bookingValueDate,
+      settlementType: ssiPairData.settlementType || derivedSettlementType
+    };
+
+    console.log(`[TradeGen] SSI from reference data: truth=${truthSSIRefId}, presented=${presentedSSIRefId}, break=${ssiPairData.breakScenario || 'NONE'}`);
+  } else {
+    // ── IN-MEMORY FALLBACK PATH (no MongoDB) ──
+    // Uses the existing hardcoded SSI dictionaries for offline/dev mode.
+    const ssiList = direction === "BUY" ? CPTY_SSIS[initialCounterparty] : ENTITY_SSIS[entity];
+    const selectedSSI = pick(ssiList);
+
+    truthSettlement = {
+      ssiId: selectedSSI.ssiId,
+      amount: universalTruth.amount,
+      valueDate: universalTruth.valueDate,
+      currency: universalTruth.currency,
+      counterparty: universalTruth.counterparty,
+      beneficiaryName: selectedSSI.beneficiaryName,
+      beneficiaryBank: selectedSSI.beneficiaryBank,
+      beneficiaryBIC: selectedSSI.beneficiaryBIC,
+      accountNumber: selectedSSI.accountNumber,
+      accountType: selectedSSI.accountType,
+      settlementMethod: selectedSSI.settlementMethod,
+      correspondentBank: selectedSSI.correspondentBank,
+      paymentReference: sPaymentReference,
+      settlementDate: sSettlementDate,
+      settlementType: derivedSettlementType
+    };
+
+    if (hasSettlementBreak && ssiList.length > 1) {
+      // Break: select a different SSI from the same list
+      const altSSI = pick(ssiList.filter(s => s.ssiId !== selectedSSI.ssiId));
+      presentedSettlement = {
+        ssiId: altSSI.ssiId,
+        beneficiaryName: altSSI.beneficiaryName,
+        beneficiaryBank: altSSI.beneficiaryBank,
+        beneficiaryBIC: altSSI.beneficiaryBIC,
+        accountNumber: altSSI.accountNumber,
+        accountType: altSSI.accountType,
+        currency: universalTruth.currency,
+        settlementMethod: altSSI.settlementMethod,
+        correspondentBank: altSSI.correspondentBank,
+        paymentReference: sPaymentReference,
+        settlementDate: bookingValueDate,
+        settlementType: derivedSettlementType
+      };
+    } else {
+      // Clean: same SSI for both
+      presentedSettlement = {
+        ...truthSettlement,
+        settlementDate: bookingValueDate
+      };
     }
   }
 
@@ -585,6 +638,10 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
     amount: bookingAmount,
     currency: bookingCurrency,
     counterparty: bookingCounterparty,
+
+    // SSI reference traceability
+    truthSSIRefId,
+    presentedSSIRefId,
 
     truths: {
       universal: {
@@ -604,38 +661,10 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
         valueDate: confirmTruthValueDate,
         currency: confirmTruthCurrency
       },
-      settlement: {
-        ssiId: selectedSSI.ssiId,
-        amount: universalTruth.amount,
-        valueDate: universalTruth.valueDate,
-        currency: universalTruth.currency,
-        counterparty: universalTruth.counterparty,
-        beneficiaryName: sBeneficiaryName,
-        beneficiaryBank: sBeneficiaryBank,
-        beneficiaryBIC: sBeneficiaryBIC,
-        accountNumber: sAccountNumber,
-        accountType: sAccountType,
-        settlementMethod: sSettlementMethod,
-        correspondentBank: sCorrespondentBank,
-        paymentReference: sPaymentReference,
-        settlementDate: sSettlementDate,
-        settlementType: sSettlementType
-      }
+      settlement: truthSettlement
     },
 
-    settlementDetails: {
-      beneficiaryName: bookingBeneficiaryName,
-      beneficiaryBank: bookingBeneficiaryBank,
-      beneficiaryBIC: bookingBeneficiaryBIC,
-      accountNumber: bookingAccountNumber,
-      accountType: bookingAccountType,
-      currency: bookingSettlementCurrency,
-      settlementMethod: bookingSettlementMethod,
-      correspondentBank: bookingCorrespondentBank,
-      paymentReference: bookingPaymentReference,
-      settlementDate: bookingSettlementDate,
-      settlementType: sSettlementType
-    },
+    settlementDetails: presentedSettlement,
 
     booking: {
       amount: bookingAmount,
@@ -692,12 +721,28 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
  * @param {string} settlementInitialState - Configured initial state for settlement
  * @returns {Array} Array of trade objects with XML audits attached
  */
-function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "SETTLEMENT_PENDING") {
+async function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "SETTLEMENT_PENDING") {
   const trades = [];
 
   let defaultCleanStatus = "MO_PENDING";
   if (desk === "CONFIRMATION") defaultCleanStatus = "CONFIRMATION_PENDING";
   if (desk === "SETTLEMENT") defaultCleanStatus = settlementInitialState;
+
+  // ── Pre-fetch SSI pairs from reference data (if available) ──
+  // This batches the MongoDB calls instead of making one per trade.
+  const useRefData = await ssiRepository.isReferenceDataAvailable();
+  let ssiPairs = [];
+
+  if (useRefData) {
+    console.log(`[TradeGen] Using reference data for SSI generation`);
+    const totalTrades = cleanCount + breakCount;
+    ssiPairs = await _prefetchSSIPairs(totalTrades, cleanCount, breakCount);
+    console.log(`[TradeGen] Pre-fetched ${ssiPairs.length} SSI pairs (${ssiPairs.filter(p => p.breakScenario).length} breaks)`);
+  } else {
+    console.log(`[TradeGen] MongoDB unavailable — using in-memory SSI fallback`);
+  }
+
+  let ssiIndex = 0;
 
   // ── Generate CLEAN trades ──
   // For MO desk, some clean trades might have a hidden confirmation break
@@ -706,7 +751,12 @@ function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "
     if (desk === "MO") {
       hasConfirmationBreak = Math.random() < CONFIRMATION_BREAK_RATIO;
     }
-    const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak, settlementInitialState);
+
+    // Get SSI pair (clean — no break)
+    const ssiPairData = ssiPairs[ssiIndex] || null;
+    if (ssiPairData) ssiIndex++;
+
+    const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak, settlementInitialState, false, ssiPairData);
 
     // Generate XML audit (story: captured → validated → routed)
     const { xml } = generateXmlAudit(trade);
@@ -738,7 +788,11 @@ function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "
       status = settlementInitialState;
     }
 
-    const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak, settlementInitialState, hasSettlementBreak);
+    // Get SSI pair (break or clean depending on desk)
+    const ssiPairData = ssiPairs[ssiIndex] || null;
+    if (ssiPairData) ssiIndex++;
+
+    const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak, settlementInitialState, hasSettlementBreak, ssiPairData);
 
     // Generate XML audit
     const { xml } = generateXmlAudit(trade);
@@ -748,6 +802,119 @@ function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "
   }
 
   return trades;
+}
+
+/**
+ * Pre-fetch SSI pairs from reference data for a batch of trades.
+ *
+ * Implements the reference data chain:
+ *   Product → Security → Currency → Counterparty → SSI
+ *
+ * Maintains the natural DIRECT/CORRESPONDENT ratio from the SSI reference
+ * data (e.g. ~78% CORRESPONDENT, ~22% DIRECT based on agentBank presence).
+ *
+ * @param {number} totalCount - Total trades to generate
+ * @param {number} cleanCount - Number of clean trades
+ * @param {number} breakCount - Number of break trades
+ * @returns {Promise<Object[]>} Array of SSI pair objects
+ */
+async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
+  const pairs = [];
+
+  // Step 1: Get available currencies from both Security and SSI reference data
+  const ssiCurrencies = await ssiRepository.getAvailableCurrencies();
+  const secCurrencies = await ssiRepository.getSecurityCurrencies();
+  if (ssiCurrencies.length === 0) return pairs;
+
+  // Currencies that exist in BOTH security data and SSI reference data
+  const sharedCurrencies = ssiCurrencies.filter(c => secCurrencies.includes(c));
+  // If no overlap, use SSI currencies directly (graceful degradation)
+  const availableCurrencies = sharedCurrencies.length > 0 ? sharedCurrencies : ssiCurrencies;
+
+  // Step 2: Get the natural CORRESPONDENT/DIRECT ratio from the database
+  const ratioData = await ssiRepository.getSettlementTypeRatio();
+  const correspondentRatio = ratioData.ratio; // ~0.78
+
+  // Compute how many of each type we need for clean and break trades
+  const cleanCorrespondent = Math.round(cleanCount * correspondentRatio);
+  const cleanDirect = cleanCount - cleanCorrespondent;
+  const breakCorrespondent = Math.round(breakCount * correspondentRatio);
+  const breakDirect = breakCount - breakCorrespondent;
+
+  console.log(`[TradeGen] Settlement type ratio: ${(correspondentRatio * 100).toFixed(0)}% CORRESPONDENT / ${((1 - correspondentRatio) * 100).toFixed(0)}% DIRECT`);
+  console.log(`[TradeGen] Distribution: Clean(CORR:${cleanCorrespondent} DIR:${cleanDirect}) Break(CORR:${breakCorrespondent} DIR:${breakDirect})`);
+
+  // For clean trades: select SSI pair with no break, maintaining ratio
+  for (let i = 0; i < cleanCorrespondent; i++) {
+    const enriched = await _resolveReferenceChain(availableCurrencies, false, "CORRESPONDENT");
+    if (enriched) pairs.push(enriched);
+  }
+  for (let i = 0; i < cleanDirect; i++) {
+    const enriched = await _resolveReferenceChain(availableCurrencies, false, "DIRECT");
+    if (enriched) pairs.push(enriched);
+  }
+
+  // For break trades: select SSI pair with break (two different valid records)
+  for (let i = 0; i < breakCorrespondent; i++) {
+    const enriched = await _resolveReferenceChain(availableCurrencies, true, "CORRESPONDENT");
+    if (enriched) pairs.push(enriched);
+  }
+  for (let i = 0; i < breakDirect; i++) {
+    const enriched = await _resolveReferenceChain(availableCurrencies, true, "DIRECT");
+    if (enriched) pairs.push(enriched);
+  }
+
+  return pairs;
+}
+
+/**
+ * Resolve the full reference data chain for one trade:
+ *   Product → Security → Currency → Counterparty → SSI
+ *
+ * @param {string[]} availableCurrencies - Currencies available in reference data
+ * @param {boolean} hasBreak - Whether to create a settlement break
+ * @param {string|null} preferredSettlementType - "CORRESPONDENT" or "DIRECT" (null = any)
+ * @returns {Promise<Object|null>} Enriched SSI pair with currency, counterparty, product, security
+ */
+async function _resolveReferenceChain(availableCurrencies, hasBreak, preferredSettlementType = null) {
+  // Step 1: Pick a currency from reference data
+  const currency = pick(availableCurrencies);
+
+  // Step 2: Find a security for this currency (Product → Security → Currency)
+  const security = await ssiRepository.getSecurityByCurrency(currency);
+  // Determine product from the security's characteristics
+  // (Securities in the data are primarily equities/bonds)
+  let product;
+  if (security) {
+    // Map security type to product — securities are primarily equities/bonds
+    product = pick(["Equity", "Corporate Bond", "Government Bond"]);
+  } else {
+    // No security for this currency — use an OTC product
+    product = pick(["FX Spot", "FX Forward", "Interest Rate Swap"]);
+  }
+
+  // Step 3: Find counterparties with SSI data for this currency
+  const counterparties = await ssiRepository.getCounterpartiesForCurrency(currency);
+  if (counterparties.length === 0) return null;
+
+  const counterparty = pick(counterparties);
+
+  // Step 4: Select SSI pair (with preferred settlement type filter)
+  const pair = await ssiRepository.selectSSIPair(counterparty, currency, hasBreak, preferredSettlementType);
+  if (!pair) return null;
+
+  // Enrich the pair with reference chain data
+  return {
+    ...pair,
+    currency,
+    counterpartyName: counterparty,
+    product,
+    security: security ? {
+      isin: security.isin,
+      companyName: security.companyName,
+      issuingCountry: security.issuingCountry
+    } : null
+  };
 }
 
 /**

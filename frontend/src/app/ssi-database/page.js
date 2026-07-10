@@ -89,13 +89,13 @@ function SsiDatabaseComponent() {
         <div style={{ width:"35%", borderRight:"1px solid #ddd", background:"white", display:"flex", flexDirection:"column", padding:"20px" }}>
           <h3 style={{ marginTop: 0, marginBottom: "20px", color: "#333" }}>Search Instructions</h3>
           <p style={{ fontSize: "14px", color: "#555", marginBottom: "20px" }}>
-            Enter the <strong>Alert Code</strong> (6-character alphanumeric) and <strong>Acronym Code</strong> (6-digit numeric) provided by the counterparty to retrieve standard settlement instructions.
+            Enter the <strong>Alert Code</strong> and <strong>Acronym Code</strong> provided by the counterparty to retrieve standard settlement instructions.
           </p>
           
           <div style={{ marginBottom: "12px" }}>
             <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "4px" }}>Alert Code</label>
             <input 
-              placeholder="e.g., A1B2C3"
+              placeholder="e.g., 100"
               style={{ width: "100%", boxSizing: "border-box", padding:"10px", border:"1px solid #ddd", borderRadius:"4px", color:"#333", backgroundColor:"#fff", fontFamily: "monospace", fontSize: "15px", letterSpacing: "2px" }}
               value={alertCode}
               onChange={e => setAlertCode(e.target.value.toUpperCase())}
@@ -107,10 +107,10 @@ function SsiDatabaseComponent() {
           <div style={{ marginBottom: "16px" }}>
             <label style={{ fontSize: "13px", fontWeight: "600", color: "#444", display: "block", marginBottom: "4px" }}>Acronym Code</label>
             <input 
-              placeholder="e.g., 100245"
+              placeholder="e.g., AI37"
               style={{ width: "100%", boxSizing: "border-box", padding:"10px", border:"1px solid #ddd", borderRadius:"4px", color:"#333", backgroundColor:"#fff", fontFamily: "monospace", fontSize: "15px", letterSpacing: "2px" }}
               value={acronymCode}
-              onChange={e => setAcronymCode(e.target.value.replace(/\D/g, ""))}
+              onChange={e => setAcronymCode(e.target.value.toUpperCase())}
               onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
               maxLength={6}
             />
@@ -165,54 +165,97 @@ function SsiDatabaseComponent() {
 }
 
 function SsiViewer({ ssi }) {
+  const isCorrespondent = !!(ssi.intermediaryBank || ssi.intermediaryBIC || ssi.intermediaryAccount);
+  const settlType = isCorrespondent ? "CORRESPONDENT" : "DIRECT";
+  const LINE = "═".repeat(62);
+  const DASH = "─".repeat(62);
+
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "2px solid #0B1F3A", paddingBottom: "12px" }}>
-        <h2 style={{ margin: 0, color: "#0B1F3A" }}>Standard Settlement Instruction (SSI)</h2>
+      {/* Header bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0", padding: "14px 20px", borderRadius: "8px 8px 0 0", background: isCorrespondent ? "#1E3A5F" : "#0B1F3A", color: "white" }}>
+        <h2 style={{ margin: 0, fontSize: "16px" }}>Standard Settlement Instruction ({settlType})</h2>
         <div style={{ display: "flex", gap: "8px" }}>
-          <div style={{ background: "#0B1F3A", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "14px", fontWeight: "bold" }}>
-            Alert: {ssi.alertCode}
-          </div>
-          <div style={{ background: "#1E3A5F", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "14px", fontWeight: "bold" }}>
-            Acronym: {ssi.acronymCode}
-          </div>
+          {ssi.alertCode && (
+            <div style={{ background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold" }}>
+              Alert: {ssi.alertCode}
+            </div>
+          )}
+          {ssi.alertAcronym && (
+            <div style={{ background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold" }}>
+              Acronym: {ssi.alertAcronym}
+            </div>
+          )}
+          <span style={{ background: isCorrespondent ? "#f59e0b" : "#22c55e", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 700 }}>
+            {settlType}
+          </span>
         </div>
       </div>
-      
-      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"15px", border:"1px solid #ddd", marginTop: "20px" }}>
-        <tbody>
-          <tr style={{ background:"#f9f9f9" }}>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", width:"30%", color: "#444" }}>Beneficiary Name:</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px" }}>{ssi.beneficiaryName}</td>
-          </tr>
-          <tr>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", color: "#444" }}>Beneficiary Bank:</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px" }}>{ssi.beneficiaryBank}</td>
-          </tr>
-          <tr style={{ background:"#f9f9f9" }}>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", color: "#444" }}>Beneficiary BIC (SWIFT):</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px", letterSpacing: "1px" }}>{ssi.beneficiaryBIC}</td>
-          </tr>
-          <tr>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", color: "#444" }}>Account Number:</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px", letterSpacing: "1px" }}>{ssi.accountNumber}</td>
-          </tr>
-          <tr style={{ background:"#f9f9f9" }}>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", color: "#444" }}>Account Type:</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px" }}>{ssi.accountType}</td>
-          </tr>
-          <tr>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", color: "#444" }}>Settlement Method:</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px" }}>{ssi.settlementMethod}</td>
-          </tr>
-          <tr style={{ background:"#f9f9f9" }}>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontWeight:"bold", color: "#444" }}>Correspondent Bank:</td>
-            <td style={{ padding:"12px", border:"1px solid #ddd", fontFamily: "monospace", fontSize: "16px" }}>{ssi.correspondentBank}</td>
-          </tr>
-        </tbody>
-      </table>
 
-      <div style={{ marginTop: "30px", padding: "16px", background: "#f8f9fa", borderLeft: "4px solid #17a2b8", fontSize: "13px", color: "#666" }}>
+      {/* SSI Content - monospace formatted */}
+      <div style={{ fontFamily: "'Consolas', 'Courier New', monospace", fontSize: "13px", backgroundColor: "#fdfdfd", padding: "20px 24px", border: "1px solid #ddd", borderTop: "none", borderRadius: "0 0 8px 8px", color: "#1e293b", lineHeight: "1.8" }}>
+        {/* Header */}
+        <div style={{ color: "#64748b", fontSize: "12px", letterSpacing: "1px" }}>{LINE}</div>
+        <div style={{ fontWeight: "bold", fontSize: "14px", padding: "4px 0", background: "#f1f5f9", textAlign: "center" }}>
+          STANDARD SETTLEMENT INSTRUCTION ({settlType} SETTLEMENT)
+        </div>
+        <div style={{ color: "#64748b", fontSize: "12px", letterSpacing: "1px" }}>{LINE}</div>
+
+        {/* Currency & Asset Class */}
+        <div style={{ padding: "10px 0" }}>
+          <div><strong style={{ display: "inline-block", width: "200px" }}>Currency:</strong> {ssi.currency}</div>
+          <div><strong style={{ display: "inline-block", width: "200px" }}>Asset Class:</strong> FX / Cash</div>
+          <div><strong style={{ display: "inline-block", width: "200px" }}>Settlement Method:</strong> {ssi.settlementMethod || "SWIFT"}</div>
+          {ssi.counterpartyName && (
+            <div><strong style={{ display: "inline-block", width: "200px" }}>Counterparty:</strong> {ssi.counterpartyName}</div>
+          )}
+        </div>
+        <div style={{ color: "#cbd5e1", letterSpacing: "1px" }}>{DASH}</div>
+
+        {/* Agent Bank Section (Correspondent only) */}
+        {isCorrespondent && (
+          <>
+            <div style={{ padding: "10px 0" }}>
+              <div style={{ color: "#1E3A5F", fontWeight: "bold", fontSize: "12px", textTransform: "uppercase", marginBottom: "4px", letterSpacing: "1px" }}>▎ Agent / Intermediary Bank</div>
+              <div><strong style={{ display: "inline-block", width: "200px" }}>Agent Bank (Inter):</strong> <span style={{ color: "#0f172a" }}>{ssi.intermediaryBIC || ssi.beneficiaryBIC || ""} ({ssi.intermediaryBank || ssi.correspondentBank || ""})</span></div>
+              <div><strong style={{ display: "inline-block", width: "200px" }}>Account at Agent:</strong> <span style={{ color: "#0f172a" }}>{ssi.intermediaryAccount || ""}</span></div>
+            </div>
+            <div style={{ color: "#cbd5e1", letterSpacing: "1px" }}>{DASH}</div>
+          </>
+        )}
+
+        {/* Beneficiary Bank Section */}
+        <div style={{ padding: "10px 0" }}>
+          <div style={{ color: "#1E3A5F", fontWeight: "bold", fontSize: "12px", textTransform: "uppercase", marginBottom: "4px", letterSpacing: "1px" }}>▎ Beneficiary Bank</div>
+          <div><strong style={{ display: "inline-block", width: "200px" }}>Beneficiary Bank:</strong> <span style={{ color: "#0f172a" }}>{ssi.beneficiaryBIC || ""} ({ssi.beneficiaryBank || ""})</span></div>
+          <div><strong style={{ display: "inline-block", width: "200px" }}>Account Number/IBAN:</strong> <span style={{ color: "#0f172a" }}>{ssi.accountNumber || ""}</span></div>
+          <div><strong style={{ display: "inline-block", width: "200px" }}>Beneficiary Name:</strong> <span style={{ color: "#0f172a" }}>{ssi.beneficiaryName || ""}</span></div>
+          {ssi.accountType && (
+            <div><strong style={{ display: "inline-block", width: "200px" }}>Account Type:</strong> <span style={{ color: "#0f172a" }}>{ssi.accountType}</span></div>
+          )}
+          {ssi.country && (
+            <div><strong style={{ display: "inline-block", width: "200px" }}>Country:</strong> <span style={{ color: "#0f172a" }}>{ssi.country}</span></div>
+          )}
+        </div>
+        <div style={{ color: "#cbd5e1", letterSpacing: "1px" }}>{DASH}</div>
+
+        {/* Notes */}
+        <div style={{ padding: "10px 0" }}>
+          <div style={{ color: "#1E3A5F", fontWeight: "bold", fontSize: "12px", textTransform: "uppercase", marginBottom: "4px", letterSpacing: "1px" }}>▎ Notes</div>
+          <div style={{ color: "#475569" }}>
+            {isCorrespondent
+              ? `Route via ${ssi.intermediaryBank || ssi.correspondentBank || "Agent Bank"}. ${ssi.intermediaryBank || "Agent"} will credit ${ssi.beneficiaryBank || "Beneficiary Bank"}'s ledger before final credit.`
+              : `Direct settlement. Funds credit the beneficiary's account directly at ${ssi.beneficiaryBank || "the beneficiary bank"}.`
+            }
+          </div>
+          {ssi.field72 && (
+            <div style={{ marginTop: "4px", color: "#64748b", fontSize: "12px" }}>Field 72: {ssi.field72}</div>
+          )}
+        </div>
+        <div style={{ color: "#64748b", fontSize: "12px", letterSpacing: "1px" }}>{LINE}</div>
+      </div>
+
+      <div style={{ marginTop: "20px", padding: "14px 16px", background: "#f8f9fa", borderLeft: "4px solid #17a2b8", fontSize: "13px", color: "#666", borderRadius: "0 4px 4px 0" }}>
         <strong>Note:</strong> These instructions are legally binding standard standing instructions. Ensure that your system bookings perfectly match these fields (case-sensitive where applicable) before approving settlement.
       </div>
     </>
