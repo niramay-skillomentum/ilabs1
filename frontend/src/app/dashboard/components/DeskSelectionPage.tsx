@@ -18,7 +18,7 @@ export const DeskSelectionPage = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#0b1120] text-slate-300 font-sans overflow-hidden selection:bg-blue-500/30">
+    <div className="flex h-screen bg-[var(--color-background)] text-[var(--color-text-primary)] font-sans overflow-hidden selection:bg-[var(--color-secondary)] selection:text-[var(--color-primary)]">
       <Sidebar />
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header />
@@ -35,14 +35,14 @@ export const DeskSelectionPage = () => {
           width: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: #0b1120;
+          background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #1e293b;
+          background: var(--color-border);
           border-radius: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #334155;
+          background: var(--color-text-muted);
         }
       `}} />
     </div>
