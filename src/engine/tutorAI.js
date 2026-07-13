@@ -59,31 +59,58 @@ ${tradeContext ? JSON.stringify(tradeContext, null, 2) : "No specific trade sele
     { role: "user", content: message }
   ];
 
-  try {
-    const response = await fetch(OPENROUTER_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "HTTP-Referer": "http://localhost:3000", // Optional for rankings
-        "X-Title": "iLabs Operations Simulator" // Optional for rankings
-      },
-      body: JSON.stringify({
-        model: "meta-llama/llama-3.3-70b-instruct:free",
-        messages: messages,
-        temperature: 0.5,
-        max_tokens: 2000
-      })
-    });
+  const freeModels = [
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.0-flash-lite-preview-02-05:free",
+    "mistralai/mistral-7b-instruct:free",
+    "google/gemma-2-9b-it:free",
+    "meta-llama/llama-3.1-8b-instruct:free"
+  ];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenRouter API Error:", response.status, errorText);
-      throw new Error(`OpenRouter API responded with status ${response.status}`);
+  let lastError;
+
+  for (const model of freeModels) {
+    try {
+      const response = await fetch(OPENROUTER_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "http://localhost:3000",
+          "X-Title": "iLabs Operations Simulator"
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: messages,
+          temperature: 0.5,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`[Tutor AI] Model ${model} failed with ${response.status}:`, errorText);
+        if (response.status === 429) {
+          lastError = new Error(`Model ${model} rate-limited`);
+          continue; // Try the next model
+        }
+        throw new Error(`OpenRouter API responded with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
+
+    } catch (error) {
+      if (error.message.includes("rate-limited")) {
+        continue;
+      }
+      throw error;
     }
+  }
 
-    const data = await response.json();
-    return data.choices[0].message.content;
+  console.error("All free models are currently rate-limited.");
+  throw lastError;
 
   } catch (error) {
     console.error("Error generating tutor response via OpenRouter:", error);
