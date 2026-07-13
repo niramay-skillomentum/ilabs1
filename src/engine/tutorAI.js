@@ -111,11 +111,6 @@ ${tradeContext ? JSON.stringify(tradeContext, null, 2) : "No specific trade sele
 
   console.error("All free models are currently rate-limited.");
   throw lastError;
-
-  } catch (error) {
-    console.error("Error generating tutor response via OpenRouter:", error);
-    throw error;
-  }
 }
 
 module.exports = {
