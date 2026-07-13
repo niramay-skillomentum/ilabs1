@@ -16,6 +16,7 @@ const { startAgenda } = require("./src/engine/agendaJobs");
 const { initSocket } = require("./src/engine/socketEngine");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3002;
 
 // ======================================

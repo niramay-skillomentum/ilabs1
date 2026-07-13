@@ -69,7 +69,7 @@ ${tradeContext ? JSON.stringify(tradeContext, null, 2) : "No specific trade sele
         "X-Title": "iLabs Operations Simulator" // Optional for rankings
       },
       body: JSON.stringify({
-        model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+        model: "meta-llama/llama-3.3-70b-instruct:free",
         messages: messages,
         temperature: 0.5,
         max_tokens: 2000
