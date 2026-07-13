@@ -15,4 +15,9 @@ const QueueSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// cleanupExpiredSessions runs Queue.find({ isActive: true, sessionExpiry: { $lt: now } }).
+// This compound index serves that sweep directly. (The per-user lookup is already
+// covered by the unique userId index above.)
+QueueSchema.index({ isActive: 1, sessionExpiry: 1 });
+
 module.exports = mongoose.model("Queue", QueueSchema);

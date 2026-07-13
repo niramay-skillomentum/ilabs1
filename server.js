@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
+const compression = require("compression");
 require("dotenv").config();
 
 const { connectDB, getIsConnected } = require("./src/db");
@@ -26,9 +27,36 @@ const PORT = process.env.PORT || 3002;
 // old cache shape, so downstream processor mutation code is unchanged.
 const getTradeByRef = (tradeRef) => Trade.findOne({ tradeRef }).lean();
 
-// COMMUNICATION REPLY PROCESSORS
-setInterval(() => {
-  communicationEngine.processReplies(
+// guardedInterval: run `fn` every `ms`, but never let a slow tick overlap the
+// next one. Reply processors await up to 25 LLM calls per tick; without this
+// guard, slow ticks stack up and exhaust the DB connection pool.
+function guardedInterval(name, fn, ms) {
+  let busy = false;
+  return setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await fn();
+    } catch (err) {
+      console.warn(`[Background:${name}] tick error:`, err.message);
+    } finally {
+      busy = false;
+    }
+  }, ms);
+}
+
+// ======================================
+// ROLE GATING — the pollers are stateful queue drainers and must run in
+// exactly ONE process, not on every web replica (that multiplies DB load by
+// the replica count). Set ROLE=web on web instances and run a single ROLE=worker
+// process. Default (unset) runs them, preserving today's single-process setup.
+// The claim pattern (findOneAndDelete) keeps this correct even if misconfigured.
+// ======================================
+function startBackgroundProcessors() {
+  const POLL_MS = parseInt(process.env.POLL_INTERVAL_MS, 10) || 3000;
+
+  // COMMUNICATION REPLY PROCESSOR (CPTY)
+  guardedInterval("cpty-replies", () => communicationEngine.processReplies(
     conversationEngine,
     getTradeByRef,
     async (trade) => {
@@ -39,12 +67,10 @@ setInterval(() => {
         }
       });
     }
-  );
-}, 3000);
+  ), POLL_MS);
 
-// FO REPLY PROCESSOR
-setInterval(() => {
-  communicationEngine.processFOReplies(
+  // FO REPLY PROCESSOR
+  guardedInterval("fo-replies", () => communicationEngine.processFOReplies(
     conversationEngine,
     getTradeByRef,
     async (trade) => {
@@ -56,12 +82,10 @@ setInterval(() => {
         }
       });
     }
-  );
-}, 3000);
+  ), POLL_MS);
 
-// FO INTERNAL CHANNEL PROCESSOR
-setInterval(() => {
-  foInternalChannel.processFOInternalReplies(
+  // FO INTERNAL CHANNEL PROCESSOR
+  guardedInterval("fo-internal", () => foInternalChannel.processFOInternalReplies(
     async (trade) => {
       await Trade.updateOne({ tradeRef: trade.tradeRef }, {
         $set: {
@@ -71,13 +95,13 @@ setInterval(() => {
         }
       });
     }
-  );
-}, 3000);
+  ), POLL_MS);
 
-// SYSTEM WORKFLOW PROCESSOR (amendment + verification/approval bot)
-setInterval(() => {
-  systemWorkflowEngine.processJobs();
-}, 3000);
+  // SYSTEM WORKFLOW PROCESSOR (amendment + verification/approval bot)
+  guardedInterval("system-workflow", () => systemWorkflowEngine.processJobs(), POLL_MS);
+
+  console.log(`⚙️  Background processors started (role=${process.env.ROLE || "all"}, interval=${POLL_MS}ms)`);
+}
 
 // (B1) The fleet-wide 2s cache refresh was removed — processors now fetch the
 // single trade they need on demand via getTradeByRef (indexed findOne).
@@ -94,7 +118,18 @@ if (!process.env.JWT_SECRET) {
 // ======================================
 // EXPRESS CONFIG & ROUTES
 // ======================================
-app.use(cors());
+// Restrict REST CORS to the same allow-list the socket layer uses, instead of
+// reflecting any origin. Set ALLOWED_ORIGINS (comma-separated) in production.
+function getAllowedOrigins() {
+  const raw = process.env.ALLOWED_ORIGINS;
+  if (raw) return raw.split(",").map(o => o.trim()).filter(Boolean);
+  return [process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"];
+}
+app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
+
+// gzip responses — trade/queue JSON payloads compress well (big bandwidth win).
+app.use(compression());
+
 app.use(express.json());
 
 app.use("/api/auth", require("./src/routes/authRoutes"));
@@ -119,7 +154,15 @@ async function startServer() {
   await startAgenda();
 
   const server = http.createServer(app);
-  initSocket(server);
+  await initSocket(server);
+
+  // Only web-facing replicas should skip the pollers. Any other role (worker,
+  // or unset for single-process deploys) runs the background queue drainers.
+  if (process.env.ROLE !== "web") {
+    startBackgroundProcessors();
+  } else {
+    console.log("⚙️  ROLE=web — background processors NOT started on this instance");
+  }
 
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

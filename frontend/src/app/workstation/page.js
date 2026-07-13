@@ -267,10 +267,24 @@ function WorkstationComponent() {
     socketRef.current = socket;
     socket.emit("join_desk", dsk);
 
-    socket.on("trade_update", () => {
-      scheduleRefresh(dsk);
+    // trade_update carries { tradeRef, currentStatus } — patch that row in place
+    // instead of refetching the whole 20-trade queue. Status transitions (esp.
+    // from the settlement bots) are frequent; a full refetch per event is the
+    // dominant read load from the socket layer.
+    socket.on("trade_update", (payload) => {
+      if (payload && payload.tradeRef && payload.currentStatus) {
+        setQueue(prev => prev.map(t =>
+          t.tradeRef === payload.tradeRef
+            ? { ...t, currentStatus: payload.currentStatus }
+            : t));
+      } else {
+        // Malformed/legacy event — fall back to a reconciling refresh.
+        scheduleRefresh(dsk);
+      }
     });
 
+    // new_email may attach amendments / response flags the client can't derive
+    // from the payload, so a (debounced) reconciling refresh is still warranted.
     socket.on("new_email", () => {
       scheduleRefresh(dsk);
     });

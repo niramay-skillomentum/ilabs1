@@ -191,9 +191,14 @@ class QueueComposer {
 
       const shuffledDbTrades = shuffle(freshDbTrades);
 
-      // Separate into clean and break
-      const dbClean = shuffledDbTrades.filter(t => !isBreakTrade(t, desk));
-      const dbBreaks = shuffledDbTrades.filter(t => isBreakTrade(t, desk));
+      // Separate into clean and break in a SINGLE pass. The old code ran
+      // isBreakTrade twice per trade (once per filter), and each call recomputes
+      // truth mismatches — doubling that work over the whole pool for nothing.
+      const dbClean = [];
+      const dbBreaks = [];
+      for (const t of shuffledDbTrades) {
+        (isBreakTrade(t, desk) ? dbBreaks : dbClean).push(t);
+      }
 
       // Pick from DB
       const cleanPick = Math.min(dbClean.length, dbCleanTarget);
@@ -217,8 +222,11 @@ class QueueComposer {
       const generated = await tradeGenerator.generateTrades(remainingClean, remainingBreaks, desk, settlementInitialState);
       const saved = await tradeGenerator.saveGeneratedTrades(generated);
 
-      const genClean = saved.filter(t => !isBreakTrade(t, desk));
-      const genBreaks = saved.filter(t => isBreakTrade(t, desk));
+      const genClean = [];
+      const genBreaks = [];
+      for (const t of saved) {
+        (isBreakTrade(t, desk) ? genBreaks : genClean).push(t);
+      }
 
       selectedClean = selectedClean.concat(genClean);
       selectedBreaks = selectedBreaks.concat(genBreaks);

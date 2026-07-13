@@ -18,14 +18,40 @@ function getAllowedOrigins() {
   return [process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"];
 }
 
-function initSocket(server) {
+async function initSocket(server) {
   io = new Server(server, {
     cors: {
       origin: getAllowedOrigins(),
       methods: ["GET", "POST"],
       credentials: true
-    }
+    },
+    // Blotter payloads are small; skip per-message deflate CPU cost.
+    perMessageDeflate: false
   });
+
+  // ======================================
+  // HORIZONTAL SCALING — Redis adapter.
+  // Without an adapter, Socket.io rooms are process-local: an emit on one
+  // instance never reaches a socket connected to another instance. With
+  // REDIS_URL set, rooms span every instance so `io.to('user_x').emit(...)`
+  // works no matter which instance the user (or the emitting worker) is on.
+  // Guarded + lazy-required so the app still boots with no Redis in dev.
+  // ======================================
+  if (process.env.REDIS_URL) {
+    try {
+      const { createAdapter } = require("@socket.io/redis-adapter");
+      const { createClient } = require("redis");
+      const pubClient = createClient({ url: process.env.REDIS_URL });
+      const subClient = pubClient.duplicate();
+      pubClient.on("error", (e) => console.warn("[Redis pub] ", e.message));
+      subClient.on("error", (e) => console.warn("[Redis sub] ", e.message));
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log("✅ Socket.io Redis adapter attached — rooms now span all instances");
+    } catch (err) {
+      console.warn("⚠️ Redis adapter failed to attach — running single-instance socket mode:", err.message);
+    }
+  }
 
   // Authentication Middleware for Sockets
   io.use((socket, next) => {

@@ -15,6 +15,98 @@ const Counterparty = require("../models/Counterparty");
 const { getIsConnected } = require("../db");
 
 // ============================
+// REFERENCE-DATA CACHE
+// ============================
+// Reference data (SSI records, securities) is effectively static — it changes
+// only via the import script. The trade generator, however, hit the DB ~3x per
+// generated trade (60+ round-trips per "Generate Queue"). We load the whole
+// active reference set once and serve all hot lookups from memory, refreshing
+// on a TTL. Call invalidateRefCache() after an import to force an immediate
+// rebuild.
+const REF_TTL_MS = parseInt(process.env.SSI_REF_TTL_MS, 10) || 10 * 60_000;
+
+let _cache = null;       // { currencies, secCurrencies, ratio, cptysByCur, ssiByCptyCur, secByCur }
+let _cacheAt = 0;
+let _cachePromise = null; // de-dupes concurrent rebuilds
+
+function _uc(v) {
+  return String(v || "").toUpperCase();
+}
+
+async function _buildCache() {
+  const [ssis, securities] = await Promise.all([
+    SSIReference.find({ active: true }).lean(),
+    Security.find({}).lean()
+  ]);
+
+  const cptysByCur = new Map();     // CUR -> Set(groupCounterPartyName)
+  const ssiByCptyCur = new Map();   // `${cpty}::${CUR}` -> [ssi]
+  const currencySet = new Set();
+  let correspondent = 0;
+
+  for (const ssi of ssis) {
+    const cur = _uc(ssi.currency);
+    currencySet.add(cur);
+
+    if (!cptysByCur.has(cur)) cptysByCur.set(cur, new Set());
+    if (ssi.groupCounterPartyName) cptysByCur.get(cur).add(ssi.groupCounterPartyName);
+
+    const key = `${ssi.groupCounterPartyName}::${cur}`;
+    if (!ssiByCptyCur.has(key)) ssiByCptyCur.set(key, []);
+    ssiByCptyCur.get(key).push(ssi);
+
+    if (ssi.agentBank && String(ssi.agentBank).trim().length > 0) correspondent++;
+  }
+
+  const secByCur = new Map();
+  const secCurrencySet = new Set();
+  for (const sec of securities) {
+    const cur = _uc(sec.currency);
+    secCurrencySet.add(cur);
+    if (!secByCur.has(cur)) secByCur.set(cur, []);
+    secByCur.get(cur).push(sec);
+  }
+
+  const total = ssis.length;
+  return {
+    currencies: [...currencySet],
+    secCurrencies: [...secCurrencySet],
+    ratio: total > 0 ? correspondent / total : 0.78,
+    cptysByCur,
+    ssiByCptyCur,
+    secByCur,
+    securities
+  };
+}
+
+async function _getCache() {
+  if (!getIsConnected()) return null;
+  if (_cache && Date.now() - _cacheAt < REF_TTL_MS) return _cache;
+  if (_cachePromise) return _cachePromise; // a rebuild is already in flight
+  _cachePromise = _buildCache()
+    .then((c) => {
+      _cache = c;
+      _cacheAt = Date.now();
+      return c;
+    })
+    .catch((err) => {
+      console.warn("[SSIRepository] Reference cache build failed:", err.message);
+      return _cache; // serve stale on failure rather than throwing
+    })
+    .finally(() => { _cachePromise = null; });
+  return _cachePromise;
+}
+
+function invalidateRefCache() {
+  _cache = null;
+  _cacheAt = 0;
+}
+
+function _pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ============================
 // SSI LOOKUP
 // ============================
 
@@ -27,15 +119,9 @@ const { getIsConnected } = require("../db");
  * @returns {Promise<Object[]>} Array of matching SSI documents (lean)
  */
 async function findMatchingSSIs(counterpartyName, currency) {
-  if (!getIsConnected()) return [];
-
-  const results = await SSIReference.find({
-    groupCounterPartyName: counterpartyName,
-    currency: currency.toUpperCase(),
-    active: true
-  }).lean();
-
-  return results;
+  const cache = await _getCache();
+  if (!cache) return [];
+  return cache.ssiByCptyCur.get(`${counterpartyName}::${_uc(currency)}`) || [];
 }
 
 /**
@@ -61,12 +147,10 @@ async function findSSIsByCurrency(currency) {
  * @returns {Promise<string[]>} Array of unique counterparty names
  */
 async function getCounterpartiesForCurrency(currency) {
-  if (!getIsConnected()) return [];
-
-  return SSIReference.distinct("groupCounterPartyName", {
-    currency: currency.toUpperCase(),
-    active: true
-  });
+  const cache = await _getCache();
+  if (!cache) return [];
+  const set = cache.cptysByCur.get(_uc(currency));
+  return set ? [...set] : [];
 }
 
 /**
@@ -75,9 +159,8 @@ async function getCounterpartiesForCurrency(currency) {
  * @returns {Promise<string[]>} Array of unique currency codes
  */
 async function getAvailableCurrencies() {
-  if (!getIsConnected()) return [];
-
-  return SSIReference.distinct("currency", { active: true });
+  const cache = await _getCache();
+  return cache ? cache.currencies : [];
 }
 
 // ============================
@@ -121,70 +204,27 @@ async function selectSSIPair(counterpartyName, currency, hasBreak = false, prefe
   let presentedSSI;
   let breakScenario = null;
 
+  const truthIndex = Math.floor(Math.random() * candidateSSIs.length);
+  truthSSI = candidateSSIs[truthIndex];
+  presentedSSI = { ...truthSSI };
+
   if (hasBreak) {
-    // Group candidates by cptyId AND Beneficiary Bank
-    const groupedByIdAndBank = {};
-    for (const ssi of candidateSSIs) {
-      if (!ssi.cptyId) continue;
-      const bank = ssi.accountWithInstitution || ssi.finalBeneficiary || "UNKNOWN";
-      const key = `${ssi.cptyId}::${bank}`;
-      if (!groupedByIdAndBank[key]) groupedByIdAndBank[key] = [];
-      groupedByIdAndBank[key].push(ssi);
-    }
-
-    // Find groups that have more than 1 SSI record
-    const validGroups = Object.values(groupedByIdAndBank).filter(group => group.length > 1);
-
-    if (validGroups.length > 0) {
-      // Pick a random group
-      const selectedGroup = validGroups[Math.floor(Math.random() * validGroups.length)];
-      // Pick two distinct SSIs from this group
-      const truthIndex = Math.floor(Math.random() * selectedGroup.length);
-      truthSSI = selectedGroup[truthIndex];
-      
-      const alternatives = selectedGroup.filter((_, idx) => idx !== truthIndex);
-      presentedSSI = alternatives[Math.floor(Math.random() * alternatives.length)];
-      breakScenario = "SSI_MISMATCH";
-
-      console.log(`[SSIRepository] Break created: Truth=${truthSSI._id} vs Presented=${presentedSSI._id} for ${counterpartyName}/${currency} (ID: ${truthSSI.cptyId}, Bank matched)`);
-    } else {
-      // Fallback: If we can't find a same-bank match, just try same-ID
-      const groupedById = {};
-      for (const ssi of candidateSSIs) {
-        if (!ssi.cptyId) continue;
-        if (!groupedById[ssi.cptyId]) groupedById[ssi.cptyId] = [];
-        groupedById[ssi.cptyId].push(ssi);
-      }
-      const validIdGroups = Object.values(groupedById).filter(group => group.length > 1);
-
-      if (validIdGroups.length > 0) {
-        const selectedGroup = validIdGroups[Math.floor(Math.random() * validIdGroups.length)];
-        const truthIndex = Math.floor(Math.random() * selectedGroup.length);
-        truthSSI = selectedGroup[truthIndex];
-        const alternatives = selectedGroup.filter((_, idx) => idx !== truthIndex);
-        presentedSSI = alternatives[Math.floor(Math.random() * alternatives.length)];
-        breakScenario = "SSI_MISMATCH";
-        console.log(`[SSIRepository] Break fallback (ID only) created: Truth=${truthSSI._id} vs Presented=${presentedSSI._id} for ${counterpartyName}/${currency} (ID: ${truthSSI.cptyId})`);
-      } else if (candidateSSIs.length > 1) {
-        // Fallback 2: just pick any two different records
-        const truthIndex = Math.floor(Math.random() * candidateSSIs.length);
-        truthSSI = candidateSSIs[truthIndex];
-        const alternatives = candidateSSIs.filter((_, idx) => idx !== truthIndex);
-        presentedSSI = alternatives[Math.floor(Math.random() * alternatives.length)];
-        breakScenario = "SSI_MISMATCH";
-        console.log(`[SSIRepository] Break fallback (Any) created: Truth=${truthSSI._id} vs Presented=${presentedSSI._id} for ${counterpartyName}/${currency}`);
+    breakScenario = "ACCOUNT_NUMBER_MISMATCH";
+    
+    if (presentedSSI.accountNumber) {
+      const acctStr = String(presentedSSI.accountNumber);
+      if (acctStr.length > 0) {
+        // Tweak the account number by appending 2 to 4 random digits
+        const randomNumbers = Math.floor(Math.random() * 9000) + 100; // 3 or 4 random digits
+        presentedSSI.accountNumber = acctStr + String(randomNumbers);
       } else {
-        // Cannot create a break (only 1 SSI available overall)
-        truthSSI = candidateSSIs[0];
-        presentedSSI = truthSSI;
-        console.log(`[SSIRepository] Only 1 SSI found for ${counterpartyName}/${currency}. No SSI-level break possible.`);
+        presentedSSI.accountNumber = String(Math.floor(Math.random() * 90000000) + 10000000);
       }
+    } else {
+      presentedSSI.accountNumber = String(Math.floor(Math.random() * 90000000) + 10000000);
     }
-  } else {
-    // Clean trade: select a random SSI and use it for both
-    const truthIndex = Math.floor(Math.random() * candidateSSIs.length);
-    truthSSI = candidateSSIs[truthIndex];
-    presentedSSI = truthSSI;
+    
+    console.log(`[SSIRepository] Break created: Tweaked account number for ${counterpartyName}/${currency}. Truth=${truthSSI.accountNumber}, Presented=${presentedSSI.accountNumber}`);
   }
 
   return {
@@ -204,38 +244,25 @@ async function selectSSIPair(counterpartyName, currency, hasBreak = false, prefe
  * @returns {Promise<{correspondent: number, direct: number, ratio: number}>}
  */
 async function getSettlementTypeRatio() {
-  if (!getIsConnected()) return { correspondent: 0, direct: 0, ratio: 0.78 };
-
-  try {
-    const pipeline = [
-      { $match: { active: true } },
-      { $group: {
-        _id: { $cond: [{ $and: [{ $ne: ["$agentBank", null] }, { $ne: ["$agentBank", ""] }] }, "CORRESPONDENT", "DIRECT"] },
-        count: { $sum: 1 }
-      }}
-    ];
-    const results = await SSIReference.aggregate(pipeline);
-    
-    let correspondent = 0, direct = 0;
-    results.forEach(r => {
-      if (r._id === "CORRESPONDENT") correspondent = r.count;
-      else direct = r.count;
-    });
-    
-    const total = correspondent + direct;
-    return {
-      correspondent,
-      direct,
-      ratio: total > 0 ? correspondent / total : 0.78 // fallback ~78%
-    };
-  } catch (err) {
-    return { correspondent: 0, direct: 0, ratio: 0.78 };
-  }
+  const cache = await _getCache();
+  if (!cache) return { correspondent: 0, direct: 0, ratio: 0.78 };
+  return { ratio: cache.ratio };
 }
 
 // ============================
 // SECURITY LOOKUP
 // ============================
+
+/**
+ * Get a completely random security (across all currencies).
+ *
+ * @returns {Promise<Object|null>} Security document or null
+ */
+async function getRandomSecurity() {
+  const cache = await _getCache();
+  if (!cache || !cache.securities || cache.securities.length === 0) return null;
+  return _pickRandom(cache.securities);
+}
 
 /**
  * Get a random security for a given currency.
@@ -245,14 +272,11 @@ async function getSettlementTypeRatio() {
  * @returns {Promise<Object|null>} Security document or null
  */
 async function getSecurityByCurrency(currency) {
-  if (!getIsConnected()) return null;
-
-  const securities = await Security.find({
-    currency: currency.toUpperCase()
-  }).lean();
-
-  if (securities.length === 0) return null;
-  return securities[Math.floor(Math.random() * securities.length)];
+  const cache = await _getCache();
+  if (!cache) return null;
+  const securities = cache.secByCur.get(_uc(currency));
+  if (!securities || securities.length === 0) return null;
+  return _pickRandom(securities);
 }
 
 /**
@@ -261,8 +285,8 @@ async function getSecurityByCurrency(currency) {
  * @returns {Promise<string[]>} Array of currency codes
  */
 async function getSecurityCurrencies() {
-  if (!getIsConnected()) return [];
-  return Security.distinct("currency");
+  const cache = await _getCache();
+  return cache ? cache.secCurrencies : [];
 }
 
 // ============================
@@ -407,6 +431,7 @@ module.exports = {
   // Security
   getSecurityByCurrency,
   getSecurityCurrencies,
+  getRandomSecurity,
 
   // Search
   findByAlertCodes,
@@ -414,6 +439,9 @@ module.exports = {
 
   // Counterparty
   getAllCounterparties,
+
+  // Cache control (call after a reference-data import)
+  invalidateRefCache,
 
   // Helpers (exposed for testing)
   deriveSettlementType,

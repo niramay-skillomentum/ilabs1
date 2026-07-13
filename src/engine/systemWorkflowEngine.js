@@ -28,7 +28,10 @@ const VERIFICATION_DELAY_MS = parseInt(process.env.SYSTEM_VERIFICATION_DELAY_MS,
 const SSI_FIELDS = [
   "beneficiaryName", "beneficiaryBank", "beneficiaryBIC",
   "accountNumber", "accountType", "currency",
-  "settlementMethod", "correspondentBank", "paymentReference"
+  "settlementMethod", "correspondentBank", "paymentReference",
+  "intermediaryBank", "intermediaryBIC", "intermediaryAccount",
+  "abaRoutingNumber", "field72", "country",
+  "alertCode", "alertAcronym", "settlementType"
 ];
 
 // Fields that must always be present for a settlement to be valid

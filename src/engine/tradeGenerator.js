@@ -18,9 +18,16 @@ const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "AUD"];
 const COUNTERPARTIES = ["CITI", "HSBC", "DB", "JPM", "BNP", "BARC", "MS", "UBS"];
 const ENTITIES = ["GS London", "GS New York", "GS Singapore", "GS Tokyo", "GS Frankfurt"];
 const REGIONS = ["AMER", "EMEA", "APAC"];
-const PRODUCTS = [
-  "FX Spot", "FX Forward", "Interest Rate Swap", "Credit Default Swap",
-  "Equity", "Corporate Bond", "Government Bond", "Listed Futures", "Listed Options"
+const PRODUCT_MASTER = [
+  { name: "FX Spot", securityRequired: false },
+  { name: "FX Forward", securityRequired: false },
+  { name: "Interest Rate Swap", securityRequired: false },
+  { name: "Credit Default Swap", securityRequired: false },
+  { name: "Equity", securityRequired: true },
+  { name: "Corporate Bond", securityRequired: true },
+  { name: "Government Bond", securityRequired: true },
+  { name: "Listed Futures", securityRequired: false },
+  { name: "Listed Options", securityRequired: false }
 ];
 const TRADE_TYPES = ["OTC", "Listed", "Exchange", "Depository"];
 const SETTLEMENT_TYPES = ["ELECTRONIC", "BILATERAL"];
@@ -424,7 +431,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   // currency and counterparty from the chain: Product → Security → Currency → Counterparty → SSI.
   // Otherwise, fall back to random picks from hardcoded arrays.
   const currency = (ssiPairData && ssiPairData.currency) ? ssiPairData.currency : pick(CURRENCIES);
-  const product = (ssiPairData && ssiPairData.product) ? ssiPairData.product : pick(PRODUCTS);
+  const product = (ssiPairData && ssiPairData.product) ? ssiPairData.product : pick(PRODUCT_MASTER).name;
   const direction = pick(DIRECTIONS);
   const entity = pick(ENTITIES);
   const foRegion = pick(REGIONS);
@@ -821,15 +828,9 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
 async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
   const pairs = [];
 
-  // Step 1: Get available currencies from both Security and SSI reference data
+  // Step 1: Get available currencies from SSI reference data
   const ssiCurrencies = await ssiRepository.getAvailableCurrencies();
-  const secCurrencies = await ssiRepository.getSecurityCurrencies();
   if (ssiCurrencies.length === 0) return pairs;
-
-  // Currencies that exist in BOTH security data and SSI reference data
-  const sharedCurrencies = ssiCurrencies.filter(c => secCurrencies.includes(c));
-  // If no overlap, use SSI currencies directly (graceful degradation)
-  const availableCurrencies = sharedCurrencies.length > 0 ? sharedCurrencies : ssiCurrencies;
 
   // Step 2: Get the natural CORRESPONDENT/DIRECT ratio from the database
   const ratioData = await ssiRepository.getSettlementTypeRatio();
@@ -846,21 +847,21 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
 
   // For clean trades: select SSI pair with no break, maintaining ratio
   for (let i = 0; i < cleanCorrespondent; i++) {
-    const enriched = await _resolveReferenceChain(availableCurrencies, false, "CORRESPONDENT");
+    const enriched = await _resolveReferenceChain(ssiCurrencies, false, "CORRESPONDENT");
     if (enriched) pairs.push(enriched);
   }
   for (let i = 0; i < cleanDirect; i++) {
-    const enriched = await _resolveReferenceChain(availableCurrencies, false, "DIRECT");
+    const enriched = await _resolveReferenceChain(ssiCurrencies, false, "DIRECT");
     if (enriched) pairs.push(enriched);
   }
 
   // For break trades: select SSI pair with break (two different valid records)
   for (let i = 0; i < breakCorrespondent; i++) {
-    const enriched = await _resolveReferenceChain(availableCurrencies, true, "CORRESPONDENT");
+    const enriched = await _resolveReferenceChain(ssiCurrencies, true, "CORRESPONDENT");
     if (enriched) pairs.push(enriched);
   }
   for (let i = 0; i < breakDirect; i++) {
-    const enriched = await _resolveReferenceChain(availableCurrencies, true, "DIRECT");
+    const enriched = await _resolveReferenceChain(ssiCurrencies, true, "DIRECT");
     if (enriched) pairs.push(enriched);
   }
 
@@ -868,42 +869,67 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
 }
 
 /**
- * Resolve the full reference data chain for one trade:
- *   Product → Security → Currency → Counterparty → SSI
+ * Resolve the full reference data chain for one trade based on PRODUCT_MASTER:
+ *   Product → Security (if required) → Currency → Counterparty → SSI
  *
- * @param {string[]} availableCurrencies - Currencies available in reference data
+ * @param {string[]} ssiCurrencies - All available SSI currencies
  * @param {boolean} hasBreak - Whether to create a settlement break
  * @param {string|null} preferredSettlementType - "CORRESPONDENT" or "DIRECT" (null = any)
  * @returns {Promise<Object|null>} Enriched SSI pair with currency, counterparty, product, security
  */
-async function _resolveReferenceChain(availableCurrencies, hasBreak, preferredSettlementType = null) {
-  // Step 1: Pick a currency from reference data
-  const currency = pick(availableCurrencies);
+async function _resolveReferenceChain(ssiCurrencies, hasBreak, preferredSettlementType = null) {
+  let pair = null;
+  let currency = null;
+  let counterparty = null;
+  let security = null;
+  
+  // Pick product
+  const productDef = pick(PRODUCT_MASTER);
+  const product = productDef.name;
+  
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (!pair && attempts < maxAttempts) {
+    attempts++;
+    
+    if (productDef.securityRequired) {
+      // Choose random security
+      security = await ssiRepository.getRandomSecurity();
+      if (!security) {
+        // Fallback if no securities exist
+        currency = pick(ssiCurrencies);
+      } else {
+        // Read currency from security
+        currency = security.currency;
+        // Verify this currency actually has SSI counterparties
+        const counterparties = await ssiRepository.getCounterpartiesForCurrency(currency);
+        if (counterparties.length === 0) {
+          // If no SSI for this security's currency, loop and pick another security
+          continue;
+        }
+        counterparty = pick(counterparties);
+      }
+    } else {
+      // Skip security, just pick a random currency from SSI db
+      security = null;
+      currency = pick(ssiCurrencies);
+      const counterparties = await ssiRepository.getCounterpartiesForCurrency(currency);
+      if (counterparties.length === 0) continue;
+      counterparty = pick(counterparties);
+    }
+    
+    if (!counterparty) continue;
 
-  // Step 2: Find a security for this currency (Product → Security → Currency)
-  const security = await ssiRepository.getSecurityByCurrency(currency);
-  // Determine product from the security's characteristics
-  // (Securities in the data are primarily equities/bonds)
-  let product;
-  if (security) {
-    // Map security type to product — securities are primarily equities/bonds
-    product = pick(["Equity", "Corporate Bond", "Government Bond"]);
-  } else {
-    // No security for this currency — use an OTC product
-    product = pick(["FX Spot", "FX Forward", "Interest Rate Swap"]);
+    // Lookup SSI pair
+    pair = await ssiRepository.selectSSIPair(counterparty, currency, hasBreak, preferredSettlementType);
+  }
+  
+  if (!pair) {
+     console.warn(`[TradeGen] Failed to generate SSI pair for product ${product} after ${maxAttempts} attempts`);
+     return null;
   }
 
-  // Step 3: Find counterparties with SSI data for this currency
-  const counterparties = await ssiRepository.getCounterpartiesForCurrency(currency);
-  if (counterparties.length === 0) return null;
-
-  const counterparty = pick(counterparties);
-
-  // Step 4: Select SSI pair (with preferred settlement type filter)
-  const pair = await ssiRepository.selectSSIPair(counterparty, currency, hasBreak, preferredSettlementType);
-  if (!pair) return null;
-
-  // Enrich the pair with reference chain data
   return {
     ...pair,
     currency,
