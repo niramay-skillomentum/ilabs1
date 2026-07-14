@@ -13,14 +13,23 @@ const TradeSchema = new mongoose.Schema({
 
   amount: { type: Number },
   currency: { type: String },
+  counterpartyGroup: { type: String },
   counterparty: { type: String },
   direction: { type: String },
 
   entity: { type: String },
   foRegion: { type: String },
   product: { type: String },
+  productType: { type: String },
   tradeType: { type: String },
   settlementType: { type: String },
+
+  // Underlyer picked from security data (e.g., "FX AUD/SEK", "Allianz SE", "DE0008404005")
+  underlyer: { type: String },
+
+  // Display-friendly SSI IDs (generated unique identifiers per SSI record)
+  ssiId: { type: String },          // SSI ID of the presented/displayed SSI
+  truthSsiId: { type: String },     // SSI ID of the truth SSI (used in verification)
 
   age: { type: Number, default: 0 },
 

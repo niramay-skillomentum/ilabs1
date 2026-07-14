@@ -13,6 +13,9 @@ const SSIReferenceSchema = new mongoose.Schema({
   // Original row identifier from Excel
   sourceId: { type: String, required: true },
 
+  // Generated unique SSI ID for display (format: SSI-{GroupAbbrev}-{CCY}-{hash})
+  ssiId: { type: String, index: true },
+
   // Counterparty ID (e.g. CPG0050)
   cptyId: { type: String, index: true },
 

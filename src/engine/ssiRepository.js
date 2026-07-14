@@ -2,9 +2,9 @@
 // SSI REPOSITORY (DATA ACCESS LAYER)
 // Clean repository pattern for SSI reference data lookups.
 //
-// This module is the ONLY place that queries the SSIReference
-// collection. All other modules access SSI data through this
-// repository, preserving separation of concerns.
+// This module is the ONLY place that queries the SSIReference,
+// Security, Counterparty, and Entity collections. All other modules
+// access reference data through this repository.
 //
 // IMPORTANT: This module NEVER modifies SSI reference data.
 // ======================================
@@ -12,35 +12,32 @@
 const SSIReference = require("../models/SSIReference");
 const Security = require("../models/Security");
 const Counterparty = require("../models/Counterparty");
+const Entity = require("../models/Entity");
 const { getIsConnected } = require("../db");
 
 // ============================
 // REFERENCE-DATA CACHE
 // ============================
-// Reference data (SSI records, securities) is effectively static — it changes
-// only via the import script. The trade generator, however, hit the DB ~3x per
-// generated trade (60+ round-trips per "Generate Queue"). We load the whole
-// active reference set once and serve all hot lookups from memory, refreshing
-// on a TTL. Call invalidateRefCache() after an import to force an immediate
-// rebuild.
 const REF_TTL_MS = parseInt(process.env.SSI_REF_TTL_MS, 10) || 10 * 60_000;
 
-let _cache = null;       // { currencies, secCurrencies, ratio, cptysByCur, ssiByCptyCur, secByCur }
+let _cache = null;
 let _cacheAt = 0;
-let _cachePromise = null; // de-dupes concurrent rebuilds
+let _cachePromise = null;
 
 function _uc(v) {
   return String(v || "").toUpperCase();
 }
 
 async function _buildCache() {
-  const [ssis, securities] = await Promise.all([
+  const [ssis, securities, entities] = await Promise.all([
     SSIReference.find({ active: true }).lean(),
-    Security.find({}).lean()
+    Security.find({}).lean(),
+    Entity.find({}).lean()
   ]);
 
   const cptysByCur = new Map();     // CUR -> Set(groupCounterPartyName)
   const ssiByCptyCur = new Map();   // `${cpty}::${CUR}` -> [ssi]
+  const ssiByGroup = new Map();     // groupCounterPartyName -> [ssi] (all currencies)
   const currencySet = new Set();
   let correspondent = 0;
 
@@ -55,16 +52,41 @@ async function _buildCache() {
     if (!ssiByCptyCur.has(key)) ssiByCptyCur.set(key, []);
     ssiByCptyCur.get(key).push(ssi);
 
+    // Index by group (for SSI ID dropdown in settlement break)
+    if (ssi.groupCounterPartyName) {
+      if (!ssiByGroup.has(ssi.groupCounterPartyName)) ssiByGroup.set(ssi.groupCounterPartyName, []);
+      ssiByGroup.get(ssi.groupCounterPartyName).push(ssi);
+    }
+
     if (ssi.agentBank && String(ssi.agentBank).trim().length > 0) correspondent++;
   }
 
+  // Securities indexed by product and by currency
   const secByCur = new Map();
+  const secByProduct = new Map();   // product -> [securities]
+  const secByProductType = new Map(); // productType -> [securities]
   const secCurrencySet = new Set();
+
   for (const sec of securities) {
     const cur = _uc(sec.currency);
     secCurrencySet.add(cur);
+
     if (!secByCur.has(cur)) secByCur.set(cur, []);
     secByCur.get(cur).push(sec);
+
+    // Index by product (Derivative, FX, Equity, Fixed Income)
+    const prod = sec.product;
+    if (prod) {
+      if (!secByProduct.has(prod)) secByProduct.set(prod, []);
+      secByProduct.get(prod).push(sec);
+    }
+
+    // Index by productType (Forward, FX Spot, Equity, Corporate Bond, etc.)
+    const pt = sec.productType;
+    if (pt) {
+      if (!secByProductType.has(pt)) secByProductType.set(pt, []);
+      secByProductType.get(pt).push(sec);
+    }
   }
 
   const total = ssis.length;
@@ -74,15 +96,19 @@ async function _buildCache() {
     ratio: total > 0 ? correspondent / total : 0.78,
     cptysByCur,
     ssiByCptyCur,
+    ssiByGroup,
     secByCur,
-    securities
+    secByProduct,
+    secByProductType,
+    securities,
+    entities
   };
 }
 
 async function _getCache() {
   if (!getIsConnected()) return null;
   if (_cache && Date.now() - _cacheAt < REF_TTL_MS) return _cache;
-  if (_cachePromise) return _cachePromise; // a rebuild is already in flight
+  if (_cachePromise) return _cachePromise;
   _cachePromise = _buildCache()
     .then((c) => {
       _cache = c;
@@ -91,7 +117,7 @@ async function _getCache() {
     })
     .catch((err) => {
       console.warn("[SSIRepository] Reference cache build failed:", err.message);
-      return _cache; // serve stale on failure rather than throwing
+      return _cache;
     })
     .finally(() => { _cachePromise = null; });
   return _cachePromise;
@@ -112,11 +138,6 @@ function _pickRandom(arr) {
 
 /**
  * Find all active SSI records for a counterparty + currency.
- * Returns immutable reference data — NEVER modify the result.
- *
- * @param {string} counterpartyName - Group Counter Party Name (exact match)
- * @param {string} currency - 3-letter currency code
- * @returns {Promise<Object[]>} Array of matching SSI documents (lean)
  */
 async function findMatchingSSIs(counterpartyName, currency) {
   const cache = await _getCache();
@@ -126,14 +147,9 @@ async function findMatchingSSIs(counterpartyName, currency) {
 
 /**
  * Find all active SSI records for a given currency (across all counterparties).
- * Used when we need to select a counterparty that has SSI data for a given currency.
- *
- * @param {string} currency - 3-letter currency code
- * @returns {Promise<Object[]>} Array of matching SSI documents (lean)
  */
 async function findSSIsByCurrency(currency) {
   if (!getIsConnected()) return [];
-
   return SSIReference.find({
     currency: currency.toUpperCase(),
     active: true
@@ -142,9 +158,6 @@ async function findSSIsByCurrency(currency) {
 
 /**
  * Get all distinct counterparty names that have SSI data for a given currency.
- *
- * @param {string} currency - 3-letter currency code
- * @returns {Promise<string[]>} Array of unique counterparty names
  */
 async function getCounterpartiesForCurrency(currency) {
   const cache = await _getCache();
@@ -155,12 +168,52 @@ async function getCounterpartiesForCurrency(currency) {
 
 /**
  * Get all distinct currencies available in the SSI reference data.
- *
- * @returns {Promise<string[]>} Array of unique currency codes
  */
 async function getAvailableCurrencies() {
   const cache = await _getCache();
   return cache ? cache.currencies : [];
+}
+
+/**
+ * Get all SSI records for a counterparty group (all currencies).
+ * Used for the SSI ID dropdown in settlement break flow.
+ *
+ * @param {string} groupName - Group Counter Party Name
+ * @param {string|null} currency - Optional currency filter
+ * @returns {Promise<Object[]>} Array of { ssiId, currency, accountWithInstitution, ... }
+ */
+async function getSSIsByCounterpartyGroup(groupName, currency = null) {
+  const cache = await _getCache();
+  if (!cache) return [];
+
+  let ssis;
+  if (currency) {
+    ssis = cache.ssiByCptyCur.get(`${groupName}::${_uc(currency)}`) || [];
+  } else {
+    ssis = cache.ssiByGroup.get(groupName) || [];
+  }
+
+  return ssis.map(ssi => ({
+    ssiId: ssi.ssiId || ssi.sourceId,
+    refId: String(ssi._id),
+    currency: ssi.currency,
+    groupCounterPartyName: ssi.groupCounterPartyName,
+    counterPartyName: ssi.counterPartyName,
+    accountWithInstitution: ssi.accountWithInstitution,
+    swiftBicCode: ssi.swiftBicCode,
+    accountNumber: ssi.accountNumber ? String(ssi.accountNumber) : "",
+    settlementType: deriveSettlementType(ssi),
+    agentBank: ssi.agentBank,
+    agentSwiftCode: ssi.agentSwiftCode
+  }));
+}
+
+/**
+ * Find an SSI record by its ssiId (generated display ID).
+ */
+async function findBySsiId(ssiId) {
+  if (!getIsConnected()) return null;
+  return SSIReference.findOne({ ssiId, active: true }).lean();
 }
 
 // ============================
@@ -169,18 +222,6 @@ async function getAvailableCurrencies() {
 
 /**
  * Select Truth SSI and Presented SSI for a trade.
- *
- * - Clean trade: truthSSI === presentedSSI (same record)
- * - Break trade: truthSSI !== presentedSSI (two different valid records)
- *
- * IMPORTANT: Neither SSI is ever modified. Both are valid reference data.
- * Settlement breaks come from the DIFFERENCE between two valid records,
- * exactly like the simulator's MO and Confirmation truth comparisons.
- *
- * @param {string} counterpartyName - Group Counter Party Name
- * @param {string} currency - 3-letter currency code
- * @param {boolean} hasBreak - Whether to create a settlement break
- * @returns {Promise<Object|null>} { truthSSI, presentedSSI, truthSSIRefId, presentedSSIRefId, settlementType, breakScenario }
  */
 async function selectSSIPair(counterpartyName, currency, hasBreak = false, preferredSettlementType = null) {
   const matchingSSIs = await findMatchingSSIs(counterpartyName, currency);
@@ -196,7 +237,6 @@ async function selectSSIPair(counterpartyName, currency, hasBreak = false, prefe
       const type = deriveSettlementType(ssi);
       return type === preferredSettlementType;
     });
-    // Use filtered set if we have matches, otherwise fall back to all
     if (filtered.length > 0) candidateSSIs = filtered;
   }
 
@@ -214,8 +254,7 @@ async function selectSSIPair(counterpartyName, currency, hasBreak = false, prefe
     if (presentedSSI.accountNumber) {
       const acctStr = String(presentedSSI.accountNumber);
       if (acctStr.length > 0) {
-        // Tweak the account number by appending 2 to 4 random digits
-        const randomNumbers = Math.floor(Math.random() * 9000) + 100; // 3 or 4 random digits
+        const randomNumbers = Math.floor(Math.random() * 9000) + 100;
         presentedSSI.accountNumber = acctStr + String(randomNumbers);
       } else {
         presentedSSI.accountNumber = String(Math.floor(Math.random() * 90000000) + 10000000);
@@ -232,16 +271,15 @@ async function selectSSIPair(counterpartyName, currency, hasBreak = false, prefe
     presentedSSI: createSnapshot(presentedSSI),
     truthSSIRefId: String(truthSSI._id),
     presentedSSIRefId: String(presentedSSI._id),
+    truthSsiId: truthSSI.ssiId || truthSSI.sourceId,
+    presentedSsiId: presentedSSI.ssiId || presentedSSI.sourceId,
     settlementType: deriveSettlementType(truthSSI),
     breakScenario
   };
 }
 
 /**
- * Get the ratio of CORRESPONDENT to DIRECT SSI records in the database.
- * Used by the trade generator to maintain realistic settlement type distribution.
- *
- * @returns {Promise<{correspondent: number, direct: number, ratio: number}>}
+ * Get the ratio of CORRESPONDENT to DIRECT SSI records.
  */
 async function getSettlementTypeRatio() {
   const cache = await _getCache();
@@ -254,9 +292,7 @@ async function getSettlementTypeRatio() {
 // ============================
 
 /**
- * Get a completely random security (across all currencies).
- *
- * @returns {Promise<Object|null>} Security document or null
+ * Get a completely random security (across all categories).
  */
 async function getRandomSecurity() {
   const cache = await _getCache();
@@ -265,11 +301,36 @@ async function getRandomSecurity() {
 }
 
 /**
- * Get a random security for a given currency.
- * Used in the flow: Product → Security → ISIN/Currency.
+ * Get a random security for a given product (Derivative, FX, Equity, Fixed Income).
+ * Used in the new flow: Product → Product Type → Security → Underlyer/Currency.
  *
- * @param {string} currency - 3-letter currency code
+ * @param {string} product - Product name (e.g., "FX", "Equity", "Derivative", "Fixed Income")
  * @returns {Promise<Object|null>} Security document or null
+ */
+async function getSecurityByProduct(product) {
+  const cache = await _getCache();
+  if (!cache) return null;
+  const securities = cache.secByProduct.get(product);
+  if (!securities || securities.length === 0) return null;
+  return _pickRandom(securities);
+}
+
+/**
+ * Get a random security for a given product type (Forward, FX Spot, Equity, etc.).
+ *
+ * @param {string} productType - Product type name
+ * @returns {Promise<Object|null>} Security document or null
+ */
+async function getSecurityByProductType(productType) {
+  const cache = await _getCache();
+  if (!cache) return null;
+  const securities = cache.secByProductType.get(productType);
+  if (!securities || securities.length === 0) return null;
+  return _pickRandom(securities);
+}
+
+/**
+ * Get a random security for a given currency.
  */
 async function getSecurityByCurrency(currency) {
   const cache = await _getCache();
@@ -281,8 +342,6 @@ async function getSecurityByCurrency(currency) {
 
 /**
  * Get all distinct currencies from the securities collection.
- *
- * @returns {Promise<string[]>} Array of currency codes
  */
 async function getSecurityCurrencies() {
   const cache = await _getCache();
@@ -290,20 +349,51 @@ async function getSecurityCurrencies() {
 }
 
 // ============================
-// ALERT/ACRONYM CODE SEARCH (for SSI Database page)
+// ENTITY LOOKUP
+// ============================
+
+/**
+ * Get a random entity from the Entity collection.
+ * Returns entity with name, code, currency, region.
+ *
+ * @returns {Promise<Object|null>} Entity document or null
+ */
+async function getRandomEntity() {
+  const cache = await _getCache();
+  if (!cache || !cache.entities || cache.entities.length === 0) return null;
+  return _pickRandom(cache.entities);
+}
+
+/**
+ * Get all unique entity names.
+ *
+ * @returns {Promise<string[]>} Array of entity names
+ */
+async function getUniqueEntityNames() {
+  const cache = await _getCache();
+  if (!cache || !cache.entities) return [];
+  return [...new Set(cache.entities.map(e => e.entityName))];
+}
+
+/**
+ * Get all entities.
+ *
+ * @returns {Promise<Object[]>}
+ */
+async function getAllEntities() {
+  const cache = await _getCache();
+  return cache ? cache.entities : [];
+}
+
+// ============================
+// ALERT/ACRONYM CODE SEARCH
 // ============================
 
 /**
  * Search for an SSI by alert code and acronym code.
- * Used by the SSI Database page for dual-code search.
- *
- * @param {string} alertCode
- * @param {string} acronymCode (alertAcronym in our model)
- * @returns {Promise<Object|null>} SSI document or null
  */
 async function findByAlertCodes(alertCode, acronymCode) {
   if (!getIsConnected()) return null;
-
   return SSIReference.findOne({
     alertCode: alertCode.trim(),
     alertAcronym: acronymCode.trim(),
@@ -313,14 +403,9 @@ async function findByAlertCodes(alertCode, acronymCode) {
 
 /**
  * Search for an SSI by its MongoDB _id.
- * Used for traceability lookups.
- *
- * @param {string} refId - MongoDB _id
- * @returns {Promise<Object|null>}
  */
 async function findByRefId(refId) {
   if (!getIsConnected()) return null;
-
   return SSIReference.findById(refId).lean();
 }
 
@@ -330,7 +415,6 @@ async function findByRefId(refId) {
 
 /**
  * Determine settlement type from an SSI record.
- * CORRESPONDENT if agentBank exists, otherwise DIRECT.
  */
 function deriveSettlementType(ssi) {
   if (ssi.agentBank && String(ssi.agentBank).trim().length > 0) {
@@ -341,18 +425,14 @@ function deriveSettlementType(ssi) {
 
 /**
  * Create a snapshot of an SSI record for embedding in a trade.
- * This is the frozen-in-time copy stored on the trade document.
- * The snapshot ensures historical trades remain unchanged even if
- * the reference data is updated in the future.
- *
- * Maps from the MongoDB SSIReference schema to the trade's
- * settlement fields (truths.settlement / settlementDetails).
  */
 function createSnapshot(ssi) {
   return {
     ssiRefId: String(ssi._id),
+    ssiId: ssi.ssiId || ssi.sourceId,
     sourceId: ssi.sourceId,
-    counterpartyName: ssi.groupCounterPartyName,
+    counterpartyGroup: ssi.groupCounterPartyName,
+    counterpartyName: ssi.counterPartyName,
     currency: ssi.currency,
     settlementType: deriveSettlementType(ssi),
 
@@ -376,7 +456,7 @@ function createSnapshot(ssi) {
     abaRoutingNumber: ssi.abaRoutingNumber || null,
     field72: ssi.field72 || null,
 
-    // Alert codes (for SSI Database page lookups)
+    // Alert codes
     alertCode: ssi.alertCode || null,
     alertAcronym: ssi.alertAcronym || null,
 
@@ -387,12 +467,9 @@ function createSnapshot(ssi) {
 
 /**
  * Check if SSI reference data is available in MongoDB.
- * Used by the trade generator to decide between reference data
- * and in-memory fallback.
  */
 async function isReferenceDataAvailable() {
   if (!getIsConnected()) return false;
-
   try {
     const count = await SSIReference.countDocuments({ active: true });
     return count > 0;
@@ -408,8 +485,6 @@ async function isReferenceDataAvailable() {
 
 /**
  * Get all counterparties.
- *
- * @returns {Promise<Object[]>}
  */
 async function getAllCounterparties() {
   if (!getIsConnected()) return [];
@@ -422,16 +497,25 @@ module.exports = {
   findSSIsByCurrency,
   getCounterpartiesForCurrency,
   getAvailableCurrencies,
+  getSSIsByCounterpartyGroup,
+  findBySsiId,
 
   // Trade generation
   selectSSIPair,
   isReferenceDataAvailable,
   getSettlementTypeRatio,
 
-  // Security
+  // Security (new product-based lookups)
+  getSecurityByProduct,
+  getSecurityByProductType,
   getSecurityByCurrency,
   getSecurityCurrencies,
   getRandomSecurity,
+
+  // Entity
+  getRandomEntity,
+  getUniqueEntityNames,
+  getAllEntities,
 
   // Search
   findByAlertCodes,
@@ -440,7 +524,7 @@ module.exports = {
   // Counterparty
   getAllCounterparties,
 
-  // Cache control (call after a reference-data import)
+  // Cache control
   invalidateRefCache,
 
   // Helpers (exposed for testing)

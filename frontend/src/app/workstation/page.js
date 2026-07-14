@@ -136,11 +136,14 @@ const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewS
       <td className="num">{t.age}</td>
       <td>{format(t.tradeDate)}</td>
       <td>{format(t.valueDate)}</td>
+      <td>{t.counterpartyGroup}</td>
       <td>{t.counterparty}</td>
       <td>{t.entity}</td>
       <td>{t.foRegion}</td>
       <td>{t.product}</td>
+      <td>{t.productType || ''}</td>
       <td>{t.tradeType}</td>
+      <td style={{maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis'}} title={t.underlyer || ''}>{t.underlyer || ''}</td>
       {desk !== "SETTLEMENT" && <td>{t.settlementType}</td>}
       {desk === "SETTLEMENT" && (
         <td>
@@ -163,11 +166,14 @@ const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewS
   prev.t.age === next.t.age &&
   prev.t.tradeDate === next.t.tradeDate &&
   prev.t.valueDate === next.t.valueDate &&
+  prev.t.counterpartyGroup === next.t.counterpartyGroup &&
   prev.t.counterparty === next.t.counterparty &&
   prev.t.entity === next.t.entity &&
   prev.t.foRegion === next.t.foRegion &&
   prev.t.product === next.t.product &&
+  prev.t.productType === next.t.productType &&
   prev.t.tradeType === next.t.tradeType &&
+  prev.t.underlyer === next.t.underlyer &&
   prev.t.settlementType === next.t.settlementType &&
   prev.t.direction === next.t.direction &&
   prev.t.currency === next.t.currency &&
@@ -196,6 +202,8 @@ function WorkstationComponent() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEditingSSI, setIsEditingSSI] = useState(false);
   const [ssiFormData, setSsiFormData] = useState({});
+  const [ssiGroupList, setSsiGroupList] = useState([]);
+  const [selectedSsiId, setSelectedSsiId] = useState("");
 
   const socketRef = useRef(null);
   const refreshTimerRef = useRef(null);
@@ -411,12 +419,14 @@ function WorkstationComponent() {
       const res = await fetch("/api/settlement/amend", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ tradeRef: popupState.trade.tradeRef })
+        body: JSON.stringify({ tradeRef: popupState.trade.tradeRef, ssiId: selectedSsiId || undefined })
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("Sent to System for Amendment. The trade is now PENDING_AMENDMENT — check the System Mailbox for confirmation.");
+        toast.success(`Sent to System for Amendment${selectedSsiId ? ` (SSI: ${selectedSsiId})` : ""}. The trade is now PENDING_AMENDMENT — check the System Mailbox for confirmation.`);
         setIsEditingSSI(false);
+        setSelectedSsiId("");
+        setSsiGroupList([]);
         refreshQueueSilent();
         setPopupState({type: null});
       } else {
@@ -430,13 +440,13 @@ function WorkstationComponent() {
   const downloadCSV = () => {
     if (!queue || queue.length === 0) return toast.error("No data to export");
     const baseHeaders = [
-      "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "Counterparty", "Entity", "FO Region",
-      "Product", "Trade Type"
+      "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "CP Group", "Counterparty", "Entity", "FO Region",
+      "Product", "Product Type", "Trade Type", "Underlyer"
     ];
     
     let headers = [...baseHeaders];
     if (desk === "SETTLEMENT") {
-      headers = headers.concat(["Beneficiary Name", "Beneficiary BIC", "Account Number", "Account Type", "Settlement Method", "Direction", "Currency", "Amount"]);
+      headers = headers.concat(["SSI ID", "Beneficiary Name", "Beneficiary BIC", "Account Number", "Account Type", "Settlement Method", "Direction", "Currency", "Amount"]);
     } else {
       headers = headers.concat(["Settlement Type", "Direction", "Currency", "Amount"]);
     }
@@ -445,11 +455,12 @@ function WorkstationComponent() {
     queue.forEach(t => {
       let row = [
         t.tradeRef, t.currentStatus, t.nextDesk, t.age, format(t.tradeDate), format(t.valueDate), 
-        t.counterparty, t.entity, t.foRegion, t.product, t.tradeType
+        t.counterpartyGroup || "", t.counterparty, t.entity, t.foRegion, t.product, t.productType || "", t.tradeType, t.underlyer || ""
       ];
       
       if (desk === "SETTLEMENT") {
         row = row.concat([
+          t.ssiId || "",
           t.settlementDetails?.beneficiaryName || "",
           t.settlementDetails?.beneficiaryBIC || "",
           t.settlementDetails?.accountNumber || "",
@@ -572,8 +583,24 @@ function WorkstationComponent() {
     setPopupState({ type: "truth" });
   };
 
-  const viewSSI = useCallback((trade) => {
+  const viewSSI = useCallback(async (trade) => {
     setPopupState({ type: "ssi", trade });
+    setSelectedSsiId("");
+    setSsiGroupList([]);
+    // If trade has a settlement break, fetch SSI group for the dropdown
+    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus) && trade.settlementDetails?.counterpartyName) {
+      try {
+        const params = new URLSearchParams({ groupName: trade.settlementDetails.counterpartyName });
+        if (trade.currency) params.set("currency", trade.currency);
+        const res = await fetch(`/api/ssi/group?${params.toString()}`, { headers: authHeaders() });
+        const data = await res.json();
+        if (data.success && data.ssis) {
+          setSsiGroupList(data.ssis);
+        }
+      } catch (err) {
+        console.error("Failed to load SSI group:", err);
+      }
+    }
   }, []);
 
   const openTermsheet = () => {
@@ -622,8 +649,8 @@ function WorkstationComponent() {
             <thead>
               <tr>
                 <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Desk</th><th className="num">Age</th>
-                <th>Trade Date</th><th>Value Date</th><th>Counterparty</th><th>Entity</th><th>FO Region</th>
-                <th>Product</th><th>Trade Type</th>
+                <th>Trade Date</th><th>Value Date</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>FO Region</th>
+                <th>Product</th><th>Product Type</th><th>Trade Type</th><th>Underlyer</th>
                 {desk !== "SETTLEMENT" && <th>Settlement Type</th>}
                 {desk === "SETTLEMENT" && <th>SSI Details</th>}
                 <th>Direction</th><th>Currency</th>
@@ -775,10 +802,15 @@ function WorkstationComponent() {
                   </div>
                   <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
 
-                  {/* Currency & Asset Class */}
+                  {/* SSI ID & Currency & Asset Class */}
                   <div style={{padding: '8px 0'}}>
+                    {(popupState.trade.ssiId || sd.ssiId) && (
+                      <div style={{marginBottom: '6px'}}><strong style={{display: 'inline-block', width: '200px', color: '#0f766e'}}>SSI ID:</strong> <span style={{color: '#0f766e', fontWeight: 'bold', fontSize: '14px'}}>{popupState.trade.ssiId || sd.ssiId}</span></div>
+                    )}
                     <div><strong style={{display: 'inline-block', width: '200px'}}>Currency:</strong> {sd.currency || popupState.trade.currency}</div>
                     <div><strong style={{display: 'inline-block', width: '200px'}}>Asset Class:</strong> {popupState.trade.product || 'FX / Cash'}</div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Product Type:</strong> {popupState.trade.productType || ''}</div>
+                    <div><strong style={{display: 'inline-block', width: '200px'}}>Underlyer:</strong> {popupState.trade.underlyer || 'N/A'}</div>
                     <div><strong style={{display: 'inline-block', width: '200px'}}>Settlement Method:</strong> {sd.settlementMethod || 'SWIFT'}</div>
                     {sd.counterpartyName && (
                       <div><strong style={{display: 'inline-block', width: '200px'}}>Counterparty:</strong> {sd.counterpartyName}</div>
@@ -832,6 +864,30 @@ function WorkstationComponent() {
                       Truth Ref: {popupState.trade.truthSSIRefId} | Presented Ref: {popupState.trade.presentedSSIRefId}
                     </div>
                   )}
+
+                  {/* SSI ID Selection Dropdown — shown for settlement breaks */}
+                  {ssiGroupList.length > 0 && ['SETTLEMENT_BREAK', 'REJECTED_REVERIFY'].includes(popupState.trade.currentStatus) && (
+                    <div style={{marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', border: '1px solid #f59e0b'}}>
+                      <div style={{fontWeight: 'bold', fontSize: '13px', color: '#92400e', marginBottom: '8px'}}>⚠️ Select SSI ID for Amendment</div>
+                      <select
+                        value={selectedSsiId}
+                        onChange={e => setSelectedSsiId(e.target.value)}
+                        style={{width: '100%', padding: '8px', border: '1px solid #d97706', borderRadius: '4px', fontSize: '13px', background: 'white', marginBottom: '8px'}}
+                      >
+                        <option value="">-- Select an SSI ID --</option>
+                        {ssiGroupList.map((ssi, idx) => (
+                          <option key={idx} value={ssi.ssiId}>
+                            {ssi.ssiId} — {ssi.currency} — {ssi.accountWithInstitution || ssi.counterPartyName}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedSsiId && (
+                        <div style={{fontSize: '11px', color: '#78716c'}}>
+                          Selected: <strong>{selectedSsiId}</strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
@@ -850,7 +906,14 @@ function WorkstationComponent() {
             </div>
             <div style={{display: 'flex', justifyContent: 'flex-end', padding: '12px 24px', gap: '10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc'}}>
               {!isEditingSSI ? (
-                <button className="btn secondary" onClick={() => setPopupState({type: null})}>Close</button>
+                <>
+                  <button className="btn secondary" onClick={() => setPopupState({type: null})}>Close</button>
+                  {['SETTLEMENT_BREAK', 'REJECTED_REVERIFY'].includes(popupState.trade.currentStatus) && (
+                    <button className="btn primary" onClick={handleSendToSystemAmendment} disabled={ssiGroupList.length > 0 && !selectedSsiId}>
+                      Send to System for Amendment
+                    </button>
+                  )}
+                </>
               ) : (
                 <>
                   <button className="btn secondary" onClick={() => setIsEditingSSI(false)}>Cancel Edit</button>

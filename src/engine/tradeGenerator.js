@@ -1,9 +1,25 @@
 // ======================================
-// TRADE GENERATOR (V2 — DESK-SPECIFIC TRUTHS)
+// TRADE GENERATOR (V3 — REFERENCE-DATA-DRIVEN)
 // Generates realistic trades with:
+// - 3-tier product taxonomy: Product → Product Type → Trade Type
+// - Entity data from Entity data.xlsx
+// - Security/underlyer from Security Data.xlsx (3 sheets)
+// - Counterparty from SSI Reference.xlsx
+// - SSI IDs for each trade
 // - truths.mo (FO truth for MO validation)
 // - truths.confirmation (counterparty expected economics)
 // - State-aware XML audit trails
+//
+// Product Taxonomy:
+//   Derivative  → [Forward, Swap, Listed Options, Listed Futures]
+//   FX          → [FX Spot, FX Forward]
+//   Equity      → [Equity]
+//   Fixed Income → [Corporate Bond, Government Bond, Treasury Note]
+//
+// Trade Type Mapping:
+//   OTC      → Forward, Swap, FX Spot, FX Forward
+//   Exchange → Listed Options, Listed Futures
+//   Listed   → Corporate Bond, Government Bond, Treasury Note, Equity
 // ======================================
 
 const Trade = require("../models/Trade");
@@ -12,29 +28,77 @@ const ageCalculator = require("./ageCalculator");
 const ssiRepository = require("./ssiRepository");
 
 // ============================
-// REFERENCE DATA
+// 3-TIER PRODUCT TAXONOMY
+// ============================
+const PRODUCT_TAXONOMY = {
+  "Derivative": {
+    productTypes: ["Forward", "Swap", "Listed Options", "Listed Futures"],
+    tradeTypeMap: {
+      "Forward": "OTC",
+      "Swap": "OTC",
+      "Listed Options": "Exchange",
+      "Listed Futures": "Exchange"
+    }
+  },
+  "FX": {
+    productTypes: ["FX Spot", "FX Forward"],
+    tradeTypeMap: {
+      "FX Spot": "OTC",
+      "FX Forward": "OTC"
+    }
+  },
+  "Equity": {
+    productTypes: ["Equity"],
+    tradeTypeMap: {
+      "Equity": "Listed"
+    }
+  },
+  "Fixed Income": {
+    productTypes: ["Corporate Bond", "Government Bond", "Treasury Note"],
+    tradeTypeMap: {
+      "Corporate Bond": "Listed",
+      "Government Bond": "Listed",
+      "Treasury Note": "Listed"
+    }
+  }
+};
+
+const PRODUCTS = Object.keys(PRODUCT_TAXONOMY);
+
+// Settlement type derived from trade type
+function deriveSettlementType(tradeType) {
+  if (tradeType === "OTC") return "BILATERAL";
+  return "ELECTRONIC"; // Exchange, Listed
+}
+
+// ============================
+// FALLBACK REFERENCE DATA (when MongoDB unavailable)
 // ============================
 const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "AUD"];
 const COUNTERPARTIES = ["CITI", "HSBC", "DB", "JPM", "BNP", "BARC", "MS", "UBS"];
-const ENTITIES = ["GS London", "GS New York", "GS Singapore", "GS Tokyo", "GS Frankfurt"];
+const ENTITIES = ["SBG London", "SBG New York", "SBG Singapore", "SBG Tokyo", "SBG Frankfurt"];
 const REGIONS = ["AMER", "EMEA", "APAC"];
-const PRODUCT_MASTER = [
-  { name: "FX Spot", securityRequired: false },
-  { name: "FX Forward", securityRequired: false },
-  { name: "Interest Rate Swap", securityRequired: false },
-  { name: "Credit Default Swap", securityRequired: false },
-  { name: "Equity", securityRequired: true },
-  { name: "Corporate Bond", securityRequired: true },
-  { name: "Government Bond", securityRequired: true },
-  { name: "Listed Futures", securityRequired: false },
-  { name: "Listed Options", securityRequired: false }
-];
-const TRADE_TYPES = ["OTC", "Listed", "Exchange", "Depository"];
-const SETTLEMENT_TYPES = ["ELECTRONIC", "BILATERAL"];
 const DIRECTIONS = ["BUY", "SELL"];
-const SSI_BICS = ["CITIUS33", "HSBCGB2L", "DEUTDEFF", "CHASUS33", "BNPADEFF", "BARCGB2L", "MSUS33", "UBSWCHZH"];
 
-// Generate deterministic alertCode (6-char alphanumeric) and acronymCode (6-digit numeric) from ssiId
+const MO_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY", "COUNTERPARTY"];
+const CONFIRMATION_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY"];
+
+// System actors for automated audit trails
+const SYSTEM_ACTORS = [
+  "SYSTEM_BOOKING_ENGINE",
+  "AUTO_VALIDATOR",
+  "TRADE_CAPTURE_SYSTEM",
+  "RISK_ENGINE",
+  "COMPLIANCE_CHECK",
+  "MO_ANALYST_SYSTEM"
+];
+
+// ~30% of MO-clean trades will have a confirmation-level discrepancy
+const CONFIRMATION_BREAK_RATIO = 0.3;
+
+// ============================
+// IN-MEMORY SSI FALLBACK (for offline/dev mode)
+// ============================
 function generateSSICodes(ssiId) {
   let hash = 0;
   for (let i = 0; i < ssiId.length; i++) {
@@ -52,7 +116,6 @@ function generateSSICodes(ssiId) {
   return { alertCode, acronymCode };
 }
 
-// Attach alertCode + acronymCode to each SSI entry
 function enrichSSIs(ssiDict) {
   for (const key in ssiDict) {
     ssiDict[key] = ssiDict[key].map(ssi => {
@@ -65,105 +128,51 @@ function enrichSSIs(ssiDict) {
 
 const CPTY_SSIS = enrichSSIs({
   "CITI": [
-    { ssiId: "CPTY-CITI-01", beneficiaryName: "Citigroup Global Markets Inc", beneficiaryBank: "Citibank N.A. New York", beneficiaryBIC: "CITIUS33", accountNumber: "10293847", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
-    { ssiId: "CPTY-CITI-02", beneficiaryName: "Citigroup Global Markets Ltd", beneficiaryBank: "Citibank N.A. London", beneficiaryBIC: "CITIGB2L", accountNumber: "39481920", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. London"  },
-    { ssiId: "CPTY-CITI-03", beneficiaryName: "Citibank Singapore", beneficiaryBank: "Citibank N.A. Singapore", beneficiaryBIC: "CITISGSG", accountNumber: "83749210", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
-    { ssiId: "CPTY-CITI-04", beneficiaryName: "Citigroup Global Markets Europe", beneficiaryBank: "Citibank Europe PLC", beneficiaryBIC: "CITIIE2D", accountNumber: "55667788", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "Citibank N.A. London"  }
+    { ssiId: "CPTY-CITI-01", beneficiaryName: "Citigroup Global Markets Inc", beneficiaryBank: "Citibank N.A. New York", beneficiaryBIC: "CITIUS33", accountNumber: "10293847", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York" },
+    { ssiId: "CPTY-CITI-02", beneficiaryName: "Citigroup Global Markets Ltd", beneficiaryBank: "Citibank N.A. London", beneficiaryBIC: "CITIGB2L", accountNumber: "39481920", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. London" }
   ],
   "HSBC": [
-    { ssiId: "CPTY-HSBC-01", beneficiaryName: "HSBC Bank PLC", beneficiaryBank: "HSBC London", beneficiaryBIC: "HSBCGB2L", accountNumber: "88992211", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "HSBC London"  },
-    { ssiId: "CPTY-HSBC-02", beneficiaryName: "HSBC USA Inc", beneficiaryBank: "HSBC Bank USA N.A.", beneficiaryBIC: "HSBCUS33", accountNumber: "77665544", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank USA N.A."  },
-    { ssiId: "CPTY-HSBC-03", beneficiaryName: "HSBC France", beneficiaryBank: "HSBC Continental Europe", beneficiaryBIC: "HSBCFRPP", accountNumber: "11223344", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "HSBC Continental Europe"  },
-    { ssiId: "CPTY-HSBC-04", beneficiaryName: "HSBC Hong Kong", beneficiaryBank: "The Hongkong and Shanghai Banking Corp", beneficiaryBIC: "HSBCHKHH", accountNumber: "99887766", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank USA N.A."  }
+    { ssiId: "CPTY-HSBC-01", beneficiaryName: "HSBC Bank PLC", beneficiaryBank: "HSBC London", beneficiaryBIC: "HSBCGB2L", accountNumber: "88992211", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "HSBC London" },
+    { ssiId: "CPTY-HSBC-02", beneficiaryName: "HSBC USA Inc", beneficiaryBank: "HSBC Bank USA N.A.", beneficiaryBIC: "HSBCUS33", accountNumber: "77665544", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank USA N.A." }
   ],
   "DB": [
-    { ssiId: "CPTY-DB-01", beneficiaryName: "Deutsche Bank AG Frankfurt", beneficiaryBank: "Deutsche Bank AG", beneficiaryBIC: "DEUTDEFF", accountNumber: "10203040", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank AG"  },
-    { ssiId: "CPTY-DB-02", beneficiaryName: "Deutsche Bank Securities Inc", beneficiaryBank: "Deutsche Bank Trust Company Americas", beneficiaryBIC: "BKTRUS33", accountNumber: "50607080", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank Trust Company Americas"  },
-    { ssiId: "CPTY-DB-03", beneficiaryName: "Deutsche Bank AG London", beneficiaryBank: "Deutsche Bank AG London Branch", beneficiaryBIC: "DEUTGB2L", accountNumber: "11221122", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "Deutsche Bank AG London Branch"  },
-    { ssiId: "CPTY-DB-04", beneficiaryName: "Deutsche Bank AG Singapore", beneficiaryBank: "Deutsche Bank AG Singapore Branch", beneficiaryBIC: "DEUTSGSG", accountNumber: "33443344", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank Trust Company Americas"  }
+    { ssiId: "CPTY-DB-01", beneficiaryName: "Deutsche Bank AG Frankfurt", beneficiaryBank: "Deutsche Bank AG", beneficiaryBIC: "DEUTDEFF", accountNumber: "10203040", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank AG" }
   ],
   "JPM": [
-    { ssiId: "CPTY-JPM-01", beneficiaryName: "J.P. Morgan Securities LLC", beneficiaryBank: "JPMorgan Chase Bank N.A.", beneficiaryBIC: "CHASUS33", accountNumber: "90807060", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A."  },
-    { ssiId: "CPTY-JPM-02", beneficiaryName: "J.P. Morgan Securities PLC", beneficiaryBank: "JPMorgan Chase Bank N.A. London", beneficiaryBIC: "CHASGB2L", accountNumber: "10901090", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "JPMorgan Chase Bank N.A. London"  },
-    { ssiId: "CPTY-JPM-03", beneficiaryName: "J.P. Morgan SE", beneficiaryBank: "J.P. Morgan SE Frankfurt", beneficiaryBIC: "CHASDEFF", accountNumber: "50403020", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "J.P. Morgan SE Frankfurt"  },
-    { ssiId: "CPTY-JPM-04", beneficiaryName: "JPMorgan Chase Bank N.A. Sydney", beneficiaryBank: "JPMorgan Chase Bank N.A. Sydney Branch", beneficiaryBIC: "CHASAU2S", accountNumber: "12121212", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A."  }
+    { ssiId: "CPTY-JPM-01", beneficiaryName: "J.P. Morgan Securities LLC", beneficiaryBank: "JPMorgan Chase Bank N.A.", beneficiaryBIC: "CHASUS33", accountNumber: "90807060", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A." }
   ],
   "BNP": [
-    { ssiId: "CPTY-BNP-01", beneficiaryName: "BNP Paribas SA", beneficiaryBank: "BNP Paribas Paris", beneficiaryBIC: "BNPADEFF", accountNumber: "11112222", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "BNP Paribas Paris"  },
-    { ssiId: "CPTY-BNP-02", beneficiaryName: "BNP Paribas Securities Corp", beneficiaryBank: "BNP Paribas New York Branch", beneficiaryBIC: "BNPAUS33", accountNumber: "33334444", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "BNP Paribas New York Branch"  },
-    { ssiId: "CPTY-BNP-03", beneficiaryName: "BNP Paribas London Branch", beneficiaryBank: "BNP Paribas London", beneficiaryBIC: "BNPAGB2L", accountNumber: "55556666", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "BNP Paribas London"  },
-    { ssiId: "CPTY-BNP-04", beneficiaryName: "BNP Paribas Singapore", beneficiaryBank: "BNP Paribas Singapore Branch", beneficiaryBIC: "BNPASGSG", accountNumber: "77778888", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "BNP Paribas New York Branch"  }
+    { ssiId: "CPTY-BNP-01", beneficiaryName: "BNP Paribas SA", beneficiaryBank: "BNP Paribas Paris", beneficiaryBIC: "BNPADEFF", accountNumber: "11112222", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "BNP Paribas Paris" }
   ],
   "BARC": [
-    { ssiId: "CPTY-BARC-01", beneficiaryName: "Barclays Bank PLC", beneficiaryBank: "Barclays Bank PLC London", beneficiaryBIC: "BARCGB2L", accountNumber: "12344321", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "Barclays Bank PLC London"  },
-    { ssiId: "CPTY-BARC-02", beneficiaryName: "Barclays Capital Inc", beneficiaryBank: "Barclays Bank PLC New York", beneficiaryBIC: "BARCUS33", accountNumber: "56788765", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Barclays Bank PLC New York"  },
-    { ssiId: "CPTY-BARC-03", beneficiaryName: "Barclays Bank Ireland PLC", beneficiaryBank: "Barclays Bank Ireland PLC", beneficiaryBIC: "BARCIE2D", accountNumber: "90122109", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "Barclays Bank Ireland PLC"  },
-    { ssiId: "CPTY-BARC-04", beneficiaryName: "Barclays Bank PLC Singapore", beneficiaryBank: "Barclays Bank PLC Singapore Branch", beneficiaryBIC: "BARCSGSG", accountNumber: "34566543", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Barclays Bank PLC New York"  }
+    { ssiId: "CPTY-BARC-01", beneficiaryName: "Barclays Bank PLC", beneficiaryBank: "Barclays Bank PLC London", beneficiaryBIC: "BARCGB2L", accountNumber: "12344321", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "Barclays Bank PLC London" }
   ],
   "MS": [
-    { ssiId: "CPTY-MS-01", beneficiaryName: "Morgan Stanley & Co. LLC", beneficiaryBank: "Morgan Stanley Bank N.A.", beneficiaryBIC: "MSUS33", accountNumber: "10101010", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Morgan Stanley Bank N.A."  },
-    { ssiId: "CPTY-MS-02", beneficiaryName: "Morgan Stanley & Co. International", beneficiaryBank: "Morgan Stanley Bank International Ltd", beneficiaryBIC: "MSGB2L", accountNumber: "20202020", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "Morgan Stanley Bank International Ltd"  },
-    { ssiId: "CPTY-MS-03", beneficiaryName: "Morgan Stanley Europe SE", beneficiaryBank: "Morgan Stanley Europe SE", beneficiaryBIC: "MSDEFF", accountNumber: "30303030", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "Morgan Stanley Europe SE"  },
-    { ssiId: "CPTY-MS-04", beneficiaryName: "Morgan Stanley MUFG Securities Co", beneficiaryBank: "Morgan Stanley MUFG Securities Co Ltd", beneficiaryBIC: "MSJPJT", accountNumber: "40404040", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Morgan Stanley Bank N.A."  }
+    { ssiId: "CPTY-MS-01", beneficiaryName: "Morgan Stanley & Co. LLC", beneficiaryBank: "Morgan Stanley Bank N.A.", beneficiaryBIC: "MSUS33", accountNumber: "10101010", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Morgan Stanley Bank N.A." }
   ],
   "UBS": [
-    { ssiId: "CPTY-UBS-01", beneficiaryName: "UBS AG", beneficiaryBank: "UBS AG Zurich", beneficiaryBIC: "UBSWCHZH", accountNumber: "99009900", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "UBS AG Zurich"  },
-    { ssiId: "CPTY-UBS-02", beneficiaryName: "UBS Securities LLC", beneficiaryBank: "UBS AG Stamford Branch", beneficiaryBIC: "UBSWUS33", accountNumber: "88008800", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "UBS AG Stamford Branch"  },
-    { ssiId: "CPTY-UBS-03", beneficiaryName: "UBS AG London Branch", beneficiaryBank: "UBS AG London Branch", beneficiaryBIC: "UBSWGB2L", accountNumber: "77007700", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "UBS AG London Branch"  },
-    { ssiId: "CPTY-UBS-04", beneficiaryName: "UBS Europe SE", beneficiaryBank: "UBS Europe SE Frankfurt", beneficiaryBIC: "UBSWDEFF", accountNumber: "66006600", accountType: "Vostro", settlementMethod: "TARGET2", correspondentBank: "UBS Europe SE Frankfurt"  }
+    { ssiId: "CPTY-UBS-01", beneficiaryName: "UBS AG", beneficiaryBank: "UBS AG Zurich", beneficiaryBIC: "UBSWCHZH", accountNumber: "99009900", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "UBS AG Zurich" }
   ]
 });
-
 
 const ENTITY_SSIS = enrichSSIs({
-  "GS London": [
-    { ssiId: "ENT-GSLONDON-01", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "GS Bank PLC London", beneficiaryBIC: "GSGB2L", accountNumber: "12312312", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "GS Bank PLC London"  },
-    { ssiId: "ENT-GSLONDON-02", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "HSBC Bank PLC", beneficiaryBIC: "HSBCGB2L", accountNumber: "45645645", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank PLC"  },
-    { ssiId: "ENT-GSLONDON-03", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "Barclays Bank PLC", beneficiaryBIC: "BARCGB2L", accountNumber: "78978978", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Barclays Bank PLC"  },
-    { ssiId: "ENT-GSLONDON-04", beneficiaryName: "Goldman Sachs International", beneficiaryBank: "Lloyds Bank PLC", beneficiaryBIC: "LLOYGB2L", accountNumber: "32132132", accountType: "Vostro", settlementMethod: "CHAPS", correspondentBank: "Lloyds Bank PLC"  }
+  "SBG London": [
+    { ssiId: "ENT-SBGLON-01", beneficiaryName: "Skillomentum Global Bank London", beneficiaryBank: "SBG Bank PLC London", beneficiaryBIC: "SBGB2L", accountNumber: "12312312", accountType: "Nostro", settlementMethod: "CHAPS", correspondentBank: "SBG Bank PLC London" },
+    { ssiId: "ENT-SBGLON-02", beneficiaryName: "Skillomentum Global Bank London", beneficiaryBank: "HSBC Bank PLC", beneficiaryBIC: "HSBCGB2L", accountNumber: "45645645", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "HSBC Bank PLC" }
   ],
-  "GS New York": [
-    { ssiId: "ENT-GSNEWYORK-01", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "GS Bank USA New York", beneficiaryBIC: "GSUS33", accountNumber: "98798798", accountType: "Nostro", settlementMethod: "FEDWIRE", correspondentBank: "GS Bank USA New York"  },
-    { ssiId: "ENT-GSNEWYORK-02", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "JPMorgan Chase Bank N.A.", beneficiaryBIC: "CHASUS33", accountNumber: "65465465", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "JPMorgan Chase Bank N.A."  },
-    { ssiId: "ENT-GSNEWYORK-03", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "Citibank N.A. New York", beneficiaryBIC: "CITIUS33", accountNumber: "32132132", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Citibank N.A. New York"  },
-    { ssiId: "ENT-GSNEWYORK-04", beneficiaryName: "Goldman Sachs & Co. LLC", beneficiaryBank: "Bank of America N.A.", beneficiaryBIC: "BOFAUS3N", accountNumber: "85285285", accountType: "Vostro", settlementMethod: "FEDWIRE", correspondentBank: "Bank of America N.A."  }
+  "SBG New York": [
+    { ssiId: "ENT-SBGNY-01", beneficiaryName: "Skillomentum Global Bank NY", beneficiaryBank: "SBG Bank USA New York", beneficiaryBIC: "SBGUS33", accountNumber: "98798798", accountType: "Nostro", settlementMethod: "FEDWIRE", correspondentBank: "SBG Bank USA New York" }
   ],
-  "GS Singapore": [
-    { ssiId: "ENT-GSSINGAPORE-01", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "GS Bank Singapore", beneficiaryBIC: "GSSGSG", accountNumber: "11122233", accountType: "Nostro", settlementMethod: "MEPS", correspondentBank: "GS Bank Singapore"  },
-    { ssiId: "ENT-GSSINGAPORE-02", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "DBS Bank Ltd", beneficiaryBIC: "DBSSSGSG", accountNumber: "44455566", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "DBS Bank Ltd"  },
-    { ssiId: "ENT-GSSINGAPORE-03", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "Standard Chartered Bank", beneficiaryBIC: "SCBLSGSG", accountNumber: "77788899", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Standard Chartered Bank"  },
-    { ssiId: "ENT-GSSINGAPORE-04", beneficiaryName: "Goldman Sachs Singapore PTE", beneficiaryBank: "Citibank N.A. Singapore", beneficiaryBIC: "CITISGSG", accountNumber: "22233344", accountType: "Vostro", settlementMethod: "MEPS", correspondentBank: "Citibank N.A. Singapore"  }
+  "SBG Singapore": [
+    { ssiId: "ENT-SBGSG-01", beneficiaryName: "Skillomentum Global Bank Singapore", beneficiaryBank: "SBG Bank Singapore", beneficiaryBIC: "SBGSGSG", accountNumber: "11122233", accountType: "Nostro", settlementMethod: "MEPS", correspondentBank: "SBG Bank Singapore" }
   ],
-  "GS Tokyo": [
-    { ssiId: "ENT-GSTOKYO-01", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "GS Bank Tokyo", beneficiaryBIC: "GSJPJT", accountNumber: "99988877", accountType: "Nostro", settlementMethod: "BOJ-NET", correspondentBank: "GS Bank Tokyo"  },
-    { ssiId: "ENT-GSTOKYO-02", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "MUFG Bank Ltd", beneficiaryBIC: "BOTKJPJT", accountNumber: "66655544", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "MUFG Bank Ltd"  },
-    { ssiId: "ENT-GSTOKYO-03", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "Sumitomo Mitsui Banking Corp", beneficiaryBIC: "SMBCJPJT", accountNumber: "33322211", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Sumitomo Mitsui Banking Corp"  },
-    { ssiId: "ENT-GSTOKYO-04", beneficiaryName: "Goldman Sachs Japan Co Ltd", beneficiaryBank: "Mizuho Bank Ltd", beneficiaryBIC: "MHCBJPJT", accountNumber: "88877766", accountType: "Vostro", settlementMethod: "BOJ-NET", correspondentBank: "Mizuho Bank Ltd"  }
+  "SBG Tokyo": [
+    { ssiId: "ENT-SBGTK-01", beneficiaryName: "Skillomentum Global Bank Tokyo", beneficiaryBank: "SBG Bank Tokyo", beneficiaryBIC: "SBGJPJT", accountNumber: "99988877", accountType: "Nostro", settlementMethod: "BOJ-NET", correspondentBank: "SBG Bank Tokyo" }
   ],
-  "GS Frankfurt": [
-    { ssiId: "ENT-GSFRANKFURT-01", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "GS Bank Europe Frankfurt", beneficiaryBIC: "GSDEFF", accountNumber: "10102020", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "GS Bank Europe Frankfurt"  },
-    { ssiId: "ENT-GSFRANKFURT-02", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "Deutsche Bank AG", beneficiaryBIC: "DEUTDEFF", accountNumber: "30304040", accountType: "Vostro", settlementMethod: "SWIFT", correspondentBank: "Deutsche Bank AG"  },
-    { ssiId: "ENT-GSFRANKFURT-03", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "Commerzbank AG", beneficiaryBIC: "COBADEFF", accountNumber: "50506060", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Commerzbank AG"  },
-    { ssiId: "ENT-GSFRANKFURT-04", beneficiaryName: "Goldman Sachs Bank Europe SE", beneficiaryBank: "DZ Bank AG", beneficiaryBIC: "GENODEF1", accountNumber: "70708080", accountType: "Vostro", settlementMethod: "TARGET2", correspondentBank: "DZ Bank AG"  }
+  "SBG Frankfurt": [
+    { ssiId: "ENT-SBGFR-01", beneficiaryName: "Skillomentum Global Bank Europe SE", beneficiaryBank: "SBG Bank Europe Frankfurt", beneficiaryBIC: "SBGDEFF", accountNumber: "10102020", accountType: "Nostro", settlementMethod: "TARGET2", correspondentBank: "SBG Bank Europe Frankfurt" }
   ]
 });
-
-const MO_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY", "COUNTERPARTY"];
-// Confirmation breaks: no counterparty mismatch per user feedback
-const CONFIRMATION_BREAK_TYPES = ["AMOUNT", "VALUE_DATE", "CURRENCY"];
-
-// System actors for automated audit trails
-const SYSTEM_ACTORS = [
-  "SYSTEM_BOOKING_ENGINE",
-  "AUTO_VALIDATOR",
-  "TRADE_CAPTURE_SYSTEM",
-  "RISK_ENGINE",
-  "COMPLIANCE_CHECK",
-  "MO_ANALYST_SYSTEM"
-];
-
-// ~30% of MO-clean trades will have a confirmation-level discrepancy
-const CONFIRMATION_BREAK_RATIO = 0.3;
 
 // ============================
 // UTILITY FUNCTIONS
@@ -177,7 +186,6 @@ function generateRealisticAmount(currency) {
   let base;
   if (currency === "JPY") base = Math.random() * 10000000;
   else base = Math.random() * 2000000;
-
   const irregular = Math.floor(Math.random() * 997) + 3;
   return Math.floor(base / irregular) * irregular + Math.floor(Math.random() * 97);
 }
@@ -196,9 +204,6 @@ function formatDateForXml(date) {
 // BREAK DESCRIPTION HELPERS
 // ============================
 
-/**
- * Describes the discrepancy between MO truth and booking for a trade.
- */
 function describeBreak(trade) {
   const moTruth = trade.truths?.mo;
   if (!moTruth || !trade.booking) return "Discrepancy detected";
@@ -253,109 +258,97 @@ function generateXmlAudit(trade) {
     });
   } else {
     // ── Normal Audit Generation ──
-    // ── Event 1: Trade Captured ──
-  const captureTime = new Date(tradeDate);
-  captureTime.setMinutes(captureTime.getMinutes() + Math.floor(Math.random() * 30));
-  events.push({
-    eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-    timestamp: captureTime,
-    actor: "TRADE_CAPTURE_SYSTEM",
-    action: "TRADE_CAPTURED",
-    details: `Trade ${trade.tradeRef} captured. Product: ${trade.product}, Direction: ${trade.direction}, Amount: ${trade.currency} ${trade.amount}, Counterparty: ${trade.counterparty}`,
-    status: "NEW"
-  });
-
-  // ── Event 2: Compliance Check ──
-  const complianceTime = new Date(captureTime);
-  complianceTime.setMinutes(complianceTime.getMinutes() + Math.floor(Math.random() * 15) + 5);
-  events.push({
-    eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-    timestamp: complianceTime,
-    actor: "COMPLIANCE_CHECK",
-    action: "COMPLIANCE_VALIDATED",
-    details: `Compliance check passed. Counterparty: ${trade.counterparty}, Entity: ${trade.entity}, Region: ${trade.foRegion}`,
-    status: "COMPLIANCE_CLEARED"
-  });
-
-  // ── Event 3: Risk Assessment ──
-  const riskTime = new Date(complianceTime);
-  riskTime.setMinutes(riskTime.getMinutes() + Math.floor(Math.random() * 20) + 5);
-  events.push({
-    eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-    timestamp: riskTime,
-    actor: "RISK_ENGINE",
-    action: "RISK_ASSESSED",
-    details: `Risk assessment completed. Credit category: Standard. Settlement type: ${trade.settlementType}`,
-    status: "RISK_CLEARED"
-  });
-
-  // ── Event 4: Booking recorded ──
-  const bookingTime = new Date(riskTime);
-  bookingTime.setMinutes(bookingTime.getMinutes() + Math.floor(Math.random() * 10) + 2);
-
-  if (hasBreak) {
+    const captureTime = new Date(tradeDate);
+    captureTime.setMinutes(captureTime.getMinutes() + Math.floor(Math.random() * 30));
     events.push({
       eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-      timestamp: bookingTime,
+      timestamp: captureTime,
+      actor: "TRADE_CAPTURE_SYSTEM",
+      action: "TRADE_CAPTURED",
+      details: `Trade ${trade.tradeRef} captured. Product: ${trade.product}, Product Type: ${trade.productType || ""}, Direction: ${trade.direction}, Amount: ${trade.currency} ${trade.amount}, Counterparty: ${trade.counterparty}`,
+      status: "NEW"
+    });
+
+    const complianceTime = new Date(captureTime);
+    complianceTime.setMinutes(complianceTime.getMinutes() + Math.floor(Math.random() * 15) + 5);
+    events.push({
+      eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
+      timestamp: complianceTime,
+      actor: "COMPLIANCE_CHECK",
+      action: "COMPLIANCE_VALIDATED",
+      details: `Compliance check passed. Counterparty: ${trade.counterparty}, Entity: ${trade.entity}, Region: ${trade.foRegion}`,
+      status: "COMPLIANCE_CLEARED"
+    });
+
+    const riskTime = new Date(complianceTime);
+    riskTime.setMinutes(riskTime.getMinutes() + Math.floor(Math.random() * 20) + 5);
+    events.push({
+      eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
+      timestamp: riskTime,
+      actor: "RISK_ENGINE",
+      action: "RISK_ASSESSED",
+      details: `Risk assessment completed. Credit category: Standard. Settlement type: ${trade.settlementType}`,
+      status: "RISK_CLEARED"
+    });
+
+    const bookingTime = new Date(riskTime);
+    bookingTime.setMinutes(bookingTime.getMinutes() + Math.floor(Math.random() * 10) + 2);
+
+    if (hasBreak) {
+      events.push({
+        eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
+        timestamp: bookingTime,
+        actor: "SYSTEM_BOOKING_ENGINE",
+        action: "BOOKING_RECORDED",
+        details: `Booking recorded. Amount: ${trade.booking.currency} ${trade.booking.amount}, Value Date: ${new Date(trade.booking.valueDate).toISOString().split("T")[0]}, Counterparty: ${trade.booking.counterparty}`,
+        status: "BOOKING_RECORDED"
+      });
+    } else {
+      events.push({
+        eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
+        timestamp: bookingTime,
+        actor: "AUTO_VALIDATOR",
+        action: "BOOKING_VALIDATED",
+        details: `Booking matches front office truth. No discrepancies found. Trade routed to MO desk for validation.`,
+        status: "BOOKING_VALIDATED"
+      });
+    }
+
+    const routeTime = new Date(bookingTime);
+    routeTime.setMinutes(routeTime.getMinutes() + Math.floor(Math.random() * 5) + 1);
+    events.push({
+      eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
+      timestamp: routeTime,
       actor: "SYSTEM_BOOKING_ENGINE",
-      action: "BOOKING_RECORDED",
-      details: `Booking recorded. Amount: ${trade.booking.currency} ${trade.booking.amount}, Value Date: ${new Date(trade.booking.valueDate).toISOString().split("T")[0]}, Counterparty: ${trade.booking.counterparty}`,
-      status: "BOOKING_RECORDED"
+      action: "ROUTED_TO_MO",
+      details: `Trade routed to MO desk for processing. Status: MO_PENDING`,
+      status: "MO_PENDING"
     });
-  } else {
-    events.push({
-      eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-      timestamp: bookingTime,
-      actor: "AUTO_VALIDATOR",
-      action: "BOOKING_VALIDATED",
-      details: `Booking matches front office truth. No discrepancies found. Trade routed to MO desk for validation.`,
-      status: "BOOKING_VALIDATED"
-    });
+
+    if (trade.currentStatus === "MO_BREAK_OPEN") {
+      const breakIdentifyTime = new Date(routeTime);
+      breakIdentifyTime.setMinutes(breakIdentifyTime.getMinutes() + Math.floor(Math.random() * 45) + 10);
+      const breakDescription = describeBreak(trade);
+      events.push({
+        eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
+        timestamp: breakIdentifyTime,
+        actor: "MO_ANALYST_SYSTEM",
+        action: "BREAK_IDENTIFIED",
+        details: `Break identified during MO review. ${breakDescription}. Trade status changed from MO_PENDING to MO_BREAK_OPEN.`,
+        status: "MO_BREAK_OPEN"
+      });
+    }
   }
 
-  // ── Event 5: Routed to MO ──
-  const routeTime = new Date(bookingTime);
-  routeTime.setMinutes(routeTime.getMinutes() + Math.floor(Math.random() * 5) + 1);
-  events.push({
-    eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-    timestamp: routeTime,
-    actor: "SYSTEM_BOOKING_ENGINE",
-    action: "ROUTED_TO_MO",
-    details: `Trade routed to MO desk for processing. Status: MO_PENDING`,
-    status: "MO_PENDING"
-  });
-
-  // ══════════════════════════════════════════
-  // STATE-SPECIFIC CONTINUATION
-  // ══════════════════════════════════════════
-
-  if (trade.currentStatus === "MO_BREAK_OPEN") {
-
-    // ── Event 6: Break Identified ──
-    const breakIdentifyTime = new Date(routeTime);
-    breakIdentifyTime.setMinutes(breakIdentifyTime.getMinutes() + Math.floor(Math.random() * 45) + 10);
-
-    const breakDescription = describeBreak(trade);
-
-    events.push({
-      eventId: `EVT_${trade.tradeRef}_${String(evtCounter++).padStart(3, "0")}`,
-      timestamp: breakIdentifyTime,
-      actor: "MO_ANALYST_SYSTEM",
-      action: "BREAK_IDENTIFIED",
-      details: `Break identified during MO review. ${breakDescription}. Trade status changed from MO_PENDING to MO_BREAK_OPEN.`,
-      status: "MO_BREAK_OPEN"
-    });
-  }
-  } // Close the else block for Normal Audit Generation
-
-  // ══════════════════════════════════════════
-  // BUILD XML DOCUMENT
-  // ══════════════════════════════════════════
+  // ── BUILD XML DOCUMENT ──
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<AuditTrail tradeRef="${trade.tradeRef}" generatedAt="${formatDateForXml(new Date())}">\n`;
   xml += `  <TradeInfo>\n`;
   xml += `    <TradeRef>${trade.tradeRef}</TradeRef>\n`;
   xml += `    <Product>${trade.product}</Product>\n`;
+  xml += `    <ProductType>${trade.productType || ""}</ProductType>\n`;
+  xml += `    <TradeType>${trade.tradeType || ""}</TradeType>\n`;
+  xml += `    <Underlyer>${trade.underlyer || ""}</Underlyer>\n`;
   xml += `    <Direction>${trade.direction}</Direction>\n`;
   xml += `    <Currency>${trade.currency}</Currency>\n`;
   xml += `    <Amount>${trade.amount}</Amount>\n`;
@@ -366,7 +359,6 @@ function generateXmlAudit(trade) {
   xml += `    <CurrentStatus>${trade.currentStatus}</CurrentStatus>\n`;
   xml += `  </TradeInfo>\n`;
 
-  // Include MO truth vs booking if break exists
   if (hasBreak && moTruth) {
     xml += `  <DiscrepancyInfo>\n`;
     xml += `    <FOTruth>\n`;
@@ -413,59 +405,69 @@ function generateXmlAudit(trade) {
  * @param {boolean} hasConfirmationBreak - Whether to inject a confirmation-level break
  * @param {string} settlementInitialState - Configured initial state for settlement
  * @param {boolean} hasSettlementBreak - Whether to inject a settlement-level break
- * @param {Object|null} ssiPairData - Pre-selected SSI pair from ssiRepository (null = use in-memory fallback)
+ * @param {Object|null} ssiPairData - Pre-selected SSI pair from ssiRepository
  * @returns {Object} Trade object (not yet saved to DB)
  */
 function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false, settlementInitialState = "SETTLEMENT_PENDING", hasSettlementBreak = false, ssiPairData = null) {
   const now = new Date();
   const tradeDate = new Date(now);
 
-  // Constrain tradeDate so that the desk-specific age is at most 1:
-  //   MO Desk:           age = days(now - tradeDate),          so tradeDate = today or yesterday (0-1 days ago)
-  //   Confirmation Desk:  age = days(now - (tradeDate + 1)),   so tradeDate up to 2 days ago still yields age ≤ 1
-  //   Other desks:        default to MO-style (0-1 days ago)
   const maxDaysAgo = desk === "CONFIRMATION" ? 2 : 1;
   tradeDate.setDate(tradeDate.getDate() - Math.floor(Math.random() * (maxDaysAgo + 1)));
 
-  // When reference data is available, the SSI pair carries the resolved
-  // currency and counterparty from the chain: Product → Security → Currency → Counterparty → SSI.
-  // Otherwise, fall back to random picks from hardcoded arrays.
-  const currency = (ssiPairData && ssiPairData.currency) ? ssiPairData.currency : pick(CURRENCIES);
-  const product = (ssiPairData && ssiPairData.product) ? ssiPairData.product : pick(PRODUCT_MASTER).name;
-  const direction = pick(DIRECTIONS);
-  const entity = pick(ENTITIES);
-  const foRegion = pick(REGIONS);
-
-  let derivedTradeType = "";
-  let derivedSettlementType = "";
-
-  if (["FX Spot", "FX Forward", "Interest Rate Swap", "Credit Default Swap"].includes(product)) {
-    derivedTradeType = "OTC";
-    derivedSettlementType = "BILATERAL";
-  } else if (["Equity", "Listed Futures", "Listed Options"].includes(product)) {
-    derivedTradeType = "Exchange";
-    derivedSettlementType = "ELECTRONIC";
-  } else if (product === "Corporate Bond") {
-    derivedTradeType = pick(["Exchange", "Depository"]);
-    derivedSettlementType = "ELECTRONIC";
-  } else if (product === "Government Bond") {
-    derivedTradeType = "Depository";
-    derivedSettlementType = "ELECTRONIC";
+  // ── PRODUCT TAXONOMY SELECTION ──
+  // When reference data provides product/productType/tradeType, use those.
+  // Otherwise, randomly select from the taxonomy.
+  let product, productType, tradeType;
+  
+  if (ssiPairData && ssiPairData.product) {
+    product = ssiPairData.product;
+    productType = ssiPairData.productType || pick(PRODUCT_TAXONOMY[product]?.productTypes || [product]);
+    tradeType = ssiPairData.tradeType || PRODUCT_TAXONOMY[product]?.tradeTypeMap?.[productType] || "OTC";
+  } else {
+    product = pick(PRODUCTS);
+    productType = pick(PRODUCT_TAXONOMY[product].productTypes);
+    tradeType = PRODUCT_TAXONOMY[product].tradeTypeMap[productType];
   }
+
+  const derivedSettlementType = deriveSettlementType(tradeType);
+
+  // ── ENTITY SELECTION ──
+  // From reference data or fallback
+  let entity, foRegion;
+  if (ssiPairData && ssiPairData.entityName) {
+    entity = ssiPairData.entityName;
+    foRegion = ssiPairData.entityRegion || pick(REGIONS);
+  } else {
+    entity = pick(ENTITIES);
+    foRegion = pick(REGIONS);
+  }
+
+  // ── CURRENCY & COUNTERPARTY ──
+  const currency = (ssiPairData && ssiPairData.currency) ? ssiPairData.currency : pick(CURRENCIES);
+  const direction = pick(DIRECTIONS);
 
   // T+2 enforcement
   let valueDate = new Date(tradeDate);
   valueDate.setDate(tradeDate.getDate() + 2);
 
   const baseAmount = generateRealisticAmount(currency);
-  // Use counterparty from reference data chain when available
-  const initialCounterparty = (ssiPairData && ssiPairData.counterpartyName) ? ssiPairData.counterpartyName : pick(COUNTERPARTIES);
+  const initialCounterpartyGroup = (ssiPairData && ssiPairData.truthSSI?.counterpartyGroup) ? ssiPairData.truthSSI.counterpartyGroup : (ssiPairData?.counterpartyName || pick(COUNTERPARTIES));
+  const initialCounterparty = (ssiPairData && ssiPairData.truthSSI?.counterpartyName) ? ssiPairData.truthSSI.counterpartyName : initialCounterpartyGroup;
 
-  // 1. UNIVERSAL TRUTH (The Absolute Correct Economics)
+  // ── UNDERLYER ──
+  const underlyer = (ssiPairData && ssiPairData.underlyer) ? ssiPairData.underlyer : null;
+
+  // ── SSI IDs ──
+  const ssiId = (ssiPairData && ssiPairData.presentedSsiId) ? ssiPairData.presentedSsiId : null;
+  const truthSsiId = (ssiPairData && ssiPairData.truthSsiId) ? ssiPairData.truthSsiId : null;
+
+  // 1. UNIVERSAL TRUTH
   const universalTruth = {
     amount: baseAmount,
     valueDate: new Date(valueDate),
     currency: currency,
+    counterpartyGroup: initialCounterpartyGroup,
     counterparty: initialCounterparty
   };
 
@@ -473,6 +475,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let moTruthAmount = universalTruth.amount;
   let moTruthValueDate = new Date(universalTruth.valueDate);
   let moTruthCurrency = universalTruth.currency;
+  let moTruthCounterpartyGroup = universalTruth.counterpartyGroup;
   let moTruthCounterparty = universalTruth.counterparty;
 
   let confirmTruthAmount = universalTruth.amount;
@@ -481,24 +484,21 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let confirmDisputeType = null;
 
   let rand = Math.random();
-  // Force a truth discrepancy if a confirmation break was explicitly requested
   if (hasConfirmationBreak) {
-    rand = 0.4 + (Math.random() * 0.6); 
+    rand = 0.4 + (Math.random() * 0.6);
   }
 
   if (rand < 0.4) {
-    // Scenario 1 (40%): Clean Universally - FO and CPTY truths match Universal
+    // Scenario 1 (40%): Clean Universally
   } else if (rand < 0.7) {
-    // Scenario 2 (30%): FO Error - FO Truth != Universal, CPTY Truth == Universal
+    // Scenario 2 (30%): FO Error
     const errorField = pick(CONFIRMATION_BREAK_TYPES);
     if (errorField === "AMOUNT") moTruthAmount += (Math.floor(Math.random() * 5) + 1) * 10000;
     else if (errorField === "VALUE_DATE") moTruthValueDate.setDate(moTruthValueDate.getDate() + 1);
     else if (errorField === "CURRENCY") moTruthCurrency = pick(CURRENCIES.filter(c => c !== universalTruth.currency));
-    
-    // To trigger confirmation logic downstream, flag this as a dispute
     confirmDisputeType = errorField;
   } else {
-    // Scenario 3 (30%): CPTY Error - FO Truth == Universal, CPTY Truth != Universal
+    // Scenario 3 (30%): CPTY Error
     confirmDisputeType = pick(CONFIRMATION_BREAK_TYPES);
     if (confirmDisputeType === "AMOUNT") confirmTruthAmount += (Math.floor(Math.random() * 5) + 1) * 10000;
     else if (confirmDisputeType === "VALUE_DATE") confirmTruthValueDate.setDate(confirmTruthValueDate.getDate() + 1);
@@ -506,13 +506,12 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   }
 
   // 3. BOOKING GENERATION
-  // MO checks Booking vs FO Truth (moTruth)
   let bookingAmount = moTruthAmount;
   let bookingValueDate = new Date(moTruthValueDate);
   let bookingCurrency = moTruthCurrency;
+  let bookingCounterpartyGroup = moTruthCounterpartyGroup;
   let bookingCounterparty = moTruthCounterparty;
 
-  // Inject MO-level break (discrepancy between MO truth and booking)
   if (isMoBreak) {
     const moBreakType = pick(MO_BREAK_TYPES);
     if (moBreakType === "AMOUNT") {
@@ -522,7 +521,8 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
     } else if (moBreakType === "CURRENCY") {
       bookingCurrency = pick(CURRENCIES.filter(c => c !== moTruthCurrency));
     } else if (moBreakType === "COUNTERPARTY") {
-      bookingCounterparty = pick(COUNTERPARTIES.filter(c => c !== moTruthCounterparty));
+      bookingCounterpartyGroup = pick(COUNTERPARTIES.filter(c => c !== moTruthCounterpartyGroup));
+      bookingCounterparty = bookingCounterpartyGroup; // Simplification for breaks
     }
   }
 
@@ -541,8 +541,6 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   }
 
   // 4. SETTLEMENT DETAILS GENERATION
-  // Uses reference data from MongoDB when available (ssiPairData),
-  // falls back to in-memory dictionaries when MongoDB is unavailable.
   const sPaymentReference = "TRD" + Math.floor(Math.random() * 900000) + 100000;
   const sSettlementDate = universalTruth.valueDate;
 
@@ -553,10 +551,6 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
   if (ssiPairData) {
     // ── REFERENCE DATA PATH (MongoDB-backed) ──
-    // Both truthSSI and presentedSSI are complete, valid, immutable snapshots.
-    // For break trades: they are two DIFFERENT valid SSI records.
-    // For clean trades: they are the SAME SSI record.
-    // Neither is ever modified. Ever.
     truthSSIRefId = ssiPairData.truthSSIRefId;
     presentedSSIRefId = ssiPairData.presentedSSIRefId;
 
@@ -583,10 +577,9 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
     console.log(`[TradeGen] SSI from reference data: truth=${truthSSIRefId}, presented=${presentedSSIRefId}, break=${ssiPairData.breakScenario || 'NONE'}`);
   } else {
-    // ── IN-MEMORY FALLBACK PATH (no MongoDB) ──
-    // Uses the existing hardcoded SSI dictionaries for offline/dev mode.
+    // ── IN-MEMORY FALLBACK PATH ──
     const ssiList = direction === "BUY" ? CPTY_SSIS[initialCounterparty] : ENTITY_SSIS[entity];
-    const selectedSSI = pick(ssiList);
+    const selectedSSI = ssiList ? pick(ssiList) : { ssiId: "FALLBACK-SSI-01", beneficiaryName: "Fallback", beneficiaryBank: "Fallback Bank", beneficiaryBIC: "FLLBK00", accountNumber: "00000000", accountType: "Nostro", settlementMethod: "SWIFT", correspondentBank: "Fallback Bank" };
 
     truthSettlement = {
       ssiId: selectedSSI.ssiId,
@@ -606,8 +599,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
       settlementType: derivedSettlementType
     };
 
-    if (hasSettlementBreak && ssiList.length > 1) {
-      // Break: select a different SSI from the same list
+    if (hasSettlementBreak && ssiList && ssiList.length > 1) {
       const altSSI = pick(ssiList.filter(s => s.ssiId !== selectedSSI.ssiId));
       presentedSettlement = {
         ssiId: altSSI.ssiId,
@@ -624,7 +616,6 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
         settlementType: derivedSettlementType
       };
     } else {
-      // Clean: same SSI for both
       presentedSettlement = {
         ...truthSettlement,
         settlementDate: bookingValueDate
@@ -644,6 +635,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
     amount: bookingAmount,
     currency: bookingCurrency,
+    counterpartyGroup: bookingCounterpartyGroup,
     counterparty: bookingCounterparty,
 
     // SSI reference traceability
@@ -655,12 +647,14 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
         amount: universalTruth.amount,
         valueDate: universalTruth.valueDate,
         currency: universalTruth.currency,
+        counterpartyGroup: universalTruth.counterpartyGroup,
         counterparty: universalTruth.counterparty
       },
       mo: {
         amount: moTruthAmount,
         valueDate: moTruthValueDate,
         currency: moTruthCurrency,
+        counterpartyGroup: moTruthCounterpartyGroup,
         counterparty: moTruthCounterparty
       },
       confirmation: {
@@ -677,6 +671,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
       amount: bookingAmount,
       valueDate: bookingValueDate,
       currency: bookingCurrency,
+      counterpartyGroup: bookingCounterpartyGroup,
       counterparty: bookingCounterparty
     },
 
@@ -701,8 +696,12 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
     entity,
     foRegion,
     product,
-    tradeType: derivedTradeType,
+    productType,
+    tradeType,
     settlementType: derivedSettlementType,
+    underlyer,
+    ssiId,
+    truthSsiId,
 
     age: ageCalculator.calculateAge(tradeDate, now, desk),
     assignedTo: null,
@@ -714,19 +713,6 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
 
 /**
  * Generate trades with proper MO state distribution.
- *
- * State distribution for MO desk (8 break trades):
- *   - 4 trades: MO_PENDING (break exists but user must discover it)
- *   - 4 trades: MO_BREAK_OPEN (break already identified by system)
- *
- * ~30% of clean trades will also have a confirmation-level break
- * (invisible to MO, only discovered when trade reaches Confirmation desk).
- *
- * @param {number} cleanCount - Number of clean trades
- * @param {number} breakCount - Number of break trades
- * @param {string} desk - Target desk
- * @param {string} settlementInitialState - Configured initial state for settlement
- * @returns {Array} Array of trade objects with XML audits attached
  */
 async function generateTrades(cleanCount, breakCount, desk, settlementInitialState = "SETTLEMENT_PENDING") {
   const trades = [];
@@ -736,7 +722,6 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
   if (desk === "SETTLEMENT") defaultCleanStatus = settlementInitialState;
 
   // ── Pre-fetch SSI pairs from reference data (if available) ──
-  // This batches the MongoDB calls instead of making one per trade.
   const useRefData = await ssiRepository.isReferenceDataAvailable();
   let ssiPairs = [];
 
@@ -752,20 +737,17 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
   let ssiIndex = 0;
 
   // ── Generate CLEAN trades ──
-  // For MO desk, some clean trades might have a hidden confirmation break
   for (let i = 0; i < cleanCount; i++) {
     let hasConfirmationBreak = false;
     if (desk === "MO") {
       hasConfirmationBreak = Math.random() < CONFIRMATION_BREAK_RATIO;
     }
 
-    // Get SSI pair (clean — no break)
     const ssiPairData = ssiPairs[ssiIndex] || null;
     if (ssiPairData) ssiIndex++;
 
     const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak, settlementInitialState, false, ssiPairData);
 
-    // Generate XML audit (story: captured → validated → routed)
     const { xml } = generateXmlAudit(trade);
     trade.auditXml = xml;
 
@@ -781,11 +763,9 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
 
     if (desk === "MO") {
       isMoBreak = true;
-      // Distribution: ~50% MO_PENDING, ~50% MO_BREAK_OPEN
       status = i < Math.ceil(breakCount * 0.5) ? "MO_PENDING" : "MO_BREAK_OPEN";
       hasConfirmationBreak = Math.random() < CONFIRMATION_BREAK_RATIO;
     } else if (desk === "CONFIRMATION") {
-      // Force confirmation break explicitly
       isMoBreak = false;
       hasConfirmationBreak = true;
       status = "CONFIRMATION_BREAK";
@@ -795,13 +775,11 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
       status = settlementInitialState;
     }
 
-    // Get SSI pair (break or clean depending on desk)
     const ssiPairData = ssiPairs[ssiIndex] || null;
     if (ssiPairData) ssiIndex++;
 
     const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak, settlementInitialState, hasSettlementBreak, ssiPairData);
 
-    // Generate XML audit
     const { xml } = generateXmlAudit(trade);
     trade.auditXml = xml;
 
@@ -813,17 +791,7 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
 
 /**
  * Pre-fetch SSI pairs from reference data for a batch of trades.
- *
- * Implements the reference data chain:
- *   Product → Security → Currency → Counterparty → SSI
- *
- * Maintains the natural DIRECT/CORRESPONDENT ratio from the SSI reference
- * data (e.g. ~78% CORRESPONDENT, ~22% DIRECT based on agentBank presence).
- *
- * @param {number} totalCount - Total trades to generate
- * @param {number} cleanCount - Number of clean trades
- * @param {number} breakCount - Number of break trades
- * @returns {Promise<Object[]>} Array of SSI pair objects
+ * Now uses the 3-tier product taxonomy to select securities.
  */
 async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
   const pairs = [];
@@ -832,11 +800,10 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
   const ssiCurrencies = await ssiRepository.getAvailableCurrencies();
   if (ssiCurrencies.length === 0) return pairs;
 
-  // Step 2: Get the natural CORRESPONDENT/DIRECT ratio from the database
+  // Step 2: Get the natural CORRESPONDENT/DIRECT ratio
   const ratioData = await ssiRepository.getSettlementTypeRatio();
-  const correspondentRatio = ratioData.ratio; // ~0.78
+  const correspondentRatio = ratioData.ratio;
 
-  // Compute how many of each type we need for clean and break trades
   const cleanCorrespondent = Math.round(cleanCount * correspondentRatio);
   const cleanDirect = cleanCount - cleanCorrespondent;
   const breakCorrespondent = Math.round(breakCount * correspondentRatio);
@@ -845,7 +812,6 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
   console.log(`[TradeGen] Settlement type ratio: ${(correspondentRatio * 100).toFixed(0)}% CORRESPONDENT / ${((1 - correspondentRatio) * 100).toFixed(0)}% DIRECT`);
   console.log(`[TradeGen] Distribution: Clean(CORR:${cleanCorrespondent} DIR:${cleanDirect}) Break(CORR:${breakCorrespondent} DIR:${breakDirect})`);
 
-  // For clean trades: select SSI pair with no break, maintaining ratio
   for (let i = 0; i < cleanCorrespondent; i++) {
     const enriched = await _resolveReferenceChain(ssiCurrencies, false, "CORRESPONDENT");
     if (enriched) pairs.push(enriched);
@@ -854,8 +820,6 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
     const enriched = await _resolveReferenceChain(ssiCurrencies, false, "DIRECT");
     if (enriched) pairs.push(enriched);
   }
-
-  // For break trades: select SSI pair with break (two different valid records)
   for (let i = 0; i < breakCorrespondent; i++) {
     const enriched = await _resolveReferenceChain(ssiCurrencies, true, "CORRESPONDENT");
     if (enriched) pairs.push(enriched);
@@ -869,65 +833,69 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
 }
 
 /**
- * Resolve the full reference data chain for one trade based on PRODUCT_MASTER:
- *   Product → Security (if required) → Currency → Counterparty → SSI
+ * Resolve the full reference data chain for one trade using 3-tier taxonomy:
+ *   Product → Product Type → Security (from matching sheet) → Currency → Counterparty → SSI
  *
- * @param {string[]} ssiCurrencies - All available SSI currencies
- * @param {boolean} hasBreak - Whether to create a settlement break
- * @param {string|null} preferredSettlementType - "CORRESPONDENT" or "DIRECT" (null = any)
- * @returns {Promise<Object|null>} Enriched SSI pair with currency, counterparty, product, security
+ * Also fetches a random entity from the Entity collection.
  */
 async function _resolveReferenceChain(ssiCurrencies, hasBreak, preferredSettlementType = null) {
   let pair = null;
   let currency = null;
   let counterparty = null;
   let security = null;
-  
-  // Pick product
-  const productDef = pick(PRODUCT_MASTER);
-  const product = productDef.name;
-  
+
+  // Pick product and product type from taxonomy
+  const product = pick(PRODUCTS);
+  const taxonomy = PRODUCT_TAXONOMY[product];
+  const productType = pick(taxonomy.productTypes);
+  const tradeType = taxonomy.tradeTypeMap[productType];
+
+  // Get entity from reference data
+  const entity = await ssiRepository.getRandomEntity();
+
   let attempts = 0;
   const maxAttempts = 10;
-  
+
   while (!pair && attempts < maxAttempts) {
     attempts++;
-    
-    if (productDef.securityRequired) {
-      // Choose random security
-      security = await ssiRepository.getRandomSecurity();
-      if (!security) {
-        // Fallback if no securities exist
-        currency = pick(ssiCurrencies);
-      } else {
-        // Read currency from security
-        currency = security.currency;
-        // Verify this currency actually has SSI counterparties
+
+    // Select a security matching the product type
+    security = await ssiRepository.getSecurityByProductType(productType);
+
+    if (security) {
+      // Read currency from security
+      currency = security.currency ? security.currency.toUpperCase() : null;
+
+      if (currency) {
+        // Verify this currency has SSI counterparties
         const counterparties = await ssiRepository.getCounterpartiesForCurrency(currency);
-        if (counterparties.length === 0) {
-          // If no SSI for this security's currency, loop and pick another security
-          continue;
-        }
+        if (counterparties.length === 0) continue;
         counterparty = pick(counterparties);
+      } else {
+        continue;
       }
     } else {
-      // Skip security, just pick a random currency from SSI db
-      security = null;
+      // No security found for this product type — pick random currency from SSI
       currency = pick(ssiCurrencies);
       const counterparties = await ssiRepository.getCounterpartiesForCurrency(currency);
       if (counterparties.length === 0) continue;
       counterparty = pick(counterparties);
     }
-    
+
     if (!counterparty) continue;
 
-    // Lookup SSI pair
     pair = await ssiRepository.selectSSIPair(counterparty, currency, hasBreak, preferredSettlementType);
   }
-  
+
   if (!pair) {
-     console.warn(`[TradeGen] Failed to generate SSI pair for product ${product} after ${maxAttempts} attempts`);
-     return null;
+    console.warn(`[TradeGen] Failed to generate SSI pair for ${product}/${productType} after ${maxAttempts} attempts`);
+    return null;
+  }
+
+  // Determine underlyer from security
+  let underlyer = null;
+  if (security) {
+    underlyer = security.underlyer || security.companyName || security.isin || null;
   }
 
   return {
@@ -935,33 +903,36 @@ async function _resolveReferenceChain(ssiCurrencies, hasBreak, preferredSettleme
     currency,
     counterpartyName: counterparty,
     product,
+    productType,
+    tradeType,
+    underlyer,
+    entityName: entity ? entity.entityName : null,
+    entityRegion: entity ? entity.region : null,
     security: security ? {
       isin: security.isin,
       companyName: security.companyName,
-      issuingCountry: security.issuingCountry
+      issuingCountry: security.issuingCountry,
+      underlyer: security.underlyer,
+      sheetName: security.sheetName
     } : null
   };
 }
 
 /**
  * Save generated trades to DB and create automated audit log entries.
- * @param {Array} trades - Array of trade objects to persist
- * @returns {Array} Saved trade documents
  */
 async function saveGeneratedTrades(trades) {
   if (trades.length === 0) return [];
 
   try {
-    // Insert trades into DB
     const savedTrades = await Trade.insertMany(trades, { ordered: false });
 
-    // Create automated audit log entries with XML content
     const auditEntries = trades.map(trade => ({
       tradeRef: trade.tradeRef,
       action: "SYSTEM_GENERATED",
       userId: "SYSTEM",
       desk: trade.nextDesk,
-      details: `Auto-generated trade. Status: ${trade.currentStatus}. MO Break: ${trade.truths?.mo?.amount !== trade.booking?.amount || trade.truths?.mo?.currency !== trade.booking?.currency || trade.truths?.mo?.counterparty !== trade.booking?.counterparty ? 'YES' : 'NO'}. Confirmation Break: ${trade.confirmationScenario?.disputeType ? 'YES (' + trade.confirmationScenario.disputeType + ')' : 'NO'}`,
+      details: `Auto-generated trade. Status: ${trade.currentStatus}. Product: ${trade.product}/${trade.productType}. MO Break: ${trade.truths?.mo?.amount !== trade.booking?.amount || trade.truths?.mo?.currency !== trade.booking?.currency || trade.truths?.mo?.counterparty !== trade.booking?.counterparty ? 'YES' : 'NO'}. Confirmation Break: ${trade.confirmationScenario?.disputeType ? 'YES (' + trade.confirmationScenario.disputeType + ')' : 'NO'}`,
       xmlContent: trade.auditXml,
       isAutomated: true,
       timestamp: new Date()
@@ -971,14 +942,11 @@ async function saveGeneratedTrades(trades) {
 
     // ── Inject Mock Conversations for Confirmation Pre-populated States ──
     const conversationEngine = require("./conversationEngine");
-    const offlineResponseEngine = require("./offlineResponseEngine");
     
-    // Counter for how many proactive emails we've generated
     let proactiveEmailCount = 0;
     
     for (const trade of trades) {
       if (trade.nextDesk === "CONFIRMATION" && trade.currentStatus === "CONFIRMATION_PENDING" && proactiveEmailCount < 3) {
-          // Generate a proactive email from CPTY to USER for CONFIRMATION_PENDING
           const confirmationTruth = trade.truths?.confirmation || {};
           const formatDate = (dateStr) => {
               if (!dateStr) return "";
@@ -1013,17 +981,17 @@ async function saveGeneratedTrades(trades) {
 
     return savedTrades;
   } catch (err) {
-    // Ignore duplicate key errors from race conditions
     if (err.code !== 11000) {
       console.error("Trade generation DB error:", err.message);
     }
-    return trades; // Return in-memory trades as fallback
+    return trades;
   }
 }
 
 module.exports = {
   CPTY_SSIS,
   ENTITY_SSIS,
+  PRODUCT_TAXONOMY,
   generateTrades,
   generateSingleTrade,
   generateXmlAudit,

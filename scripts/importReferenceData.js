@@ -1,11 +1,19 @@
 // ======================================
 // REFERENCE DATA IMPORT SCRIPT
-// Imports SSI Reference and Security Data from Excel into MongoDB.
+// Imports SSI Reference, Security Data (3 sheets), and Entity Data from Excel into MongoDB.
 //
 // Usage:  npm run import-reference-data
 //
-// This is an offline, manually-executed import.
-// It is NOT a new engine — it is a utility script.
+// Security Data.xlsx sheets:
+//   - "EQ FI"      → Equity + Fixed Income securities
+//   - "FX"         → FX securities (currency pairs)
+//   - "Derivative"  → Derivative securities
+//
+// Entity data.xlsx:
+//   - "Sheet1" → Entity master data (entity name, code, currency, address)
+//
+// SSI Reference.xlsx:
+//   - "Final Table" → SSI reference data (55k+ rows) — each row gets a unique SSI ID
 // ======================================
 
 require("dotenv").config();
@@ -18,16 +26,41 @@ const { connectDB } = require("../src/db");
 const SSIReference = require("../src/models/SSIReference");
 const Security = require("../src/models/Security");
 const Counterparty = require("../src/models/Counterparty");
+const Entity = require("../src/models/Entity");
 
 // ============================
 // CONFIGURATION
 // ============================
-const REFERENCE_DATA_DIR = path.join(__dirname, "..", "reference data", "source");
+const REFERENCE_DATA_DIR = path.join(__dirname, "..", "reference-data", "source");
 const SSI_FILE = path.join(REFERENCE_DATA_DIR, "SSI Reference.xlsx");
 const SECURITY_FILE = path.join(REFERENCE_DATA_DIR, "Security Data.xlsx");
+const ENTITY_FILE = path.join(REFERENCE_DATA_DIR, "Entity data.xlsx");
 
 // Batch size for bulk inserts (prevents memory issues with 55k rows)
 const BATCH_SIZE = 1000;
+
+// ============================
+// SSI ID GENERATION
+// ============================
+// Generate a unique, deterministic, human-readable SSI ID for each SSI record.
+// Format: SSI-{GroupAbbrev}-{CCY}-{4-digit hash}
+// Example: SSI-BNYM-ZAR-3847
+function generateSsiId(row, index) {
+  // Create abbreviated group name (first 4 chars of group, uppercased)
+  const groupName = String(row["Group Counter Party Name"] || "").trim();
+  const groupAbbrev = groupName.replace(/[^A-Za-z]/g, "").substring(0, 4).toUpperCase() || "UNKN";
+  const ccy = String(row["CCY"] || "").trim().toUpperCase();
+
+  // Create a deterministic hash from row data for uniqueness
+  const rawKey = `${row["ID"] || ""}-${ccy}-${row["Account Number"] || ""}-${index}`;
+  let hash = 0;
+  for (let i = 0; i < rawKey.length; i++) {
+    hash = ((hash << 5) - hash + rawKey.charCodeAt(i)) | 0;
+  }
+  const hashSuffix = String(Math.abs(hash) % 10000).padStart(4, "0");
+
+  return `SSI-${groupAbbrev}-${ccy}-${hashSuffix}`;
+}
 
 // ============================
 // LOGGING
@@ -35,7 +68,8 @@ const BATCH_SIZE = 1000;
 const stats = {
   ssi: { total: 0, inserted: 0, skipped: 0, errors: [] },
   securities: { total: 0, inserted: 0, skipped: 0, errors: [] },
-  counterparties: { total: 0, inserted: 0, skipped: 0, errors: [] }
+  counterparties: { total: 0, inserted: 0, skipped: 0, errors: [] },
+  entities: { total: 0, inserted: 0, skipped: 0, errors: [] }
 };
 
 function logSection(title) {
@@ -55,6 +89,86 @@ function logStat(category) {
     s.errors.slice(0, 5).forEach(e => console.log(`       - ${e}`));
     if (s.errors.length > 5) console.log(`       ... and ${s.errors.length - 5} more`);
   }
+}
+
+// ============================
+// ENTITY DATA IMPORT
+// ============================
+
+// Derive region from entity name / address
+function deriveRegion(entityName, address) {
+  const text = `${entityName} ${address}`.toLowerCase();
+  if (text.includes("new york") || text.includes("chicago") || text.includes("toronto") || text.includes("americas") || text.includes("usa") || text.includes("united states")) return "AMER";
+  if (text.includes("london") || text.includes("frankfurt") || text.includes("paris") || text.includes("zurich") || text.includes("dublin") || text.includes("united kingdom") || text.includes("germany") || text.includes("france") || text.includes("switzerland") || text.includes("europe") || text.includes("south africa") || text.includes("johannesburg")) return "EMEA";
+  if (text.includes("singapore") || text.includes("tokyo") || text.includes("hong kong") || text.includes("sydney") || text.includes("mumbai") || text.includes("shanghai") || text.includes("australia") || text.includes("japan") || text.includes("india") || text.includes("asia")) return "APAC";
+  return "EMEA"; // Default
+}
+
+async function importEntityData(importBatch) {
+  logSection("IMPORTING ENTITY DATA");
+  console.log(`  Source: ${ENTITY_FILE}`);
+
+  const workbook = XLSX.readFile(ENTITY_FILE);
+  const sheetName = "Sheet1";
+
+  if (!workbook.SheetNames.includes(sheetName)) {
+    console.error(`  ❌ Sheet "${sheetName}" not found. Available: ${workbook.SheetNames.join(", ")}`);
+    return;
+  }
+
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+  // Skip header row
+  const dataRows = rows.slice(1).filter(r => r && r.length > 0 && r[1]);
+  stats.entities.total = dataRows.length;
+
+  console.log(`  Found ${dataRows.length} data rows in "${sheetName}"`);
+  console.log(`  Clearing existing entity data...`);
+  await Entity.deleteMany({});
+
+  // Headers: Entity Code (currency) | Entity Name | Entity Code (short code) | Address
+  const documents = [];
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    const currency = String(row[0] || "").trim().toUpperCase();
+    const entityName = String(row[1] || "").trim();
+    const entityCode = String(row[2] || "").trim();
+    const address = String(row[3] || "").trim();
+
+    if (!entityName || !currency) {
+      stats.entities.skipped++;
+      continue;
+    }
+
+    documents.push({
+      entityName,
+      entityCode,
+      currency,
+      address,
+      region: deriveRegion(entityName, address),
+      importBatch,
+      importedAt: new Date()
+    });
+  }
+
+  if (documents.length > 0) {
+    try {
+      const result = await Entity.insertMany(documents, { ordered: false });
+      stats.entities.inserted = result.length;
+    } catch (err) {
+      if (err.insertedDocs) stats.entities.inserted = err.insertedDocs.length;
+      stats.entities.errors.push(`Insert error: ${err.message}`);
+    }
+  }
+
+  // Log unique entities
+  const uniqueEntities = [...new Set(documents.map(d => d.entityName))];
+  console.log(`  Unique entity names: ${uniqueEntities.join(", ")}`);
+  console.log(`  Unique currencies: ${[...new Set(documents.map(d => d.currency))].sort().join(", ")}`);
+
+  logStat("entities");
 }
 
 // ============================
@@ -130,8 +244,12 @@ async function importSSIReference(importBatch) {
       continue;
     }
 
+    // Generate unique SSI ID for this record
+    const ssiId = generateSsiId(row, i);
+
     documents.push({
       sourceId: generateSourceId(row, i),
+      ssiId,
       cptyId: row["ID"] ? String(row["ID"]).trim() : null,
       groupCounterPartyName: String(row["Group Counter Party Name"]).trim(),
       counterPartyName: String(row["Counter Party Name"] || row["Group Counter Party Name"]).trim(),
@@ -203,56 +321,174 @@ async function importSSIReference(importBatch) {
 // SECURITY DATA IMPORT
 // ============================
 
+/**
+ * Import securities from all 3 sheets in Security Data.xlsx.
+ *
+ * Sheet "EQ FI" (Equity + Fixed Income):
+ *   Headers: Company Name | ISIN | CCY | Security Description | Issuing Country | Product | Product Type | Trade Type
+ *
+ * Sheet "FX":
+ *   Headers: Underlyer | Currency | Product | Product Type | Trade Type
+ *
+ * Sheet "Derivative":
+ *   Headers: Company Name | Underlyer | CCY | Security Description | Issuing Country | Product | Product Type | Trade Type
+ */
 async function importSecurities(importBatch) {
-  logSection("IMPORTING SECURITY DATA");
+  logSection("IMPORTING SECURITY DATA (3 SHEETS)");
   console.log(`  Source: ${SECURITY_FILE}`);
 
   const workbook = XLSX.readFile(SECURITY_FILE);
-  const sheetName = "Sheet1";
+  console.log(`  Available sheets: ${workbook.SheetNames.join(", ")}`);
 
-  if (!workbook.SheetNames.includes(sheetName)) {
-    console.error(`  ❌ Sheet "${sheetName}" not found. Available: ${workbook.SheetNames.join(", ")}`);
-    return;
-  }
-
-  const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(sheet);
-  stats.securities.total = rows.length;
-
-  console.log(`  Found ${rows.length} rows in "${sheetName}"`);
   console.log(`  Clearing existing security data...`);
   await Security.deleteMany({});
 
-  const documents = [];
+  const allDocuments = [];
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  // ── Sheet 1: EQ FI (Equity + Fixed Income) ──
+  if (workbook.SheetNames.includes("EQ FI")) {
+    const sheet = workbook.Sheets["EQ FI"];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+    console.log(`\n  Sheet "EQ FI": ${rows.length} rows`);
 
-    if (!row["ISIN"] || !row["CCY"]) {
-      stats.securities.skipped++;
-      stats.securities.errors.push(`Row ${i + 2}: Missing ISIN or CCY`);
-      continue;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const product = String(row["Product"] || "").trim();
+      const productType = String(row["Product Type"] || "").trim();
+      const tradeType = String(row["Trade Type"] || "").trim();
+      const companyName = String(row["Company Name"] || "").trim();
+      const isin = String(row["ISIN"] || "").trim();
+      const ccy = String(row["CCY"] || "").trim().toUpperCase();
+
+      if (!ccy || !product || !productType) {
+        stats.securities.skipped++;
+        continue;
+      }
+
+      allDocuments.push({
+        companyName,
+        isin,
+        currency: ccy,
+        issuingCountry: String(row["Issuing Country"] || "").trim(),
+        securityDescription: String(row["Security Description"] || "").trim(),
+        underlyer: String(row["Underlyer"] || "").trim() || isin || companyName,
+        product,
+        productType,
+        tradeType,
+        sheetName: "EQ FI",
+        importBatch,
+        importedAt: new Date()
+      });
     }
-
-    documents.push({
-      companyName: String(row["Company Name"] || "").trim(),
-      isin: String(row["ISIN"]).trim(),
-      currency: String(row["CCY"]).trim().toUpperCase(),
-      issuingCountry: String(row["Issuing Country"] || "").trim(),
-      importBatch,
-      importedAt: new Date()
-    });
+  } else {
+    console.warn(`  ⚠️ Sheet "EQ FI" not found`);
   }
 
-  if (documents.length > 0) {
+  // ── Sheet 2: FX ──
+  if (workbook.SheetNames.includes("FX")) {
+    const sheet = workbook.Sheets["FX"];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+    console.log(`  Sheet "FX": ${rows.length} rows`);
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const underlyer = String(row["Underlyer"] || "").trim();
+      const currencyPair = String(row["Currency"] || "").trim().toUpperCase();
+      const product = String(row["Product"] || "").trim();
+      const productType = String(row["Product Type"] || "").trim();
+      const tradeType = String(row["Trade Type"] || "").trim();
+
+      if (!currencyPair || !product || !productType) {
+        stats.securities.skipped++;
+        continue;
+      }
+
+      // For FX, the currency is the base currency (first 3 chars of pair like AUD/SEK → AUD)
+      const baseCcy = currencyPair.split("/")[0] || currencyPair.substring(0, 3);
+
+      allDocuments.push({
+        companyName: null,
+        isin: null,
+        currency: baseCcy,
+        issuingCountry: null,
+        securityDescription: `FX ${currencyPair}`,
+        underlyer: underlyer || `FX ${currencyPair}`,
+        product,
+        productType,
+        tradeType,
+        sheetName: "FX",
+        // Store the full currency pair for display
+        currencyPair,
+        importBatch,
+        importedAt: new Date()
+      });
+    }
+  } else {
+    console.warn(`  ⚠️ Sheet "FX" not found`);
+  }
+
+  // ── Sheet 3: Derivative ──
+  if (workbook.SheetNames.includes("Derivative")) {
+    const sheet = workbook.Sheets["Derivative"];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+    console.log(`  Sheet "Derivative": ${rows.length} rows`);
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const companyName = String(row["Company Name"] || "").trim();
+      const underlyer = String(row["Underlyer"] || "").trim();
+      const ccy = String(row["CCY"] || "").trim().toUpperCase();
+      const product = String(row["Product"] || "").trim();
+      const productType = String(row["Product Type"] || "").trim();
+      const tradeType = String(row["Trade Type"] || "").trim();
+
+      if (!ccy || !product || !productType) {
+        stats.securities.skipped++;
+        continue;
+      }
+
+      allDocuments.push({
+        companyName: companyName || null,
+        isin: underlyer || null, // Underlyer column in Derivative sheet holds ISIN-like values
+        currency: ccy,
+        issuingCountry: String(row["Issuing Country"] || "").trim(),
+        securityDescription: String(row["Security Description"] || "").trim(),
+        underlyer: underlyer || companyName || "N/A",
+        product,
+        productType,
+        tradeType,
+        sheetName: "Derivative",
+        importBatch,
+        importedAt: new Date()
+      });
+    }
+  } else {
+    console.warn(`  ⚠️ Sheet "Derivative" not found`);
+  }
+
+  stats.securities.total = allDocuments.length + stats.securities.skipped;
+
+  // Bulk insert all securities
+  if (allDocuments.length > 0) {
     try {
-      const result = await Security.insertMany(documents, { ordered: false });
+      const result = await Security.insertMany(allDocuments, { ordered: false });
       stats.securities.inserted = result.length;
     } catch (err) {
       if (err.insertedDocs) stats.securities.inserted = err.insertedDocs.length;
       stats.securities.errors.push(`Insert error: ${err.message}`);
     }
   }
+
+  // Log per-product distribution
+  const productDist = {};
+  allDocuments.forEach(d => {
+    const key = `${d.product} → ${d.productType} → ${d.tradeType}`;
+    productDist[key] = (productDist[key] || 0) + 1;
+  });
+  console.log(`\n  Product taxonomy distribution:`);
+  Object.entries(productDist).sort().forEach(([key, count]) => {
+    console.log(`    ${key}: ${count} securities`);
+  });
 
   logStat("securities");
 }
@@ -322,24 +558,28 @@ async function main() {
   const importBatch = `IMPORT_${Date.now()}`;
   console.log(`  Import Batch: ${importBatch}`);
 
-  // 1. Import SSI Reference Data
+  // 1. Import Entity Data
+  await importEntityData(importBatch);
+
+  // 2. Import SSI Reference Data
   await importSSIReference(importBatch);
 
-  // 2. Import Security Data
+  // 3. Import Security Data (3 sheets)
   await importSecurities(importBatch);
 
-  // 3. Extract Counterparties from SSI Data
+  // 4. Extract Counterparties from SSI Data
   await extractCounterparties(importBatch);
 
   // ============================
   // SUMMARY
   // ============================
   logSection("IMPORT COMPLETE — SUMMARY");
+  console.log(`  Entities:        ${stats.entities.inserted} records`);
   console.log(`  SSI References:  ${stats.ssi.inserted} records`);
   console.log(`  Securities:      ${stats.securities.inserted} records`);
   console.log(`  Counterparties:  ${stats.counterparties.inserted} records`);
   
-  const totalErrors = stats.ssi.errors.length + stats.securities.errors.length + stats.counterparties.errors.length;
+  const totalErrors = stats.ssi.errors.length + stats.securities.errors.length + stats.counterparties.errors.length + stats.entities.errors.length;
   if (totalErrors > 0) {
     console.log(`\n  ⚠️ ${totalErrors} error(s) encountered during import. Review logs above.`);
   } else {
@@ -359,6 +599,23 @@ async function main() {
     { $group: { _id: "$settlementType", count: { $sum: 1 } } }
   ]);
   console.log(`  Settlement types: ${typeDistribution.map(t => `${t._id}: ${t.count}`).join(", ")}`);
+
+  // Log security product distribution
+  const productDist = await Security.aggregate([
+    { $group: { _id: { product: "$product", productType: "$productType" }, count: { $sum: 1 } } },
+    { $sort: { "_id.product": 1, "_id.productType": 1 } }
+  ]);
+  console.log(`\n  Security products:`);
+  productDist.forEach(p => console.log(`    ${p._id.product} → ${p._id.productType}: ${p.count}`));
+
+  // Log entity summary
+  const entityNames = await Entity.distinct("entityName");
+  console.log(`\n  Entities: ${entityNames.join(", ")}`);
+
+  // Log sample SSI IDs
+  const sampleSSIs = await SSIReference.find({}).limit(5).select("ssiId groupCounterPartyName currency").lean();
+  console.log(`\n  Sample SSI IDs:`);
+  sampleSSIs.forEach(s => console.log(`    ${s.ssiId} — ${s.groupCounterPartyName} (${s.currency})`));
 
   process.exit(0);
 }

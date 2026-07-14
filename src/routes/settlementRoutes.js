@@ -17,9 +17,11 @@ const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
 
 // Send to System for Amendment (replaces the old manual SSI edit).
 // Routes the request to the Internal System Mailbox — no external email.
+// Accepts optional `ssiId` — when provided, the trade's settlement details
+// are updated from the selected SSI record (user picks from dropdown).
 router.post("/amend", authenticateToken, async (req, res) => {
   try {
-    const { tradeRef, settlementType } = req.body;
+    const { tradeRef, settlementType, ssiId } = req.body;
     const userId = req.user.userId;
 
     const trade = await Trade.findOne({ tradeRef, assignedTo: userId });
@@ -27,6 +29,27 @@ router.post("/amend", authenticateToken, async (req, res) => {
 
     if (!["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus)) {
       return res.status(400).json({ success: false, error: "Amendment can only be requested from a raised break or after a failed verification." });
+    }
+
+    // If user selected a specific SSI ID, amend settlement details from that SSI
+    if (ssiId) {
+      const ssiRepository = require("../engine/ssiRepository");
+      const ssiRecord = await ssiRepository.findBySsiId(ssiId);
+      if (ssiRecord) {
+        const snapshot = ssiRepository.createSnapshot(ssiRecord);
+        // Update the trade's settlement details with the selected SSI
+        trade.settlementDetails = {
+          ...trade.settlementDetails,
+          ...snapshot,
+          paymentReference: trade.settlementDetails?.paymentReference,
+          settlementDate: trade.settlementDetails?.settlementDate,
+          settlementType: snapshot.settlementType
+        };
+        trade.ssiId = ssiId;
+        trade.presentedSSIRefId = String(ssiRecord._id);
+        await trade.save();
+        console.log(`[Settlement] Trade ${tradeRef} amended with SSI ID: ${ssiId}`);
+      }
     }
 
     await systemWorkflowEngine.scheduleAmendment(trade, userId, "SETTLEMENT", settlementType);

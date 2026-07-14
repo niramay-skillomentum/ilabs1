@@ -71,4 +71,22 @@ router.get("/reference/:refId", authenticateToken, async (req, res) => {
   }
 });
 
+// SSI Group lookup — returns all SSI IDs for a counterparty group.
+// Used by the settlement break dropdown so the user can select an SSI ID.
+router.get("/group", authenticateToken, async (req, res) => {
+  const { groupName, currency } = req.query;
+  
+  if (!groupName) {
+    return res.status(400).json({ success: false, error: "groupName is required" });
+  }
+
+  try {
+    const ssis = await ssiRepository.getSSIsByCounterpartyGroup(groupName, currency || null);
+    return res.json({ success: true, ssis });
+  } catch (err) {
+    console.error("[SSI Group] Error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
