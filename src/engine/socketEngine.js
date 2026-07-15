@@ -15,7 +15,7 @@ function getAllowedOrigins() {
   if (raw) {
     return raw.split(",").map(o => o.trim()).filter(Boolean);
   }
-  return [process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"];
+  return ["http://localhost:3000", "https://ilabs-skillomentum.vercel.app"];
 }
 
 async function initSocket(server) {

@@ -16,6 +16,7 @@ const { startAgenda } = require("./src/engine/agendaJobs");
 const { initSocket } = require("./src/engine/socketEngine");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3002;
 
 // ======================================
@@ -123,7 +124,7 @@ if (!process.env.JWT_SECRET) {
 function getAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS;
   if (raw) return raw.split(",").map(o => o.trim()).filter(Boolean);
-  return [process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"];
+  return ["http://localhost:3000", "https://ilabs-skillomentum.vercel.app"];
 }
 app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
 
