@@ -24,14 +24,13 @@ const auditEngine = require("./auditEngine");
 const AMENDMENT_DELAY_MS = parseInt(process.env.SYSTEM_AMENDMENT_DELAY_MS, 10) || 8000;
 const VERIFICATION_DELAY_MS = parseInt(process.env.SYSTEM_VERIFICATION_DELAY_MS, 10) || 8000;
 
-// SSI fields the settlement desk verifies system-vs-truth
 const SSI_FIELDS = [
   "beneficiaryName", "beneficiaryBank", "beneficiaryBIC",
   "accountNumber", "accountType", "currency",
   "settlementMethod", "correspondentBank", "paymentReference",
   "intermediaryBank", "intermediaryBIC", "intermediaryAccount",
   "abaRoutingNumber", "field72", "country",
-  "alertCode", "alertAcronym", "settlementType"
+  "settlementType"
 ];
 
 // Fields that must always be present for a settlement to be valid
@@ -126,12 +125,20 @@ function validateTrade(trade) {
 
   // 3. Mandatory settlement fields present
   for (const f of MANDATORY_FIELDS) {
-    if (!sys[f]) errors.push(`Mandatory settlement field "${f}" is missing.`);
+    const val = sys[f];
+    if (!val || String(val).trim() === "" || String(val).trim() === "-") {
+      errors.push(`Mandatory settlement field "${f}" is missing.`);
+    }
   }
 
   // 4. SSI details match the verified settlement instructions (truth)
   for (const f of SSI_FIELDS) {
-    if (sys[f] !== truth[f]) {
+    const sysRaw = sys[f];
+    const truthRaw = truth[f];
+    const sysVal = (sysRaw === null || sysRaw === undefined || String(sysRaw).trim() === "-") ? "" : String(sysRaw).trim();
+    const truthVal = (truthRaw === null || truthRaw === undefined || String(truthRaw).trim() === "-") ? "" : String(truthRaw).trim();
+    if (sysVal !== truthVal) {
+      console.log(`[ValidationBot] Mismatch on ${f}: sys=[${sysVal}] vs truth=[${truthVal}]`);
       errors.push(`SSI detail "${f}" does not match verified instructions.`);
     }
   }

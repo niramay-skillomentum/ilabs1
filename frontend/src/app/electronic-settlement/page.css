@@ -1,0 +1,808 @@
+/* ======================================
+   STCC ELECTRONIC SETTLEMENT — PAGE STYLES
+   Black/dark theme inspired by DTCC ITP layout
+   ====================================== */
+
+/* ── HEADER ── */
+.stcc-header {
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0d0d0d 100%);
+  color: #ffffff;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.stcc-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid #333;
+}
+
+.stcc-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stcc-logo-text {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #ffffff;
+}
+
+.stcc-logo-divider {
+  width: 2px;
+  height: 24px;
+  background: #555;
+}
+
+.stcc-logo-subtitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: #ccc;
+  letter-spacing: 1px;
+}
+
+.stcc-header-icons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stcc-header-icons button {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #ccc;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.stcc-header-icons button:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+/* ── NAVIGATION TABS ── */
+.stcc-nav {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background: #111;
+  border-bottom: 2px solid #333;
+}
+
+.stcc-nav-tab {
+  padding: 10px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #999;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.stcc-nav-tab:hover {
+  color: #ddd;
+}
+
+.stcc-nav-tab.active {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+/* ── SETTLEMENT MANAGER BAR ── */
+.stcc-manager-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #fafafa;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stcc-manager-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0.5px;
+}
+
+.stcc-current-view {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #666;
+}
+
+.stcc-current-view select {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+}
+
+.stcc-view-icons {
+  display: flex;
+  gap: 6px;
+}
+
+.stcc-view-icons button {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #666;
+  transition: all 0.15s;
+}
+
+.stcc-view-icons button:hover {
+  background: #e5e5e5;
+}
+
+/* ── FILTER BAR ── */
+.stcc-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stcc-filter-icon {
+  font-size: 16px;
+  color: #666;
+  cursor: pointer;
+}
+
+.stcc-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #f9fafb;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.stcc-filter-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.stcc-filter-btn.active {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.stcc-date-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  border-radius: 16px;
+  font-size: 11px;
+  color: #0369a1;
+  font-weight: 500;
+}
+
+/* ── STATUS FILTERS ── */
+.stcc-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stcc-status-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stcc-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 20px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.stcc-status-pill:hover {
+  background: #f3f4f6;
+}
+
+.stcc-status-pill.active {
+  border-color: #1a1a1a;
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.stcc-status-pill .count {
+  font-weight: 700;
+  font-size: 11px;
+  background: rgba(0,0,0,0.08);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.stcc-status-pill.active .count {
+  background: rgba(255,255,255,0.2);
+}
+
+/* ── ACTION BUTTONS ── */
+.stcc-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stcc-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.stcc-action-btn {
+  padding: 6px 16px;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stcc-action-btn:hover:not(:disabled) {
+  background: #333;
+}
+
+.stcc-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stcc-action-btn.settle {
+  background: #166534;
+  border-color: #166534;
+}
+
+.stcc-action-btn.settle:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.stcc-action-btn.cancel {
+  background: #7f1d1d;
+  border-color: #7f1d1d;
+}
+
+.stcc-action-btn.cancel:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.stcc-results-info {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* ── TRADE TABLE ── */
+.stcc-table-container {
+  flex: 1;
+  overflow: auto;
+  background: white;
+  border: 1px solid #d1d5db;
+  margin: 0;
+}
+
+.stcc-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 1600px;
+  font-size: 11.5px;
+}
+
+.stcc-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.stcc-table th {
+  background: #1a1a1a;
+  color: #e5e7eb;
+  padding: 8px 10px;
+  font-weight: 600;
+  text-align: left;
+  border-right: 1px solid #333;
+  border-bottom: 2px solid #000;
+  white-space: nowrap;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  position: sticky;
+  top: 0;
+}
+
+.stcc-table th:first-child {
+  width: 36px;
+  text-align: center;
+}
+
+.stcc-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #f0f0f0;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.stcc-table tbody tr:nth-child(even) td {
+  background-color: #fafbfc;
+}
+
+.stcc-table tbody tr:hover td {
+  background-color: #eff6ff !important;
+  cursor: pointer;
+}
+
+.stcc-table tbody tr.selected td {
+  background-color: #dbeafe !important;
+}
+
+.stcc-table td.num {
+  text-align: right;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.stcc-table td input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+/* Status badge in table */
+.stcc-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.stcc-status-badge.matched {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.stcc-status-badge.unmatched {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.stcc-status-badge.pending {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.stcc-status-badge.settled {
+  background: #f0f9ff;
+  color: #075985;
+  border: 1px solid #7dd3fc;
+}
+
+/* ── SEARCH FILTERS ROW ── */
+.stcc-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.stcc-search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stcc-search-field label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stcc-search-field input,
+.stcc-search-field select {
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+  color: #1f2937;
+  min-width: 120px;
+}
+
+.stcc-search-field input:focus,
+.stcc-search-field select:focus {
+  outline: none;
+  border-color: #6b7280;
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.1);
+}
+
+.stcc-clear-filters {
+  align-self: flex-end;
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.stcc-clear-filters:hover {
+  background: #f3f4f6;
+}
+
+/* ── COMPARISON POPUP (Unmatched trade editing) ── */
+.stcc-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 998;
+}
+
+.stcc-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 1100px;
+  max-height: 85vh;
+  overflow: hidden;
+  z-index: 999;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.stcc-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #1a1a1a;
+  color: white;
+  border-bottom: 2px solid #333;
+}
+
+.stcc-popup-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.stcc-popup-close {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #ccc;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.stcc-popup-close:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+.stcc-comparison-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.stcc-comparison-side {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.stcc-comparison-side.user-side {
+  border-right: 2px solid #e2e8f0;
+  background: #fff;
+}
+
+.stcc-comparison-side.cpty-side {
+  background: #f0fdf4;
+}
+
+.stcc-side-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+}
+
+.stcc-side-title.user {
+  color: #1a1a1a;
+  border-color: #1a1a1a;
+}
+
+.stcc-side-title.cpty {
+  color: #166534;
+  border-color: #22c55e;
+}
+
+.stcc-field-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.stcc-field-label {
+  width: 160px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.stcc-field-value {
+  flex: 1;
+  font-size: 13px;
+  color: #1e293b;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.stcc-field-value.mismatch {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.stcc-field-value.match {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.stcc-field-input {
+  flex: 1;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #1e293b;
+  font-family: inherit;
+}
+
+.stcc-field-input:focus {
+  outline: none;
+  border-color: #6b7280;
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.15);
+}
+
+.stcc-field-input.mismatch {
+  border-color: #f87171;
+  background: #fff5f5;
+}
+
+.stcc-popup-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.stcc-mismatch-count {
+  font-size: 12px;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.stcc-popup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.stcc-popup-actions button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.stcc-save-btn {
+  background: #1a1a1a;
+  color: white;
+}
+
+.stcc-save-btn:hover:not(:disabled) {
+  background: #333;
+}
+
+.stcc-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stcc-cancel-btn {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.stcc-cancel-btn:hover {
+  background: #d1d5db;
+}
+
+/* ── PAGE LAYOUT ── */
+.stcc-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f0f2f5;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.stcc-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── LOADING OVERLAY ── */
+.stcc-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.stcc-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #1a1a1a;
+  border-radius: 50%;
+  animation: stcc-spin 0.8s linear infinite;
+  margin-right: 10px;
+}
+
+@keyframes stcc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── EMPTY STATE ── */
+.stcc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.stcc-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* ── BACK BUTTON ── */
+.stcc-back-btn {
+  padding: 6px 14px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: #ccc;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.stcc-back-btn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .stcc-comparison-body {
+    grid-template-columns: 1fr;
+  }
+  .stcc-comparison-side.user-side {
+    border-right: none;
+    border-bottom: 2px solid #e2e8f0;
+  }
+  .stcc-popup {
+    width: 95vw;
+    max-height: 90vh;
+  }
+}

@@ -143,6 +143,7 @@ app.use("/api/conversations", require("./src/routes/conversationRoutes"));
 app.use("/api/fo-channel", require("./src/routes/foChannelRoutes"));
 app.use("/api/audit", require("./src/routes/auditRoutes"));
 app.use("/api/settlement", require("./src/routes/settlementRoutes"));
+app.use("/api/electronic-settlement", require("./src/routes/electronicSettlementRoutes"));
 app.use("/api/system-mailbox", require("./src/routes/systemMailboxRoutes"));
 app.use("/api/ssi", require("./src/routes/ssiRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));

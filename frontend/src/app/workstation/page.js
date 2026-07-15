@@ -144,7 +144,7 @@ const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewS
       <td>{t.productType || ''}</td>
       <td>{t.tradeType}</td>
       <td style={{maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis'}} title={t.underlyer || ''}>{t.underlyer || ''}</td>
-      {desk !== "SETTLEMENT" && <td>{t.settlementType}</td>}
+      <td>{t.settlementType}</td>
       {desk === "SETTLEMENT" && (
         <td>
           <button className="btn secondary" style={{padding: "4px 8px", fontSize: "11px", margin: 0}} onClick={(e) => { e.stopPropagation(); onViewSSI(t); }}>View SSI</button>
@@ -444,18 +444,19 @@ function WorkstationComponent() {
       "Product", "Product Type", "Trade Type", "Underlyer"
     ];
     
-    let headers = [...baseHeaders];
+    let headers = [...baseHeaders, "Settlement Mode"];
     if (desk === "SETTLEMENT") {
       headers = headers.concat(["SSI ID", "Beneficiary Name", "Beneficiary BIC", "Account Number", "Account Type", "Settlement Method", "Direction", "Currency", "Amount"]);
     } else {
-      headers = headers.concat(["Settlement Type", "Direction", "Currency", "Amount"]);
+      headers = headers.concat(["Direction", "Currency", "Amount"]);
     }
 
     let csv = headers.join(",") + "\n";
     queue.forEach(t => {
       let row = [
         t.tradeRef, t.currentStatus, t.nextDesk, t.age, format(t.tradeDate), format(t.valueDate), 
-        t.counterpartyGroup || "", t.counterparty, t.entity, t.foRegion, t.product, t.productType || "", t.tradeType, t.underlyer || ""
+        t.counterpartyGroup || "", t.counterparty, t.entity, t.foRegion, t.product, t.productType || "", t.tradeType, t.underlyer || "",
+        t.settlementType || ""
       ];
       
       if (desk === "SETTLEMENT") {
@@ -471,7 +472,7 @@ function WorkstationComponent() {
           t.amount
         ]);
       } else {
-        row = row.concat([t.settlementType || "", t.direction, t.currency, t.amount]);
+        row = row.concat([t.direction, t.currency, t.amount]);
       }
       
       csv += row.join(",") + "\n";
@@ -652,7 +653,7 @@ function WorkstationComponent() {
                 <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Desk</th><th className="num">Age</th>
                 <th>Trade Date</th><th>Value Date</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>FO Region</th>
                 <th>Product</th><th>Product Type</th><th>Trade Type</th><th>Underlyer</th>
-                {desk !== "SETTLEMENT" && <th>Settlement Type</th>}
+                <th>Settlement Mode</th>
                 {desk === "SETTLEMENT" && <th>SSI Details</th>}
                 <th>Direction</th><th>Currency</th>
                 <th className="num">Amount</th>
@@ -702,6 +703,7 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
                 <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
+                <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
               </>
             )}
           </div>
