@@ -203,6 +203,9 @@ function SsiViewer({ ssi }) {
 
         {/* Currency & Asset Class */}
         <div style={{ padding: "10px 0" }}>
+          {ssi.ssiId && (
+            <div style={{ marginBottom: "6px" }}><strong style={{ display: "inline-block", width: "200px", color: "#0f766e" }}>SSI ID:</strong> <span style={{ color: "#0f766e", fontWeight: "bold", fontSize: "14px" }}>{ssi.ssiId}</span></div>
+          )}
           <div><strong style={{ display: "inline-block", width: "200px" }}>Currency:</strong> {ssi.currency}</div>
           <div><strong style={{ display: "inline-block", width: "200px" }}>Asset Class:</strong> FX / Cash</div>
           <div><strong style={{ display: "inline-block", width: "200px" }}>Settlement Method:</strong> {ssi.settlementMethod || "SWIFT"}</div>

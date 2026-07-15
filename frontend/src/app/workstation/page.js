@@ -588,9 +588,10 @@ function WorkstationComponent() {
     setSelectedSsiId("");
     setSsiGroupList([]);
     // If trade has a settlement break, fetch SSI group for the dropdown
-    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus) && trade.settlementDetails?.counterpartyName) {
+    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus)) {
       try {
-        const params = new URLSearchParams({ groupName: trade.settlementDetails.counterpartyName });
+        const groupNameToUse = trade.counterpartyGroup || trade.counterparty || trade.settlementDetails?.counterpartyName;
+        const params = new URLSearchParams({ groupName: groupNameToUse });
         if (trade.currency) params.set("currency", trade.currency);
         const res = await fetch(`/api/ssi/group?${params.toString()}`, { headers: authHeaders() });
         const data = await res.json();
@@ -783,6 +784,16 @@ function WorkstationComponent() {
                 Standard Settlement Instruction ({settlType})
               </h3>
               <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                {sd.alertCode && (
+                  <div style={{background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white"}}>
+                    Alert: {sd.alertCode}
+                  </div>
+                )}
+                {sd.alertAcronym && (
+                  <div style={{background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white"}}>
+                    Acronym: {sd.alertAcronym}
+                  </div>
+                )}
                 {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
                   <button onClick={handleSendToSystemAmendment} style={{padding: "4px 10px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer", fontWeight: 600}}>Send to System for Amendment</button>
                 )}

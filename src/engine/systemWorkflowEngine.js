@@ -154,47 +154,12 @@ async function processAmendment(job) {
     return;
   }
 
-  const sys = trade.settlementDetails || {};
-  const truth = trade.truths?.settlement || {};
-
-  const baseNumber = (trade.amendmentHistory || []).length;
-  let seq = 0;
-  const changed = [];
-
-  for (const field of SSI_FIELDS) {
-    if (sys[field] !== truth[field]) {
-      changed.push({ field, oldValue: sys[field], newValue: truth[field] });
-      sys[field] = truth[field];
-      trade.amendmentHistory.push({
-        amendmentNumber: baseNumber + (++seq),
-        desk: "SETTLEMENT",
-        field,
-        oldValue: changed[changed.length - 1].oldValue,
-        newValue: truth[field],
-        source: "SYSTEM",
-        status: "APPLIED",
-        appliedAt: new Date(),
-        appliedBy: "System"
-      });
-    }
-  }
-
-  trade.settlementDetails = sys;
-  if (trade.markModified) {
-    trade.markModified("settlementDetails");
-    trade.markModified("amendmentHistory");
-  }
-
   applyTransition(trade, "AMENDED");
   await trade.save();
 
-  const changeLines = changed.length
-    ? changed.map(c => `  • ${c.field}: "${c.oldValue ?? "—"}" → "${c.newValue ?? "—"}"`).join("\n")
-    : "  • No field corrections were required.";
-
   const body =
     `Trade ${trade.tradeRef} has been amended successfully by the system.\n\n` +
-    `The following settlement details were updated:\n${changeLines}\n\n` +
+    `The settlement details requested have been applied exactly as specified.\n\n` +
     `Status: AMENDED\nThe trade is now available for the approval workflow.`;
 
   await SystemMail.create({
@@ -208,7 +173,7 @@ async function processAmendment(job) {
 
   await auditEngine.recordEvent(
     trade.tradeRef, "System", "SETTLEMENT_AMENDED",
-    `PENDING_AMENDMENT → AMENDED | System applied ${changed.length} correction(s)`,
+    `PENDING_AMENDMENT → AMENDED | System applied requested amendment`,
     true
   );
 

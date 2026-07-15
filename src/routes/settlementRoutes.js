@@ -37,6 +37,29 @@ router.post("/amend", authenticateToken, async (req, res) => {
       const ssiRecord = await ssiRepository.findBySsiId(ssiId);
       if (ssiRecord) {
         const snapshot = ssiRepository.createSnapshot(ssiRecord);
+        const SSI_FIELDS = require("../engine/systemWorkflowEngine").SSI_FIELDS;
+        const oldDetails = trade.settlementDetails || {};
+        
+        const baseNumber = (trade.amendmentHistory || []).length;
+        let seq = 0;
+        
+        for (const field of SSI_FIELDS) {
+          if (oldDetails[field] !== snapshot[field] && snapshot[field] !== undefined) {
+            trade.amendmentHistory = trade.amendmentHistory || [];
+            trade.amendmentHistory.push({
+              amendmentNumber: baseNumber + (++seq),
+              desk: "SETTLEMENT",
+              field,
+              oldValue: oldDetails[field],
+              newValue: snapshot[field],
+              source: "USER",
+              status: "APPLIED",
+              appliedAt: new Date(),
+              appliedBy: userId
+            });
+          }
+        }
+        
         // Update the trade's settlement details with the selected SSI
         trade.settlementDetails = {
           ...trade.settlementDetails,
@@ -47,6 +70,7 @@ router.post("/amend", authenticateToken, async (req, res) => {
         };
         trade.ssiId = ssiId;
         trade.presentedSSIRefId = String(ssiRecord._id);
+        if (trade.markModified) trade.markModified("amendmentHistory");
         await trade.save();
         console.log(`[Settlement] Trade ${tradeRef} amended with SSI ID: ${ssiId}`);
       }

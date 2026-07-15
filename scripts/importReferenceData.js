@@ -46,6 +46,10 @@ const BATCH_SIZE = 1000;
 // Format: SSI-{GroupAbbrev}-{CCY}-{4-digit hash}
 // Example: SSI-BNYM-ZAR-3847
 function generateSsiId(row, index) {
+  if (row["SSI ID"]) {
+    return String(row["SSI ID"]).trim();
+  }
+
   // Create abbreviated group name (first 4 chars of group, uppercased)
   const groupName = String(row["Group Counter Party Name"] || "").trim();
   const groupAbbrev = groupName.replace(/[^A-Za-z]/g, "").substring(0, 4).toUpperCase() || "UNKN";
