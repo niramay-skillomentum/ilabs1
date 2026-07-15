@@ -246,24 +246,40 @@ async function selectSSIPair(counterpartyName, currency, hasBreak = false, prefe
 
   const truthIndex = Math.floor(Math.random() * candidateSSIs.length);
   truthSSI = candidateSSIs[truthIndex];
-  presentedSSI = { ...truthSSI };
 
   if (hasBreak) {
-    breakScenario = "ACCOUNT_NUMBER_MISMATCH";
+    breakScenario = "SSI_MISMATCH";
+    const cache = await _getCache();
     
-    if (presentedSSI.accountNumber) {
-      const acctStr = String(presentedSSI.accountNumber);
-      if (acctStr.length > 0) {
-        const randomNumbers = Math.floor(Math.random() * 9000) + 100;
-        presentedSSI.accountNumber = acctStr + String(randomNumbers);
-      } else {
-        presentedSSI.accountNumber = String(Math.floor(Math.random() * 90000000) + 10000000);
+    // 1. Try finding another SSI from the same group and currency
+    let altSSIs = matchingSSIs.filter(s => String(s._id) !== String(truthSSI._id));
+    
+    // 2. If none, try finding another SSI from the same group (any currency)
+    if (altSSIs.length === 0 && cache) {
+      const allGroupSSIs = cache.ssiByGroup.get(counterpartyName) || [];
+      altSSIs = allGroupSSIs.filter(s => String(s._id) !== String(truthSSI._id));
+    }
+
+    // 3. If the group literally only has 1 SSI total, pick any other SSI from the system
+    if (altSSIs.length === 0 && cache) {
+      const allSSIs = [];
+      for (const groupSSIs of cache.ssiByGroup.values()) {
+        allSSIs.push(...groupSSIs);
       }
+      altSSIs = allSSIs.filter(s => String(s._id) !== String(truthSSI._id));
+    }
+
+    if (altSSIs.length > 0) {
+      presentedSSI = altSSIs[Math.floor(Math.random() * altSSIs.length)];
     } else {
-      presentedSSI.accountNumber = String(Math.floor(Math.random() * 90000000) + 10000000);
+      // Absolute fallback (should never happen with real data)
+      presentedSSI = { ...truthSSI };
+      presentedSSI.accountNumber = "99999999";
     }
     
-    console.log(`[SSIRepository] Break created: Tweaked account number for ${counterpartyName}/${currency}. Truth=${truthSSI.accountNumber}, Presented=${presentedSSI.accountNumber}`);
+    console.log(`[SSIRepository] Break created: SSI mismatch for ${counterpartyName}/${currency}. Truth=${truthSSI.ssiId || truthSSI.sourceId}, Presented=${presentedSSI.ssiId || presentedSSI.sourceId}`);
+  } else {
+    presentedSSI = { ...truthSSI };
   }
 
   return {
