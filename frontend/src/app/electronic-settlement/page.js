@@ -248,9 +248,6 @@ function ElectronicSettlementComponent() {
             <button onClick={() => window.close()} className="stcc-back-btn">
               ← Back to Workstation
             </button>
-            <button title="Settings">⚙</button>
-            <button title="Help">?</button>
-            <button title="User">{userId?.split("@")[0] || "User"}</button>
           </div>
         </div>
         <div className="stcc-nav">
@@ -263,44 +260,8 @@ function ElectronicSettlementComponent() {
         {/* ── MANAGER BAR ── */}
         <div className="stcc-manager-bar">
           <span className="stcc-manager-title">SETTLEMENT INSTRUCTION MANAGER</span>
-          <div className="stcc-current-view">
-            <span>CURRENT VIEW:</span>
-            <select defaultValue="default">
-              <option value="default">Default View</option>
-              <option value="compact">Compact View</option>
-            </select>
-            <div className="stcc-view-icons">
-              <button title="Grid View">▦</button>
-              <button title="List View">☰</button>
-              <button title="Download" onClick={() => {
-                if (filteredTrades.length === 0) return toast.error("No data to export");
-                const headers = ["Trade Ref","Status","Electronic Status","Trade Date","Settlement Date","Counterparty","Currency","Direction","Product","Amount","Settlement Mode"];
-                let csv = headers.join(",") + "\n";
-                filteredTrades.forEach(t => {
-                  csv += [t.tradeRef, t.currentStatus, t.electronicStatus, formatDate(t.tradeDate), formatDate(t.valueDate), t.counterparty, t.currency, t.direction, t.product, t.amount, t.settlementType].join(",") + "\n";
-                });
-                const blob = new Blob([csv], { type: "text/csv" });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "stcc_settlement.csv";
-                a.click();
-                window.URL.revokeObjectURL(url);
-              }}>⬇</button>
-            </div>
-          </div>
         </div>
 
-        {/* ── FILTER BAR ── */}
-        <div className="stcc-filter-bar">
-          <span className="stcc-filter-icon">🔍</span>
-          <button className="stcc-filter-btn" onClick={() => fetchTrades()}>
-            ⟳ FILTERS
-          </button>
-          <div className="stcc-date-chip">
-            Settlement Date: {formatDate(new Date())}
-          </div>
-        </div>
 
         {/* ── STATUS FILTERS ── */}
         <div className="stcc-status-filters">
@@ -311,7 +272,7 @@ function ElectronicSettlementComponent() {
           >
             All <span className="count">{trades.length}</span>
           </button>
-          {["MATCHED", "UNMATCHED", "PENDING", "SETTLED"].map((st) => (
+          {["MATCHED", "UNMATCHED", "PENDING"].map((st) => (
             <button
               key={st}
               className={`stcc-status-pill ${statusFilter === st ? "active" : ""}`}
@@ -407,9 +368,6 @@ function ElectronicSettlementComponent() {
             >
               ✎ Edit / Compare
             </button>
-            <button className="stcc-action-btn cancel" disabled={!selectedTrade || !selectedTrade.isOwned}>
-              ✕ Cancel
-            </button>
             <button
               className="stcc-action-btn"
               onClick={fetchTrades}
@@ -445,7 +403,6 @@ function ElectronicSettlementComponent() {
                   <th>Trade Ref</th>
                   <th>Status</th>
                   <th>Settlement Status</th>
-                  <th>Assigned To</th>
                   <th>Settlement Mode</th>
                   <th>Buy/Sell</th>
                   <th>Counterparty</th>
@@ -484,12 +441,6 @@ function ElectronicSettlementComponent() {
                       </span>
                     </td>
                     <td style={{ fontSize: 10, color: "#64748b" }}>{t.currentStatus}</td>
-                    <td style={{ fontSize: 10 }}>
-                      {t.isOwned
-                        ? <span style={{ color: "#166534", fontWeight: 600 }}>You</span>
-                        : <span style={{ color: "#94a3b8" }}>{t.assignedTo ? t.assignedTo.split("@")[0] : "Unassigned"}</span>
-                      }
-                    </td>
                     <td>{t.settlementType}</td>
                     <td>{t.direction}</td>
                     <td>{t.counterparty}</td>

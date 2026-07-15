@@ -29,8 +29,8 @@ const SETTLED_STATUSES = ["SETTLED"];
  * - MATCHED:   trade values match truth (no discrepancy) — can be settled
  */
 function classifyElectronicStatus(trade) {
-  // 1. SETTLED — workflow complete
-  if (SETTLED_STATUSES.includes(trade.currentStatus)) return "SETTLED";
+  // 1. SETTLED — workflow complete, treated as matched in UI
+  if (SETTLED_STATUSES.includes(trade.currentStatus)) return "MATCHED";
 
   // 2. PENDING — in-process (user has acted, bot is working)
   if (PENDING_STATUSES.includes(trade.currentStatus)) return "PENDING";
