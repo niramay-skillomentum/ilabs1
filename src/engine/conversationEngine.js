@@ -105,13 +105,7 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
  */
 async function getConversation(tradeRef) {
 
-  // Check cache first
-  const cachedConvo = cache.get(tradeRef);
-  if (cachedConvo) {
-    return cachedConvo;
-  }
-
-  // Fetch from DB
+  // Fetch from DB (bypassing local memory cache for distributed worker compatibility)
   const doc = await Conversation.findOne({ tradeRef }).lean();
 
   if (!doc) {
@@ -132,7 +126,6 @@ async function getConversation(tradeRef) {
     }))
   };
 
-  cache.set(tradeRef, result);
   return result;
 }
 
