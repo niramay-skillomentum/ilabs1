@@ -191,9 +191,12 @@ function generateRealisticAmount(currency) {
 }
 
 function generateTradeRef() {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  return `TRD_${timestamp}_${random}`;
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let random = '';
+  for (let i = 0; i < 8; i++) {
+    random += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `TRD-${random}`;
 }
 
 function formatDateForXml(date) {
@@ -483,7 +486,7 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let confirmTruthCurrency = universalTruth.currency;
   let confirmDisputeType = null;
 
-  let rand = Math.random();
+  let rand = 0; // Strictly Clean Universally unless explicitly requested
   if (hasConfirmationBreak) {
     rand = 0.4 + (Math.random() * 0.6);
   }

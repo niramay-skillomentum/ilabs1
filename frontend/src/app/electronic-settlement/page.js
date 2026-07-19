@@ -470,14 +470,14 @@ function ElectronicSettlementComponent() {
           <div className="stcc-overlay" onClick={() => setShowComparison(false)}></div>
           <div className="stcc-popup">
             <div className="stcc-popup-header">
-              <h3>Trade Comparison — {comparisonData.tradeRef}</h3>
+              <h3>Trade Comparison</h3>
               <button className="stcc-popup-close" onClick={() => setShowComparison(false)}>✕ Close</button>
             </div>
 
             <div className="stcc-comparison-body">
               {/* LEFT: User Side (Editable) */}
               <div className="stcc-comparison-side user-side">
-                <div className="stcc-side-title user">📝 Your Side (Editable)</div>
+                <div className="stcc-side-title user">System Side — {comparisonData.tradeRef}</div>
                 {COMPARISON_FIELDS.map((f) => {
                   const mismatch = comparisonData.mismatches?.find((m) => m.field === f.key);
                   const currentVal = editedFields[f.key] || "";
@@ -502,8 +502,8 @@ function ElectronicSettlementComponent() {
               </div>
 
               {/* RIGHT: Counterparty Side (Read-only truth) */}
-              <div className="stcc-comparison-side cpty-side">
-                <div className="stcc-side-title cpty">✓ Counterparty Side (Truth)</div>
+              <div className="stcc-comparison-side cpty-side" style={{ userSelect: 'none' }} onCopy={(e) => e.preventDefault()}>
+                <div className="stcc-side-title cpty">Counterparty Side — {comparisonData.tradeRef}</div>
                 {COMPARISON_FIELDS.map((f) => {
                   const truthVal = comparisonData.counterpartySide?.[f.key];
                   const mismatch = comparisonData.mismatches?.find((m) => m.field === f.key);

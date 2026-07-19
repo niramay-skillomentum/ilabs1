@@ -68,34 +68,34 @@ module.exports = {
 
   ERROR_CHECK_WITH_ISSUES: {
     COOPERATIVE: [
-      "Good catch! We've reviewed Trade {{tradeRef}} and found the following discrepancy:\n\n{{issueList}}\n\nPlease update the booking accordingly.",
-      "Thanks for asking us to check. It looks like there is indeed an issue:\n\n{{issueList}}\n\nCan you amend this on your end?",
-      "We've taken a look at {{tradeRef}} and spotted a mismatch:\n\n{{issueList}}\n\nLet's get this corrected.",
-      "Appreciate the heads-up. We checked the details and found:\n\n{{issueList}}\n\nPlease process the amendment."
+      "Good catch! We've reviewed Trade {{tradeRef}} and found the following discrepancy:\n\n{{issueList}}\n\nWe will amend the booking accordingly.",
+      "Thanks for asking us to check. It looks like there is indeed an issue:\n\n{{issueList}}\n\nWe will amend this on our side.",
+      "We've taken a look at {{tradeRef}} and spotted a mismatch:\n\n{{issueList}}\n\nWe will get this corrected on our side.",
+      "Appreciate the heads-up. We checked the details and found:\n\n{{issueList}}\n\nWe will process the amendment."
     ],
     EFFICIENT: [
-      "Review complete for {{tradeRef}}. Discrepancies found:\n\n{{issueList}}\n\nPlease amend.",
+      "Review complete for {{tradeRef}}. Discrepancies found:\n\n{{issueList}}\n\nWe will amend.",
       "Checked. Issues identified:\n\n{{issueList}}\n\nAction required.",
-      "Discrepancy confirmed on {{tradeRef}}:\n\n{{issueList}}\n\nUpdate the booking.",
-      "Errors found:\n\n{{issueList}}\n\nPlease rectify."
+      "Discrepancy confirmed on {{tradeRef}}:\n\n{{issueList}}\n\nWe will update the booking.",
+      "Errors found:\n\n{{issueList}}\n\nWe will rectify this."
     ],
     FORMAL: [
-      "We have conducted a review of Trade {{tradeRef}} and identified the following discrepancies:\n\n{{issueList}}\n\nWe kindly request that you process the necessary amendments.",
-      "Upon review of Trade {{tradeRef}}, we note the following variances:\n\n{{issueList}}\n\nPlease adjust the booking to match our records.",
-      "Our investigation into Trade {{tradeRef}} reveals the following issues:\n\n{{issueList}}\n\nKindly action the required corrections.",
-      "Please be advised that Trade {{tradeRef}} contains the following errors:\n\n{{issueList}}\n\nWe await your confirmation of the amendment."
+      "We have conducted a review of Trade {{tradeRef}} and identified the following discrepancies:\n\n{{issueList}}\n\nWe will process the necessary amendments.",
+      "Upon review of Trade {{tradeRef}}, we note the following variances:\n\n{{issueList}}\n\nWe will adjust the booking to match our records.",
+      "Our investigation into Trade {{tradeRef}} reveals the following issues:\n\n{{issueList}}\n\nWe will action the required corrections.",
+      "Please be advised that Trade {{tradeRef}} contains the following errors:\n\n{{issueList}}\n\nWe will amend the trade."
     ],
     CAUTIOUS: [
       "We've looked into Trade {{tradeRef}} and it seems there might be a discrepancy:\n\n{{issueList}}\n\nCould you verify this and amend if necessary?",
-      "Upon checking, we've noticed the following differences:\n\n{{issueList}}\n\nPlease review and confirm if an amendment is appropriate.",
+      "Upon checking, we've noticed the following differences:\n\n{{issueList}}\n\nPlease review, and we will amend if appropriate.",
       "It appears there are some inconsistencies with {{tradeRef}}:\n\n{{issueList}}\n\nLet us know your thoughts.",
       "We've identified potential issues:\n\n{{issueList}}\n\nPlease investigate from your side."
     ],
     BUREAUCRATIC: [
-      "A formal review of Trade {{tradeRef}} has been completed. The following discrepancies were recorded:\n\n{{issueList}}\n\nPlease process the required amendments and confirm completion.",
-      "Reference Trade {{tradeRef}}. The following variances have been identified:\n\n{{issueList}}\n\nAction is required to align the booking with FO records.",
-      "Discrepancy report for Trade {{tradeRef}}:\n\n{{issueList}}\n\nAmend the booking and revert with confirmation.",
-      "Official notification of trade errors on {{tradeRef}}:\n\n{{issueList}}\n\nPlease rectify immediately."
+      "A formal review of Trade {{tradeRef}} has been completed. The following discrepancies were recorded:\n\n{{issueList}}\n\nWe will process the required amendments.",
+      "Reference Trade {{tradeRef}}. The following variances have been identified:\n\n{{issueList}}\n\nWe will align the booking with FO records.",
+      "Discrepancy report for Trade {{tradeRef}}:\n\n{{issueList}}\n\nWe will amend the booking.",
+      "Official notification of trade errors on {{tradeRef}}:\n\n{{issueList}}\n\nWe will rectify immediately."
     ]
   },
 
@@ -134,24 +134,24 @@ module.exports = {
 
   AMOUNT_MISMATCH: {
     COOPERATIVE: [
-      "We've checked our records and can confirm the correct notional for this trade is {{truthAmount}} {{currency}}.\n\nIt appears the booking shows {{bookingAmount}} {{currency}}. Please update the booking accordingly.",
-      "Quick update — the correct amount should be {{truthAmount}} {{currency}}, not {{bookingAmount}} {{currency}}.\n\nKindly amend at your earliest convenience.",
-      "Hi, we noticed the amount discrepancy. The FO record is {{truthAmount}} {{currency}}. The booking of {{bookingAmount}} {{currency}} is incorrect. Please fix it.",
-      "Just confirming the notional should be {{truthAmount}} {{currency}}. We see {{bookingAmount}} {{currency}} in the system. Please amend.",
+      "We've checked our records and can confirm the correct notional for this trade is {{truthAmount}} {{currency}}.\n\nIt appears the booking shows {{bookingAmount}} {{currency}}. We will amend the booking accordingly.",
+      "Quick update — the correct amount should be {{truthAmount}} {{currency}}, not {{bookingAmount}} {{currency}}.\n\nWe will amend this.",
+      "Hi, we noticed the amount discrepancy. The FO record is {{truthAmount}} {{currency}}. The booking of {{bookingAmount}} {{currency}} is incorrect. We will fix it.",
+      "Just confirming the notional should be {{truthAmount}} {{currency}}. We see {{bookingAmount}} {{currency}} in the system. We will amend.",
       "Thanks for checking. The correct amount is indeed {{truthAmount}} {{currency}}. Please update the booked amount of {{bookingAmount}} {{currency}}."
     ],
     EFFICIENT: [
-      "Correct notional: {{truthAmount}} {{currency}}.\nBooked: {{bookingAmount}} {{currency}}.\n\nPlease amend.",
+      "Correct notional: {{truthAmount}} {{currency}}.\nBooked: {{bookingAmount}} {{currency}}.\n\nWe will amend.",
       "Confirming trade amount is {{truthAmount}} {{currency}}. Current booking of {{bookingAmount}} {{currency}} requires correction.",
-      "Amount mismatch. Correct value: {{truthAmount}} {{currency}}. Booked: {{bookingAmount}} {{currency}}. Update required.",
+      "Amount mismatch. Correct value: {{truthAmount}} {{currency}}. Booked: {{bookingAmount}} {{currency}}. We will update this.",
       "Please amend amount to {{truthAmount}} {{currency}} (currently {{bookingAmount}} {{currency}}).",
-      "Update amount to {{truthAmount}} {{currency}}."
+      "We will update the amount to {{truthAmount}} {{currency}}."
     ],
     FORMAL: [
-      "We wish to bring to your attention a discrepancy in the trade amount.\n\nAs per our trading records, the correct notional amount is {{truthAmount}} {{currency}}. However, the current booking reflects {{bookingAmount}} {{currency}}.\n\nWe kindly request that the necessary amendment be processed.",
-      "Please be advised that the notional amount for this trade should read {{truthAmount}} {{currency}}.\n\nThe current booking of {{bookingAmount}} {{currency}} represents a variance.\n\nKindly action the correction.",
-      "We confirm the authorized amount is {{truthAmount}} {{currency}}. The operations booking of {{bookingAmount}} {{currency}} is inaccurate. Please amend.",
-      "Formal notification of amount discrepancy: FO records show {{truthAmount}} {{currency}}, operations booking shows {{bookingAmount}} {{currency}}. Please rectify.",
+      "We wish to bring to your attention a discrepancy in the trade amount.\n\nAs per our trading records, the correct notional amount is {{truthAmount}} {{currency}}. However, the current booking reflects {{bookingAmount}} {{currency}}.\n\nWe will process the necessary amendment.",
+      "Please be advised that the notional amount for this trade should read {{truthAmount}} {{currency}}.\n\nThe current booking of {{bookingAmount}} {{currency}} represents a variance.\n\nWe will action the correction.",
+      "We confirm the authorized amount is {{truthAmount}} {{currency}}. The operations booking of {{bookingAmount}} {{currency}} is inaccurate. We will amend.",
+      "Formal notification of amount discrepancy: FO records show {{truthAmount}} {{currency}}, operations booking shows {{bookingAmount}} {{currency}}. We will rectify this.",
       "We request an amendment to the trade amount. It should be {{truthAmount}} {{currency}}, not {{bookingAmount}} {{currency}}."
     ],
     CAUTIOUS: [
@@ -163,34 +163,34 @@ module.exports = {
     ],
     BUREAUCRATIC: [
       "This communication is to formally notify you of a discrepancy identified in the trade amount.\n\nPer our front office system, the authorised notional amount is {{truthAmount}} {{currency}}. The operations booking currently reflects {{bookingAmount}} {{currency}}.\n\nPlease process the required amendment and confirm completion.",
-      "Reference: Trade {{tradeRef}}\n\nWe have identified a variance between the front office record ({{truthAmount}}) and the operations booking ({{bookingAmount}}).\n\nPlease amend accordingly and revert with confirmation.",
-      "Discrepancy Logged: Amount variance on {{tradeRef}}. FO system: {{truthAmount}} {{currency}}. Booking: {{bookingAmount}} {{currency}}. Amendment required.",
-      "Please initiate an amendment workflow for the notional amount. Correct value is {{truthAmount}} {{currency}}; current booked value is {{bookingAmount}} {{currency}}.",
-      "Action required: Align operations booked amount ({{bookingAmount}} {{currency}}) with front office authorized amount ({{truthAmount}} {{currency}})."
+      "Reference: Trade {{tradeRef}}\n\nWe have identified a variance between the front office record ({{truthAmount}}) and the operations booking ({{bookingAmount}}).\n\nWe will amend accordingly.",
+      "Discrepancy Logged: Amount variance on {{tradeRef}}. FO system: {{truthAmount}} {{currency}}. Booking: {{bookingAmount}} {{currency}}. We will amend.",
+      "We will initiate an amendment workflow for the notional amount. Correct value is {{truthAmount}} {{currency}}; current booked value is {{bookingAmount}} {{currency}}.",
+      "We will align operations booked amount ({{bookingAmount}} {{currency}}) with front office authorized amount ({{truthAmount}} {{currency}})."
     ]
   },
 
   VALUE_DATE_MISMATCH: {
     COOPERATIVE: [
       "Just flagging — the correct value date for this trade is {{truthVD}}.\n\nThe booking currently shows {{bookingVD}}. Please update when convenient.",
-      "We confirm the value date should be {{truthVD}}, not {{bookingVD}} as currently booked.\n\nKindly amend.",
+      "We confirm the value date should be {{truthVD}}, not {{bookingVD}} as currently booked.\n\nWe will amend.",
       "Hi, the value date seems off. Our system says {{truthVD}}, but the booking has {{bookingVD}}. Please correct this.",
       "Please amend the value date to {{truthVD}}. The current {{bookingVD}} is incorrect.",
       "Thanks for the heads up. You are right, the value date should be {{truthVD}}. Please change it from {{bookingVD}}."
     ],
     EFFICIENT: [
       "Value date correction required.\nCorrect: {{truthVD}}\nBooked: {{bookingVD}}\n\nPlease update.",
-      "VD should be {{truthVD}}. Currently showing {{bookingVD}}. Please amend.",
-      "Update VD to {{truthVD}} (currently {{bookingVD}}).",
-      "Mismatch on VD. Correct is {{truthVD}}. Booked is {{bookingVD}}. Amend.",
-      "VD amendment needed. Change {{bookingVD}} to {{truthVD}}."
+      "VD should be {{truthVD}}. Currently showing {{bookingVD}}. We will amend.",
+      "We will update VD to {{truthVD}} (currently {{bookingVD}}).",
+      "Mismatch on VD. Correct is {{truthVD}}. Booked is {{bookingVD}}. We will amend.",
+      "We will amend VD to {{bookingVD}} to {{truthVD}}."
     ],
     FORMAL: [
-      "We wish to advise that the value date for this trade requires amendment.\n\nThe correct value date as per our records is {{truthVD}}. The current booking reflects a value date of {{bookingVD}}.\n\nKindly process the necessary correction.",
-      "Please note that the value date should read {{truthVD}} rather than {{bookingVD}} as currently recorded.\n\nWe request that this be amended at the earliest opportunity.",
-      "We confirm the settlement date is {{truthVD}}. The booking of {{bookingVD}} is incorrect. Please amend.",
-      "Formal request to amend the value date to {{truthVD}} from the current {{bookingVD}}.",
-      "The authorized value date is {{truthVD}}. Please align the operations booking ({{bookingVD}}) with this date."
+      "We wish to advise that the value date for this trade requires amendment.\n\nThe correct value date as per our records is {{truthVD}}. The current booking reflects a value date of {{bookingVD}}.\n\nWe will process the necessary correction.",
+      "Please note that the value date should read {{truthVD}} rather than {{bookingVD}} as currently recorded.\n\nWe will amend this at the earliest opportunity.",
+      "We confirm the settlement date is {{truthVD}}. The booking of {{bookingVD}} is incorrect. We will amend.",
+      "We will amend the value date to {{truthVD}} from the current {{bookingVD}}.",
+      "The authorized value date is {{truthVD}}. We will align the operations booking ({{bookingVD}}) with this date."
     ],
     CAUTIOUS: [
       "We have identified a potential value date discrepancy.\n\nOur records show the trade should settle on {{truthVD}}, but the booking indicates {{bookingVD}}.\n\nCould you please review and confirm the correct date?",
@@ -202,9 +202,9 @@ module.exports = {
     BUREAUCRATIC: [
       "This is to formally notify you that the value date recorded for this trade is incorrect.\n\nAuthorised value date: {{truthVD}}\nCurrently booked value date: {{bookingVD}}\n\nPlease amend the booking and confirm once actioned.",
       "Reference: Trade {{tradeRef}}\n\nA value date discrepancy has been identified. The correct settlement date is {{truthVD}}, not {{bookingVD}} as booked.\n\nKindly rectify and revert with confirmation.",
-      "Discrepancy Logged: Value Date variance on {{tradeRef}}. FO system: {{truthVD}}. Booking: {{bookingVD}}. Amendment required.",
-      "Please initiate an amendment workflow for the value date. Correct value is {{truthVD}}; current booked value is {{bookingVD}}.",
-      "Action required: Align operations booked value date ({{bookingVD}}) with front office authorized date ({{truthVD}})."
+      "Discrepancy Logged: Value Date variance on {{tradeRef}}. FO system: {{truthVD}}. Booking: {{bookingVD}}. We will amend.",
+      "We will initiate an amendment workflow for the value date. Correct value is {{truthVD}}; current booked value is {{bookingVD}}.",
+      "We will align operations booked value date ({{bookingVD}}) with front office authorized date ({{truthVD}})."
     ]
   },
 
@@ -266,7 +266,7 @@ module.exports = {
 
   CURRENCY_MISMATCH: {
     COOPERATIVE: [
-      "We checked our records and the correct currency should be {{currency}}.\n\nPlease update the booking accordingly.",
+      "We checked our records and the correct currency should be {{currency}}.\n\nWe will amend the booking accordingly.",
       "Just flagging — the currency seems to be booked incorrectly. It should be {{currency}}."
     ],
     EFFICIENT: [
@@ -274,33 +274,33 @@ module.exports = {
       "Update currency to {{currency}}."
     ],
     FORMAL: [
-      "Please be advised that the currency for this trade is incorrect. It should be amended to {{currency}}."
+      "Please be advised that the currency for this trade is incorrect. We will amend it to {{currency}}."
     ],
     CAUTIOUS: [
       "Could you please verify the currency? Our records show it should be {{currency}}."
     ],
     BUREAUCRATIC: [
-      "Currency variance identified. Authorised currency is {{currency}}. Please amend."
+      "Currency variance identified. Authorised currency is {{currency}}. We will amend."
     ]
   },
 
   COUNTERPARTY_MISMATCH: {
     COOPERATIVE: [
-      "It looks like the counterparty is incorrect. The correct counterparty is {{counterparty}}.\n\nPlease amend the booking.",
+      "It looks like the counterparty is incorrect. The correct counterparty is {{counterparty}}.\n\nWe will amend the booking.",
       "We've noticed a mismatch on the counterparty. It should be {{counterparty}}."
     ],
     EFFICIENT: [
       "Counterparty mismatch. Correct is {{counterparty}}.",
-      "Please amend counterparty to {{counterparty}}."
+      "We will amend counterparty to {{counterparty}}."
     ],
     FORMAL: [
-      "We confirm that the counterparty on this trade should be {{counterparty}}. Please process the correction."
+      "We confirm that the counterparty on this trade should be {{counterparty}}. We will process the correction."
     ],
     CAUTIOUS: [
       "We have identified a potential mismatch in the counterparty. Our records indicate it is {{counterparty}}."
     ],
     BUREAUCRATIC: [
-      "Counterparty discrepancy logged. Authorised counterparty is {{counterparty}}. Amendment required."
+      "Counterparty discrepancy logged. Authorised counterparty is {{counterparty}}. We will amend."
     ]
   },
 
