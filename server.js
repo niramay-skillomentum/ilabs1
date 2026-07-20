@@ -147,6 +147,7 @@ app.use("/api/electronic-settlement", require("./src/routes/electronicSettlement
 app.use("/api/system-mailbox", require("./src/routes/systemMailboxRoutes"));
 app.use("/api/ssi", require("./src/routes/ssiRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));
+app.use("/api/swift", require("./src/routes/swiftRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START

@@ -13,6 +13,7 @@ const SSIReference = require("../models/SSIReference");
 const Security = require("../models/Security");
 const Counterparty = require("../models/Counterparty");
 const Entity = require("../models/Entity");
+const OurSSI = require("../models/OurSSI");
 const { getIsConnected } = require("../db");
 
 // ============================
@@ -477,7 +478,12 @@ function createSnapshot(ssi) {
     alertAcronym: ssi.alertAcronym || null,
 
     // Country
-    country: ssi.country || ssi.registeredCountry || null
+    country: ssi.country || ssi.registeredCountry || null,
+
+    // SWIFT generation fields (from Counterparty_SSI.xlsx)
+    bankAddress: ssi.bankAddress || null,
+    agentBankAddress: ssi.agentBankAddress || null,
+    swift71A: ssi.swift71A || null
   };
 }
 
@@ -505,6 +511,41 @@ async function isReferenceDataAvailable() {
 async function getAllCounterparties() {
   if (!getIsConnected()) return [];
   return Counterparty.find({}).lean();
+}
+
+// ============================
+// OUR SSI LOOKUP
+// ============================
+
+/**
+ * Find our bank's SSI for a given entity + currency.
+ * Used by the SWIFT engine to populate our side of the message.
+ *
+ * @param {string} entityName - Entity name (e.g., "Skillomentum Global Bank London")
+ * @param {string} currency - Currency code (e.g., "USD")
+ * @returns {Promise<Object|null>}
+ */
+async function findOurSSI(entityName, currency) {
+  if (!getIsConnected()) return null;
+  const ccy = String(currency).toUpperCase();
+
+  // Try exact entity name match
+  let result = await OurSSI.findOne({ entityName, currency: ccy }).lean();
+  if (result) return result;
+
+  // Try by entity code
+  result = await OurSSI.findOne({ entityCode: entityName, currency: ccy }).lean();
+  if (result) return result;
+
+  // Try partial match
+  result = await OurSSI.findOne({
+    entityName: { $regex: entityName, $options: "i" },
+    currency: ccy
+  }).lean();
+  if (result) return result;
+
+  // Fallback: any Our SSI for this currency
+  return OurSSI.findOne({ currency: ccy }).lean();
 }
 
 module.exports = {
@@ -539,6 +580,9 @@ module.exports = {
 
   // Counterparty
   getAllCounterparties,
+
+  // Our SSI
+  findOurSSI,
 
   // Cache control
   invalidateRefCache,

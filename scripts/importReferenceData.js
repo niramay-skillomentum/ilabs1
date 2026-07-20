@@ -27,6 +27,7 @@ const SSIReference = require("../src/models/SSIReference");
 const Security = require("../src/models/Security");
 const Counterparty = require("../src/models/Counterparty");
 const Entity = require("../src/models/Entity");
+const OurSSI = require("../src/models/OurSSI");
 
 // ============================
 // CONFIGURATION
@@ -35,6 +36,11 @@ const REFERENCE_DATA_DIR = path.join(__dirname, "..", "reference-data", "source"
 const SSI_FILE = path.join(REFERENCE_DATA_DIR, "SSI Reference.xlsx");
 const SECURITY_FILE = path.join(REFERENCE_DATA_DIR, "Security Data.xlsx");
 const ENTITY_FILE = path.join(REFERENCE_DATA_DIR, "Entity data.xlsx");
+
+// New SSI source (Counterparty_SSI.xlsx) — used if present, else falls back to SSI_FILE
+const COUNTERPARTY_SSI_FILE = path.join(__dirname, "..", "Counterparty_SSI.xlsx");
+// Our SSI data
+const OUR_SSI_FILE = path.join(__dirname, "..", "Our_SSI.xlsx");
 
 // Batch size for bulk inserts (prevents memory issues with 55k rows)
 const BATCH_SIZE = 1000;
@@ -73,7 +79,8 @@ const stats = {
   ssi: { total: 0, inserted: 0, skipped: 0, errors: [] },
   securities: { total: 0, inserted: 0, skipped: 0, errors: [] },
   counterparties: { total: 0, inserted: 0, skipped: 0, errors: [] },
-  entities: { total: 0, inserted: 0, skipped: 0, errors: [] }
+  entities: { total: 0, inserted: 0, skipped: 0, errors: [] },
+  ourSSI: { total: 0, inserted: 0, skipped: 0, errors: [] }
 };
 
 function logSection(title) {
@@ -217,9 +224,17 @@ function validateSSIRow(row, rowIndex) {
 
 async function importSSIReference(importBatch) {
   logSection("IMPORTING SSI REFERENCE DATA");
-  console.log(`  Source: ${SSI_FILE}`);
 
-  const workbook = XLSX.readFile(SSI_FILE);
+  // Prefer Counterparty_SSI.xlsx (has new columns: Bank Address, Agent Bank Address, SWIFT 71A)
+  const fs = require("fs");
+  let ssiFilePath = SSI_FILE;
+  if (fs.existsSync(COUNTERPARTY_SSI_FILE)) {
+    ssiFilePath = COUNTERPARTY_SSI_FILE;
+    console.log(`  Using Counterparty_SSI.xlsx (has extended columns)`);
+  }
+  console.log(`  Source: ${ssiFilePath}`);
+
+  const workbook = XLSX.readFile(ssiFilePath);
   const sheetName = "Final Table";
   
   if (!workbook.SheetNames.includes(sheetName)) {
@@ -278,6 +293,10 @@ async function importSSIReference(importBatch) {
       agentBank: row["Agent Bank"] ? String(row["Agent Bank"]).trim() : null,
       agentSwiftCode: row["Agent Swift Code"] ? String(row["Agent Swift Code"]).trim() : null,
       accountAtAgent: row["Account at Agent"] != null ? String(row["Account at Agent"]).trim() : null,
+      // New fields from Counterparty_SSI.xlsx
+      bankAddress: row["Bank Address"] ? String(row["Bank Address"]).trim() : null,
+      agentBankAddress: row["Agent Bank Address"] ? String(row["Agent Bank Address"]).trim() : null,
+      swift71A: row["SWIFT 71A"] ? String(row["SWIFT 71A"]).trim() : null,
       settlementType: deriveSettlementType(row),
       active: true,
       importBatch,
@@ -550,6 +569,91 @@ async function extractCounterparties(importBatch) {
 }
 
 // ============================
+// OUR SSI IMPORT
+// ============================
+
+/**
+ * Import Our SSI data from Our_SSI.xlsx.
+ * Schema: Entity Code (currency) | Entity Name | Entity Code (short) | Address | BIC/SWIFT Code | Account Name | Account Number | Field72
+ */
+async function importOurSSI(importBatch) {
+  logSection("IMPORTING OUR SSI DATA");
+  console.log(`  Source: ${OUR_SSI_FILE}`);
+
+  const fs = require("fs");
+  if (!fs.existsSync(OUR_SSI_FILE)) {
+    console.log("  ⚠️ Our_SSI.xlsx not found — skipping Our SSI import.");
+    return;
+  }
+
+  const workbook = XLSX.readFile(OUR_SSI_FILE);
+  const sheetName = workbook.SheetNames[0] || "Sheet1";
+
+  if (!workbook.Sheets[sheetName]) {
+    console.error(`  ❌ Sheet "${sheetName}" not found.`);
+    return;
+  }
+
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+  const dataRows = rows.slice(1).filter(r => r && r.length > 0 && r[0]);
+  stats.ourSSI.total = dataRows.length;
+
+  console.log(`  Found ${dataRows.length} data rows`);
+  console.log(`  Clearing existing Our SSI data...`);
+  await OurSSI.deleteMany({});
+
+  const documents = [];
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    const currency = String(row[0] || "").trim().toUpperCase();
+    const entityName = String(row[1] || "").trim();
+    const entityCode = String(row[2] || "").trim();
+    const address = String(row[3] || "").trim();
+    const bicSwiftCode = String(row[4] || "").trim();
+    const accountName = String(row[5] || "").trim();
+    const accountNumber = row[6] != null ? String(row[6]).trim() : "";
+    const field72 = row[7] ? String(row[7]).trim() : null;
+
+    if (!currency || !entityName) {
+      stats.ourSSI.skipped++;
+      continue;
+    }
+
+    documents.push({
+      currency,
+      entityName,
+      entityCode,
+      address,
+      bicSwiftCode,
+      accountName,
+      accountNumber,
+      field72,
+      importBatch,
+      importedAt: new Date()
+    });
+  }
+
+  if (documents.length > 0) {
+    try {
+      const result = await OurSSI.insertMany(documents, { ordered: false });
+      stats.ourSSI.inserted = result.length;
+    } catch (err) {
+      if (err.insertedDocs) stats.ourSSI.inserted = err.insertedDocs.length;
+      stats.ourSSI.errors.push(`Insert error: ${err.message}`);
+    }
+  }
+
+  // Log unique entities
+  const uniqueEntities = [...new Set(documents.map(d => d.entityCode))];
+  const uniqueCurrencies = [...new Set(documents.map(d => d.currency))];
+  console.log(`  Entities: ${uniqueEntities.join(", ")}`);
+  console.log(`  Currencies: ${uniqueCurrencies.sort().join(", ")}`);
+
+  logStat("ourSSI");
+}
+
+// ============================
 // MAIN
 // ============================
 
@@ -574,6 +678,9 @@ async function main() {
   // 4. Extract Counterparties from SSI Data
   await extractCounterparties(importBatch);
 
+  // 5. Import Our SSI Data
+  await importOurSSI(importBatch);
+
   // ============================
   // SUMMARY
   // ============================
@@ -582,8 +689,9 @@ async function main() {
   console.log(`  SSI References:  ${stats.ssi.inserted} records`);
   console.log(`  Securities:      ${stats.securities.inserted} records`);
   console.log(`  Counterparties:  ${stats.counterparties.inserted} records`);
+  console.log(`  Our SSI:         ${stats.ourSSI.inserted} records`);
   
-  const totalErrors = stats.ssi.errors.length + stats.securities.errors.length + stats.counterparties.errors.length + stats.entities.errors.length;
+  const totalErrors = stats.ssi.errors.length + stats.securities.errors.length + stats.counterparties.errors.length + stats.entities.errors.length + stats.ourSSI.errors.length;
   if (totalErrors > 0) {
     console.log(`\n  ⚠️ ${totalErrors} error(s) encountered during import. Review logs above.`);
   } else {
@@ -604,6 +712,12 @@ async function main() {
   ]);
   console.log(`  Settlement types: ${typeDistribution.map(t => `${t._id}: ${t.count}`).join(", ")}`);
 
+  // Log SWIFT type distribution (MT103 vs MT202)
+  const swiftDist = await SSIReference.aggregate([
+    { $group: { _id: "$defaultSwift", count: { $sum: 1 } } }
+  ]);
+  console.log(`  Default SWIFT: ${swiftDist.map(t => `${t._id || 'null'}: ${t.count}`).join(", ")}`);
+
   // Log security product distribution
   const productDist = await Security.aggregate([
     { $group: { _id: { product: "$product", productType: "$productType" }, count: { $sum: 1 } } },
@@ -615,6 +729,11 @@ async function main() {
   // Log entity summary
   const entityNames = await Entity.distinct("entityName");
   console.log(`\n  Entities: ${entityNames.join(", ")}`);
+
+  // Log Our SSI summary
+  const ourSSICount = await OurSSI.countDocuments();
+  const ourSSIEntities = await OurSSI.distinct("entityCode");
+  console.log(`\n  Our SSI: ${ourSSICount} records across entities: ${ourSSIEntities.join(", ")}`);
 
   // Log sample SSI IDs
   const sampleSSIs = await SSIReference.find({}).limit(5).select("ssiId groupCounterPartyName currency").lean();

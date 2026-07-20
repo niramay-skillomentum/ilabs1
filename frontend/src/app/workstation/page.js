@@ -205,6 +205,11 @@ function WorkstationComponent() {
   const [ssiGroupList, setSsiGroupList] = useState([]);
   const [selectedSsiId, setSelectedSsiId] = useState("");
 
+  // SWIFT viewer state
+  const [swiftData, setSwiftData] = useState(null);
+  const [swiftActiveTab, setSwiftActiveTab] = useState(0);
+  const [isGeneratingSwift, setIsGeneratingSwift] = useState(false);
+
   const socketRef = useRef(null);
   const refreshTimerRef = useRef(null);
 
@@ -609,6 +614,46 @@ function WorkstationComponent() {
     window.open(`/mo-risk?desk=${encodeURIComponent(desk)}`, "_blank");
   };
 
+  const viewSwift = async () => {
+    if (!selectedTrade) return toast.error("Select a trade first");
+    if (selectedTrade.currentStatus !== "SETTLED") return toast.error("SWIFT can only be viewed for settled trades");
+    
+    setIsGeneratingSwift(true);
+    setSwiftActiveTab(0);
+    try {
+      // First try to fetch existing
+      let res = await fetch(`/api/swift/${encodeURIComponent(selectedTrade.tradeRef)}`, { headers: authHeaders() });
+      let data = await res.json();
+      
+      if (data.success && data.generated && data.messages && data.messages.length > 0) {
+        setSwiftData(data);
+        setPopupState({ type: "swift" });
+        setIsGeneratingSwift(false);
+        return;
+      }
+      
+      // Generate if not exists
+      res = await fetch("/api/swift/generate", {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ tradeRef: selectedTrade.tradeRef })
+      });
+      data = await res.json();
+      
+      if (!data.success) {
+        setIsGeneratingSwift(false);
+        return toast.error(data.error || "Failed to generate SWIFT");
+      }
+      
+      setSwiftData(data);
+      setPopupState({ type: "swift" });
+      toast.success(`SWIFT ${data.messages.map(m => m.messageType).join(" + ")} generated`);
+    } catch (err) {
+      console.error("SWIFT error:", err);
+      toast.error("Failed to load SWIFT message");
+    }
+    setIsGeneratingSwift(false);
+  };
+
   if (!userId) return null;
 
   return (
@@ -704,6 +749,9 @@ function WorkstationComponent() {
                 <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
                 <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
                 <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
+                <button className="btn" style={{background: "linear-gradient(135deg, #1e40af, #3b82f6)", color:"white", border:"none", marginLeft: "8px", fontWeight: 600}} onClick={viewSwift} disabled={isGeneratingSwift}>
+                  {isGeneratingSwift ? "⏳ Generating..." : "📄 View SWIFT"}
+                </button>
               </>
             )}
           </div>
@@ -933,6 +981,176 @@ function WorkstationComponent() {
                   <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
                 </>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════════════════
+          SWIFT MESSAGE VIEWER MODAL — Terminal-style dark theme
+         ══════════════════════════════════════════════════════ */}
+      {popupState.type === "swift" && swiftData && (() => {
+        const msgs = swiftData.messages || [];
+        const activeMsg = msgs[swiftActiveTab] || msgs[0];
+        
+        const FIELD_DESCRIPTIONS = {
+          field20: "Transaction Reference Number",
+          field21: "Related Reference",
+          field23B: "Bank Operation Code",
+          field32A: "Value Date / Currency / Amount",
+          field33B: "Currency / Original Amount",
+          field50A: "Ordering Customer (BIC)",
+          field50K: "Ordering Customer",
+          field52A: "Ordering Institution",
+          field52D: "Ordering Institution",
+          field53A: "Sender's Correspondent",
+          field54A: "Receiver's Correspondent",
+          field56A: "Intermediary Bank",
+          field57A: "Account With Institution",
+          field58A: "Beneficiary Institution",
+          field59: "Beneficiary",
+          field70: "Remittance Information",
+          field71A: "Details of Charges",
+          field72: "Sender to Receiver Info",
+          field77B: "Regulatory Reporting"
+        };
+
+        const MSG_TITLES = {
+          MT103: "Single Customer Credit Transfer",
+          MT202: "General Financial Institution Transfer",
+          MT202COV: "Cover Payment (MT202 COV)"
+        };
+
+        const copyToClipboard = (text) => {
+          navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard"));
+        };
+
+        return (
+          <div className="popup" style={{display: 'block', width: '880px', maxHeight: '92vh', overflowY: 'auto', padding: '0', borderRadius: '12px', border: '1px solid #1e293b'}}>
+            {/* Header */}
+            <div style={{padding: '16px 24px', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', borderRadius: '12px 12px 0 0'}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <div>
+                  <h3 style={{margin: 0, color: '#f8fafc', fontSize: '16px', fontWeight: 700, letterSpacing: '0.5px'}}>
+                    📄 SWIFT {activeMsg?.messageType || ""} — {MSG_TITLES[activeMsg?.messageType] || "Payment Message"}
+                  </h3>
+                  <div style={{color: '#94a3b8', fontSize: '12px', marginTop: '4px'}}>
+                    Trade: {selectedTrade?.tradeRef} | Direction: {swiftData.direction || selectedTrade?.direction}
+                  </div>
+                </div>
+                <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                  {swiftData.settlementRef && (
+                    <div style={{background: 'rgba(59,130,246,0.2)', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)'}}>
+                      Sett: {swiftData.settlementRef}
+                    </div>
+                  )}
+                  {swiftData.ssiRef && (
+                    <div style={{background: 'rgba(34,197,94,0.2)', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)'}}>
+                      SSI: {swiftData.ssiRef}
+                    </div>
+                  )}
+                  <div style={{background: activeMsg?.counterpartyType === 'Bank' ? 'rgba(245,158,11,0.2)' : 'rgba(168,85,247,0.2)', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, color: activeMsg?.counterpartyType === 'Bank' ? '#fbbf24' : '#c084fc', border: `1px solid ${activeMsg?.counterpartyType === 'Bank' ? 'rgba(245,158,11,0.3)' : 'rgba(168,85,247,0.3)'}`}}>
+                    {activeMsg?.counterpartyType || ""}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs for multiple messages */}
+              {msgs.length > 1 && (
+                <div style={{display: 'flex', gap: '4px', marginTop: '12px'}}>
+                  {msgs.map((m, i) => (
+                    <button key={i} onClick={() => setSwiftActiveTab(i)} style={{
+                      padding: '6px 16px', border: 'none', borderRadius: '6px 6px 0 0', cursor: 'pointer',
+                      fontSize: '12px', fontWeight: 600, letterSpacing: '0.5px', transition: 'all 0.2s',
+                      background: swiftActiveTab === i ? '#1e293b' : 'rgba(255,255,255,0.08)',
+                      color: swiftActiveTab === i ? '#f8fafc' : '#64748b',
+                      borderBottom: swiftActiveTab === i ? '2px solid #3b82f6' : '2px solid transparent'
+                    }}>
+                      {m.messageType}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Message Content — Terminal Style */}
+            {activeMsg && (
+              <div style={{display: 'flex', minHeight: '400px'}}>
+                {/* Left: Raw SWIFT message */}
+                <div style={{flex: '1 1 60%', background: '#0f172a', padding: '20px', overflowX: 'auto', overflowY: 'auto', maxHeight: '55vh'}}>
+                  <pre style={{
+                    fontFamily: "'Consolas', 'SF Mono', 'Fira Code', monospace",
+                    fontSize: '12.5px', lineHeight: '1.8', color: '#e2e8f0', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all'
+                  }}>
+                    {activeMsg.messageContent?.split('\n').map((line, i) => {
+                      // Color-code field tags
+                      const isHeader = line.startsWith('{1:') || line.startsWith('{2:') || line.startsWith('{3:') || line.startsWith('{4:') || line === '-}';
+                      const isFieldTag = line.match(/^:(\d+[A-Z]?):/);
+                      
+                      if (isHeader) {
+                        return <span key={i} style={{color: '#64748b'}}>{line}{'\n'}</span>;
+                      }
+                      if (isFieldTag) {
+                        const tagEnd = line.indexOf(':', 1) + 1;
+                        const tag = line.substring(0, tagEnd);
+                        const value = line.substring(tagEnd);
+                        return (
+                          <span key={i}>
+                            <span style={{color: '#4ade80', fontWeight: 700}}>{tag}</span>
+                            <span style={{color: '#f1f5f9'}}>{value}</span>
+                            {'\n'}
+                          </span>
+                        );
+                      }
+                      return <span key={i} style={{color: '#cbd5e1'}}>{line}{'\n'}</span>;
+                    })}
+                  </pre>
+                </div>
+
+                {/* Right: Field descriptions panel */}
+                <div style={{flex: '0 0 280px', background: '#1e293b', padding: '16px', borderLeft: '1px solid #334155', overflowY: 'auto', maxHeight: '55vh'}}>
+                  <div style={{fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #334155'}}>
+                    Field Reference
+                  </div>
+                  {activeMsg.fields && Object.entries(activeMsg.fields).filter(([, v]) => v).map(([key, val]) => {
+                    const fieldNum = key.replace('field', ':').replace(/([A-Z])/g, '$1');
+                    const desc = FIELD_DESCRIPTIONS[key] || key;
+                    return (
+                      <div key={key} style={{marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(51,65,85,0.5)'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                          <span style={{color: '#4ade80', fontSize: '11px', fontWeight: 700, fontFamily: 'monospace'}}>{fieldNum}</span>
+                          <span style={{color: '#64748b', fontSize: '10px'}}>{desc}</span>
+                        </div>
+                        <div style={{color: '#e2e8f0', fontSize: '11px', marginTop: '3px', fontFamily: 'monospace', wordBreak: 'break-all', whiteSpace: 'pre-wrap'}}>
+                          {String(val).substring(0, 80)}{String(val).length > 80 ? '...' : ''}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderTop: '1px solid #334155', background: '#0f172a', borderRadius: '0 0 12px 12px'}}>
+              <div style={{fontSize: '11px', color: '#64748b'}}>
+                Generated: {activeMsg?.generatedAt ? new Date(activeMsg.generatedAt).toLocaleString() : 'N/A'}
+                {activeMsg?.generatedBy && <span> | By: {activeMsg.generatedBy}</span>}
+              </div>
+              <div style={{display: 'flex', gap: '8px'}}>
+                <button onClick={() => copyToClipboard(activeMsg?.messageContent || '')} style={{
+                  padding: '6px 14px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)',
+                  borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s'
+                }}>
+                  📋 Copy Message
+                </button>
+                <button onClick={() => { setPopupState({type: null}); setSwiftData(null); }} style={{
+                  padding: '6px 14px', background: 'rgba(255,255,255,0.08)', color: '#94a3b8', border: '1px solid #334155',
+                  borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500
+                }}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         );

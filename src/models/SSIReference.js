@@ -55,6 +55,13 @@ const SSIReferenceSchema = new mongoose.Schema({
   agentBank: { type: String },
   agentSwiftCode: { type: String },
   accountAtAgent: { type: String },
+  agentBankAddress: { type: String },
+
+  // Beneficiary bank address (from "Bank Address" column)
+  bankAddress: { type: String },
+
+  // SWIFT 71A — Details of Charges (SHA / OUR / BEN)
+  swift71A: { type: String },
 
   // Derived settlement type (DIRECT or CORRESPONDENT)
   settlementType: { type: String, enum: ["DIRECT", "CORRESPONDENT"] },
