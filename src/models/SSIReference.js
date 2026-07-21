@@ -44,6 +44,7 @@ const SSIReferenceSchema = new mongoose.Schema({
 
   // Additional instruction fields
   field72: { type: String },
+  swift71A: { type: String },
   finalBeneficiary: { type: String },
 
   // Reference columns A, B, C from Excel

@@ -723,34 +723,42 @@ function WorkstationComponent() {
 
         <div className="action-bar">
           <div>
-            {desk === "MO" && (
+            {selectedTrade?.tradeType === "ELECTRONIC" ? (
+              <div style={{color: '#dc2626', fontWeight: 600, fontSize: '13px', marginLeft: '12px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px'}}>
+                ⚠️ Actions for Electronic trades must be performed in the STCC Electronic Settlement dashboard.
+              </div>
+            ) : (
               <>
-                <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
-                <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
-                <button className="btn primary" onClick={sendToFO}>Send to FO</button>
-              </>
-            )}
-            {desk === "CONFIRMATION" && (
-              <>
-                <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
-                <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
-                <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
-                <button className="btn primary" onClick={() => {
-                  if(!selectedTrade) return toast.error("Select a trade first");
-                  if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
-                  const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
-                  window.open("/communication?" + mailParams.toString(), "_blank");
-                }}>Escalate to FO</button>
-              </>
-            )}
-            {desk === "SETTLEMENT" && (
-              <>
-                <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
-                <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
+                {desk === "MO" && (
+                  <>
+                    <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
+                    <button className="btn primary" onClick={sendToFO}>Send to FO</button>
+                  </>
+                )}
+                {desk === "CONFIRMATION" && (
+                  <>
+                    <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
+                    <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
+                    <button className="btn primary" onClick={() => {
+                      if(!selectedTrade) return toast.error("Select a trade first");
+                      if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+                      const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
+                      window.open("/communication?" + mailParams.toString(), "_blank");
+                    }}>Escalate to FO</button>
+                  </>
+                )}
+                {desk === "SETTLEMENT" && (
+                  <>
+                    <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
+                    <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
+                    <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
+                  </>
+                )}
               </>
             )}
           </div>
