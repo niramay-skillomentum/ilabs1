@@ -11,6 +11,15 @@ import TutorialPanel from "../../components/TutorialPanel";
 // ============ Module-scope stable constants (F2) ============
 const format = (d) => d ? new Date(d).toLocaleDateString() : "";
 
+function getSwiftTitle(messageType) {
+  switch (messageType) {
+    case "MT103": return "Single Customer Credit Transfer";
+    case "MT202": return "General Financial Institution Transfer";
+    case "MT202COV": return "Cover Payment (Customer Credit Transfer)";
+    default: return "SWIFT Message";
+  }
+}
+
 // Static stylesheet — hoisted so it isn't re-created on every render.
 const WORKSTATION_STYLE = `
         body { font-family: 'Inter', sans-serif; background: #f0f4f8; margin: 0; color: #1e293b; }
@@ -204,6 +213,9 @@ function WorkstationComponent() {
   const [ssiFormData, setSsiFormData] = useState({});
   const [ssiGroupList, setSsiGroupList] = useState([]);
   const [selectedSsiId, setSelectedSsiId] = useState("");
+  const [swiftData, setSwiftData] = useState(null);
+  const [swiftActiveTab, setSwiftActiveTab] = useState(0);
+  const [isLoadingSwift, setIsLoadingSwift] = useState(false);
 
   const socketRef = useRef(null);
   const refreshTimerRef = useRef(null);
@@ -500,6 +512,41 @@ function WorkstationComponent() {
     setPopupState({ type: "audit" });
   };
 
+  const viewSwift = async () => {
+    if (!selectedTrade) return toast.error("Select trade first");
+    if (selectedTrade.currentStatus !== "SETTLED") return toast.error("SWIFT messages are only available for SETTLED trades.");
+    setIsLoadingSwift(true);
+    try {
+      const res = await fetch("/api/swift/trade/" + selectedTrade.tradeRef, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success && data.messages && data.messages.length > 0) {
+        setSwiftData(data);
+        setSwiftActiveTab(0);
+        setPopupState({ type: "swift" });
+      } else {
+        // Try generating first
+        const genRes = await fetch("/api/swift/generate", {
+          method: "POST", headers: authHeaders(),
+          body: JSON.stringify({ tradeRef: selectedTrade.tradeRef })
+        });
+        const genData = await genRes.json();
+        if (genData.success && genData.messages && genData.messages.length > 0) {
+          // Re-fetch with display payloads
+          const res2 = await fetch("/api/swift/trade/" + selectedTrade.tradeRef, { headers: authHeaders() });
+          const data2 = await res2.json();
+          setSwiftData(data2);
+          setSwiftActiveTab(0);
+          setPopupState({ type: "swift" });
+        } else {
+          toast.error(genData.errors?.[0] || "No SWIFT messages could be generated for this trade.");
+        }
+      }
+    } catch (err) {
+      toast.error("Failed to load SWIFT messages.");
+    }
+    setIsLoadingSwift(false);
+  };
+
   const openMailboxGeneral = (forceChannel, forceComposeTo) => {
     const mailParams = new URLSearchParams({ desk });
     if (selectedTrade) {
@@ -712,6 +759,11 @@ function WorkstationComponent() {
             <button className="btn secondary" onClick={openAudit}>Audit</button>
             <button className="btn secondary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
             <button className="btn secondary" style={{backgroundColor:"#8b5cf6", color:"white", border:"none"}} onClick={viewTruth}>👁️ View Truth</button>
+            {selectedTrade?.currentStatus === "SETTLED" && (
+              <button className="btn" style={{background:"linear-gradient(135deg, #0d9488 0%, #0f766e 100%)", color:"white", border:"none", fontWeight: 600}} onClick={viewSwift} disabled={isLoadingSwift}>
+                {isLoadingSwift ? "Loading..." : "📄 View SWIFT"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -933,6 +985,219 @@ function WorkstationComponent() {
                   <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
                 </>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══════ SWIFT MESSAGE POPUP ══════ */}
+      {popupState.type === "swift" && swiftData && swiftData.messages && (() => {
+        const messages = swiftData.messages;
+        const activeMsg = messages[swiftActiveTab] || messages[0];
+        const fieldMap = activeMsg.fieldMap || {};
+        const fieldTags = Object.keys(fieldMap);
+        const msgType = activeMsg.messageType;
+
+        // MT103 descriptive field labels (matching the reference image exactly)
+        const MT103_LABELS = {
+          "20": "Sender's Reference",
+          "23B": "Bank Operation Code",
+          "32A": "Val Dte/Curr/Interbnk Settld Amt",
+          "33B": "Currency/Original Ordered Amount",
+          "50K": "Ordering Customer-Name & Address",
+          "50A": "Ordering Customer",
+          "50F": "Ordering Customer",
+          "52A": "Ordering Institution-Name & Addr",
+          "52D": "Ordering Institution-Name & Addr",
+          "53A": "Sender's Correspondent - FI BIC",
+          "53B": "Sender's Correspondent",
+          "54A": "Receiver's Correspondent",
+          "54B": "Receiver's Correspondent",
+          "56A": "Intermediary Institution",
+          "56C": "Intermediary Institution",
+          "57A": "Account With Institution - FI BIC",
+          "57B": "Account With Institution",
+          "57C": "Account With Institution",
+          "59": "Beneficiary Customer-Name & Addr",
+          "59A": "Beneficiary Customer",
+          "70": "Remittance Information",
+          "71A": "Details of Charges",
+          "72": "Sender to Receiver Information",
+          "77B": "Regulatory Reporting"
+        };
+
+        // MT202 field reference table descriptions (matching the reference image)
+        const MT202_DESCRIPTIONS = {
+          "20": "Transaction Reference Number – unique ID for this MT202.",
+          "21": "Related Reference – links to a related transaction (e.g., a customer MT103).",
+          "32A": "Value Date, Currency, and Amount.",
+          "52A": "Ordering Institution – the bank acting on behalf of the sender's customer.",
+          "53A": "Sender's Correspondent – the correspondent bank used by the sender.",
+          "54A": "Receiver's Correspondent – the correspondent bank used by the receiver.",
+          "56A": "Intermediary Institution – a bank through which the payment is routed.",
+          "57A": "Account With Institution – the bank that will credit the beneficiary.",
+          "58A": "Beneficiary Institution – the final beneficiary's bank (optional in MT202).",
+          "72": "Sender to Receiver Information – additional payment instructions.",
+          "50K": "Ordering Customer (Underlying)",
+          "59": "Beneficiary Customer (Underlying)",
+          "33B": "Currency/Original Ordered Amount"
+        };
+
+        // Build raw SWIFT block text for MT202 / MT202COV
+        const buildRawBlock = () => {
+          const senderBIC = (activeMsg.senderBIC || "BANKUS33XXX").replace(/\s/g, "").toUpperCase();
+          const receiverBIC = (activeMsg.receiverBIC || "DEUTDEFFXXX").replace(/\s/g, "").toUpperCase();
+          const padSender = senderBIC.length === 8 ? senderBIC + "AXXX" : senderBIC;
+          const padReceiver = receiverBIC.length === 8 ? receiverBIC + "XXXX" : receiverBIC;
+          const msgNum = msgType === "MT202COV" ? "202" : msgType.replace("MT", "");
+          const covRef = msgType === "MT202COV" ? "COV" : "";
+
+          let lines = [];
+          lines.push(`{1:F01${padSender}1234567890}{2:I${msgNum}`);
+          lines.push(`${covRef}${padReceiver}N}{3:{108:REF${activeMsg.tradeRef || "20250928"}}}`);
+          lines.push("{4:");
+          for (const tag of fieldTags) {
+            const val = String(fieldMap[tag].value || "");
+            const valLines = val.split("\n");
+            lines.push(`:${tag}:${valLines[0]}`);
+            for (let i = 1; i < valLines.length; i++) {
+              lines.push(valLines[i]);
+            }
+          }
+          lines.push("-}");
+          return lines;
+        };
+
+        return (
+          <div className="popup" style={{display: 'block', width: '1000px', maxWidth: '96vw', maxHeight: '92vh', overflowY: 'auto', padding: '0', borderRadius: '8px', border: '1px solid #ccc', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', background: 'white' }}>
+
+            {/* Title Bar */}
+            <div style={{padding: '14px 24px', background: 'white', borderBottom: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                <span style={{fontSize: '22px', fontWeight: 700, color: '#1e293b'}}>{msgType} Swift Message</span>
+              </div>
+              <button onClick={() => { setPopupState({type: null}); setSwiftData(null); }}
+                style={{background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#94a3b8', fontWeight: 700, lineHeight: 1}}>&times;</button>
+            </div>
+
+            {/* Description bar */}
+            <div style={{padding: '12px 24px', background: '#fafafa', borderBottom: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', lineHeight: '1.6'}}>
+              {msgType === "MT103" && "An MT103 is a standardized SWIFT message used by banks to confirm an international wire transfer, known as a \"Single Customer Credit Transfer\". It contains all necessary details for cross-border payments, such as sender and receiver information, currency, amount, and transaction references, making it a vital tool for communication, tracking, and proof of payment within the SWIFT network."}
+              {msgType === "MT202" && "An MT202 is a SWIFT message for General Financial Institution Transfers — bank-to-bank payments. It is used to order the movement of funds between financial institutions and does not carry customer payment details."}
+              {msgType === "MT202COV" && "An MT202 COV (Cover Payment) is a SWIFT message used for the cover leg of a customer credit transfer. It carries the interbank routing details (Sequence A) alongside the underlying customer payment information (Sequence B) from the paired MT103."}
+            </div>
+
+            {/* Tabs if multiple messages */}
+            {messages.length > 1 && (
+              <div style={{display: 'flex', borderBottom: '2px solid #e2e8f0', background: 'white'}}>
+                {messages.map((m, idx) => (
+                  <button key={idx} onClick={() => setSwiftActiveTab(idx)}
+                    style={{
+                      flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
+                      background: swiftActiveTab === idx ? '#f0fdf4' : 'white',
+                      borderBottom: swiftActiveTab === idx ? '3px solid #16a34a' : '3px solid transparent',
+                      fontWeight: swiftActiveTab === idx ? 700 : 500,
+                      color: swiftActiveTab === idx ? '#15803d' : '#64748b',
+                      fontSize: '13px', transition: 'all 0.2s'
+                    }}>
+                    {m.messageType}{m.messageType === "MT103" ? " — Customer Transfer" : m.messageType === "MT202COV" ? " — Cover Payment" : " — Bank Transfer"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Main Content — split into message (left) + field reference (right) */}
+            <div style={{display: 'flex', gap: '0', borderBottom: '1px solid #e2e8f0'}}>
+
+              {/* LEFT: SWIFT Message Body */}
+              <div style={{flex: '1 1 55%', padding: '20px 24px', borderRight: '1px solid #e2e8f0', maxHeight: '500px', overflowY: 'auto', background: 'white'}}>
+
+                {msgType === "MT103" ? (
+                  /* MT103: Descriptive format — tag: description \n    value */
+                  <pre style={{fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white'}}>
+                    {fieldTags.map(tag => {
+                      const field = fieldMap[tag];
+                      const label = MT103_LABELS[tag] || field.description || tag;
+                      const val = String(field.value || "");
+                      const valLines = val.split("\n");
+                      return `${tag}: ${label}\n${valLines.map(l => `    ${l}`).join("\n")}\n`;
+                    }).join("")}
+                  </pre>
+                ) : (
+                  /* MT202 / MT202COV: Raw SWIFT block format */
+                  <pre style={{fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white'}}>
+                    {(() => {
+                      const senderBIC = (activeMsg.senderBIC || "BANKUS33XXX").replace(/\s/g, "").toUpperCase();
+                      const receiverBIC = (activeMsg.receiverBIC || "DEUTDEFFXXX").replace(/\s/g, "").toUpperCase();
+                      const padSender = senderBIC.length === 8 ? senderBIC + "AXXX" : senderBIC.length < 12 ? senderBIC + "X".repeat(12 - senderBIC.length) : senderBIC;
+                      const padReceiver = receiverBIC.length === 8 ? receiverBIC + "XXXX" : receiverBIC.length < 12 ? receiverBIC + "X".repeat(12 - receiverBIC.length) : receiverBIC;
+                      const msgNum = "202";
+                      const covPrefix = msgType === "MT202COV" ? "COV" : "";
+
+                      let header = `{1:F01${padSender}1234567890}{2:I${msgNum}\n${covPrefix}${padReceiver}N}{3:{108:REF${(activeMsg.tradeRef || swiftData.tradeRef || "20250928").substring(0,10)}}}`;
+                      let body = "{4:";
+                      for (const tag of fieldTags) {
+                        const val = String(fieldMap[tag].value || "");
+                        const valLines = val.split("\n");
+                        body += `\n:${tag}:${valLines[0]}`;
+                        for (let i = 1; i < valLines.length; i++) {
+                          body += `\n${valLines[i]}`;
+                        }
+                      }
+                      body += "\n-}";
+                      return header + "\n" + body;
+                    })()}
+                  </pre>
+                )}
+              </div>
+
+              {/* RIGHT: Field Reference Table */}
+              <div style={{flex: '1 1 45%', maxHeight: '500px', overflowY: 'auto', background: 'white'}}>
+                <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '12px'}}>
+                  <thead>
+                    <tr style={{background: '#16a34a', position: 'sticky', top: 0, zIndex: 2}}>
+                      <th style={{padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.3)', width: '80px'}}>
+                        {msgType === "MT103" ? "FIELD" : "Field Tag"}
+                      </th>
+                      {msgType !== "MT103" && (
+                        <th style={{padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.3)'}}>
+                          Content (from Example)
+                        </th>
+                      )}
+                      <th style={{padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600}}>
+                        {msgType === "MT103" ? "DESCRIPTION" : "Meaning / Purpose"}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fieldTags.map((tag, i) => (
+                      <tr key={tag} style={{background: i % 2 === 0 ? 'white' : '#f9f9f9', borderBottom: '1px solid #e5e5e5'}}>
+                        <td style={{padding: '6px 12px', fontFamily: "'Courier New', monospace", fontWeight: 600, color: '#1e293b', borderRight: '1px solid #e5e5e5', verticalAlign: 'top'}}>
+                          {msgType === "MT103" ? tag : `:${tag}:`}
+                        </td>
+                        {msgType !== "MT103" && (
+                          <td style={{padding: '6px 12px', fontFamily: "'Courier New', monospace", color: '#1e293b', borderRight: '1px solid #e5e5e5', verticalAlign: 'top', fontSize: '11.5px', wordBreak: 'break-all'}}>
+                            {String(fieldMap[tag].value || "").split("\n")[0]}
+                          </td>
+                        )}
+                        <td style={{padding: '6px 12px', color: '#374151', verticalAlign: 'top', fontSize: '12px'}}>
+                          {msgType === "MT103"
+                            ? (MT103_LABELS[tag] || fieldMap[tag].description || "")
+                            : (MT202_DESCRIPTIONS[tag] || fieldMap[tag].description || "")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px', background: 'white', borderTop: '1px solid #e2e8f0'}}>
+              <div style={{fontSize: '11px', color: '#94a3b8'}}>
+                Trade Ref: {swiftData.tradeRef} | Generated: {activeMsg.generatedAt ? new Date(activeMsg.generatedAt).toLocaleString() : new Date().toLocaleString()}
+              </div>
+              <button className="btn secondary" onClick={() => { setPopupState({type: null}); setSwiftData(null); }}>Close</button>
             </div>
           </div>
         );
