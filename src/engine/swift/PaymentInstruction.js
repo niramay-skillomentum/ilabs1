@@ -69,7 +69,7 @@ function build(trade, ourBank, counterpartySSI) {
 
     // Additional instructions
     field72: counterpartySSI.field72 || null,
-    charges: "SHA",   // Shared charges by default
+    charges: counterpartySSI.swift71A || "SHA",   // Fallback to Shared charges
 
     // Direction-resolved roles
     orderingInstitution: null,

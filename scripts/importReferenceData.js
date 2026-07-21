@@ -278,6 +278,7 @@ async function importSSIReference(importBatch) {
       country: row["Country"] ? String(row["Country"]).trim() : null,
       accountNumber: row["Account Number"] != null ? String(row["Account Number"]).trim() : null,
       field72: row["Field 72"] ? String(row["Field 72"]).trim() : null,
+      swift71A: row["SWIFT 71 A"] ? String(row["SWIFT 71 A"]).trim() : null,
       finalBeneficiary: row["Final Beneficiary"] ? String(row["Final Beneficiary"]).trim() : null,
       refA: row["A"] != null ? row["A"] : null,
       refB: row["B"] != null ? row["B"] : null,
