@@ -132,6 +132,7 @@ async function importEntityData(importBatch) {
   await Entity.deleteMany({});
 
   // Headers: Entity Code (currency) | Entity Name | Entity Code (short code) | Address
+  //           | BIC / SWIFT Code | Account Name | Account Number
   const documents = [];
 
   for (let i = 0; i < dataRows.length; i++) {
@@ -140,6 +141,9 @@ async function importEntityData(importBatch) {
     const entityName = String(row[1] || "").trim();
     const entityCode = String(row[2] || "").trim();
     const address = String(row[3] || "").trim();
+    const bic = String(row[4] || "").trim();
+    const accountName = String(row[5] || "").trim();
+    const accountNumber = String(row[6] || "").trim();
 
     if (!entityName || !currency) {
       stats.entities.skipped++;
@@ -151,6 +155,9 @@ async function importEntityData(importBatch) {
       entityCode,
       currency,
       address,
+      bic: bic || null,
+      accountName: accountName || null,
+      accountNumber: accountNumber || null,
       region: deriveRegion(entityName, address),
       importBatch,
       importedAt: new Date()

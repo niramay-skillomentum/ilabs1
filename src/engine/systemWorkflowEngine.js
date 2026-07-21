@@ -230,6 +230,9 @@ async function processVerification(job) {
 
     emit("trade_update", job.userId, { tradeRef: trade.tradeRef, currentStatus: "SETTLED" });
     emit("new_system_mail", job.userId, { tradeRef: trade.tradeRef, action: "SETTLED" });
+
+    // Fire-and-forget SWIFT message generation
+    try { require("./swift").generateSwiftMessages(trade.tradeRef, job.userId); } catch (e) {}
   } else {
     // Verification failed — revert to SETTLEMENT_PENDING
     applyTransition(trade, "SETTLEMENT_PENDING");

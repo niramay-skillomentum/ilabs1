@@ -183,6 +183,9 @@ router.post("/settle", authenticateToken, async (req, res) => {
       if (io) io.to(`user_${userId}`).emit("trade_update", { tradeRef, currentStatus: trade.currentStatus });
     } catch (err) {}
 
+    // Fire-and-forget SWIFT message generation
+    try { require("../engine/swift").generateSwiftMessages(tradeRef, userId); } catch (e) {}
+
     return res.json({ success: true, trade, currentStatus: trade.currentStatus });
   } catch (err) {
     console.error("[ElectronicSettlement] POST /settle error:", err);

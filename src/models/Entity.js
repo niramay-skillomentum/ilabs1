@@ -3,9 +3,11 @@
 // Stores entity master data imported from Entity data.xlsx.
 // Entities represent the internal bank entities (e.g., SBG London, SBG New York).
 // Used in the trade generation flow to select entity, region, and currency.
+// Also provides our bank's SWIFT/BIC details for SWIFT message generation.
 //
 // Excel structure:
 //   Entity Code (currency) | Entity Name | Entity Code (short code) | Address
+//   | BIC / SWIFT Code | Account Name | Account Number
 // ======================================
 
 const mongoose = require("mongoose");
@@ -16,6 +18,11 @@ const EntitySchema = new mongoose.Schema({
   entityCode: { type: String, required: true },
   currency: { type: String, required: true, index: true },
   address: { type: String },
+
+  // SWIFT / BIC details for SWIFT message generation
+  bic: { type: String },
+  accountName: { type: String },
+  accountNumber: { type: String },
 
   // Derived region based on entity location
   region: { type: String, index: true },
