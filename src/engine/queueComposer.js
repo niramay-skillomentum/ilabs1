@@ -221,6 +221,8 @@ class QueueComposer {
 
       const generated = await tradeGenerator.generateTrades(remainingClean, remainingBreaks, desk, settlementInitialState);
       const saved = await tradeGenerator.saveGeneratedTrades(generated);
+      // Fire-and-forget: Create Ledger Reconciliation Items
+      try { require("./ledgerImporter").importTradesAsLedgerItems(saved); } catch (e) {}
 
       const genClean = [];
       const genBreaks = [];
@@ -249,6 +251,8 @@ class QueueComposer {
         settlementInitialState
       );
       const savedFiller = await tradeGenerator.saveGeneratedTrades(filler);
+      // Fire-and-forget: Create Ledger Reconciliation Items
+      try { require("./ledgerImporter").importTradesAsLedgerItems(savedFiller); } catch (e) {}
       queue = queue.concat(savedFiller);
     }
 

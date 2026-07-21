@@ -137,6 +137,9 @@ async function generateSwiftMessages(tradeRef, userId) {
 
       generatedMessages.push(msg);
       console.log(`[SwiftEngine] ${spec.messageType} generated for ${tradeRef} (id: ${msg._id})`);
+
+      // Fire-and-forget: Create Statement Reconciliation Item
+      try { require("../statementImporter").createStatementItem(msg, trade); } catch (e) {}
     }
 
     // ── 7. Link related messages (MT103 ↔ MT202COV pair) ──
