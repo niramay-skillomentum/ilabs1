@@ -1023,7 +1023,12 @@ function WorkstationComponent() {
         const messages = swiftData.messages;
         const activeMsg = messages[swiftActiveTab] || messages[0];
         const fieldMap = activeMsg.fieldMap || {};
-        const fieldTags = Object.keys(fieldMap);
+        const SWIFT_TAG_ORDER = ["20", "21", "23B", "32A", "33B", "50A", "50F", "50K", "52A", "52D", "53A", "53B", "54A", "54B", "56A", "56C", "57A", "57B", "57C", "58A", "59", "59A", "70", "71A", "72", "77B"];
+        const fieldTags = Object.keys(fieldMap).sort((a, b) => {
+          let idxA = SWIFT_TAG_ORDER.indexOf(a); let idxB = SWIFT_TAG_ORDER.indexOf(b);
+          if (idxA === -1) idxA = 999; if (idxB === -1) idxB = 999;
+          return idxA - idxB;
+        });
         const msgType = activeMsg.messageType;
 
         // MT103 descriptive field labels (matching the reference image exactly)
@@ -1145,10 +1150,11 @@ function WorkstationComponent() {
                   <pre style={{fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white'}}>
                     {fieldTags.map(tag => {
                       const field = fieldMap[tag];
-                      const label = MT103_LABELS[tag] || field.description || tag;
                       const val = String(field.value || "");
                       const valLines = val.split("\n");
-                      return `${tag}: ${label}\n${valLines.map(l => `    ${l}`).join("\n")}\n`;
+                      const firstLine = valLines[0];
+                      const restLines = valLines.slice(1).map(l => `    ${l}`).join("\n");
+                      return `${tag}: ${firstLine}\n${restLines ? restLines + "\n" : ""}`;
                     }).join("")}
                   </pre>
                 ) : (
