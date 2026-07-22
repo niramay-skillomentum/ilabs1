@@ -13,7 +13,12 @@ export const DeskSelectionPage = () => {
   const [hoveredStage, setHoveredStage] = useState<string | null>(null);
 
   const handleSelect = (route: string) => {
-    // Keep existing routing mechanism
+    // Reconciliation Desk has its own dedicated page
+    if (route === "RECONCILIATION") {
+      router.push("/reconciliation-desk");
+      return;
+    }
+    // Keep existing routing mechanism for other desks
     router.push(`/workstation?desk=${encodeURIComponent(route)}`);
   };
 

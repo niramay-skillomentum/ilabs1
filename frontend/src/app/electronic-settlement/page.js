@@ -354,20 +354,28 @@ function ElectronicSettlementComponent() {
         {/* ── ACTION BAR ── */}
         <div className="stcc-action-bar">
           <div className="stcc-action-buttons">
-            <button
-              className="stcc-action-btn settle"
-              disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling}
-              onClick={handleSettle}
-            >
-              {isSettling ? "Settling..." : "⬆ Settle"}
-            </button>
-            <button
-              className="stcc-action-btn"
-              disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED"}
-              onClick={handleOpenComparison}
-            >
-              ✎ Edit / Compare
-            </button>
+            {selectedTrade?.tradeType === "BILATERAL" ? (
+              <span style={{color: '#ef4444', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', padding: '0 12px'}}>
+                ⚠️ Actions for Bilateral trades must be performed in the Main Workstation.
+              </span>
+            ) : (
+              <>
+                <button
+                  className="stcc-action-btn settle"
+                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling}
+                  onClick={handleSettle}
+                >
+                  {isSettling ? "Settling..." : "⬆ Settle"}
+                </button>
+                <button
+                  className="stcc-action-btn"
+                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED"}
+                  onClick={handleOpenComparison}
+                >
+                  ✎ Edit / Compare
+                </button>
+              </>
+            )}
             <button
               className="stcc-action-btn"
               onClick={fetchTrades}

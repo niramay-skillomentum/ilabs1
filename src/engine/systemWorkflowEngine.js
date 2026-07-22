@@ -109,6 +109,17 @@ async function scheduleVerification(trade, userId, desk) {
 
 function validateTrade(trade) {
   const errors = [];
+  
+  if (trade.direction === "SELL") {
+    // For SELL trades, the bot checks if the counterparty provided the correct SSI.
+    // If the counterparty sent an incorrect SSI in their email and the user sent it for approval anyway,
+    // the bot will reject it.
+    if (trade.truths && trade.truths.settlement && trade.truths.settlement.cptyProvidedCorrectSSI === false) {
+      errors.push("The counterparty has not provided the correct SSI. Please liaise with them to get the correct SSI before approving.");
+    }
+    return errors;
+  }
+
   const sys = trade.settlementDetails || {};
   const truth = trade.truths?.settlement || {};
 
