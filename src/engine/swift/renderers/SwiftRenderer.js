@@ -97,11 +97,21 @@ function renderHeader(senderBIC, receiverBIC, messageType) {
 }
 
 /**
- * Render the text block {4: ... -}
- */
+const SWIFT_TAG_ORDER = ["20", "21", "23B", "32A", "33B", "50A", "50F", "50K", "52A", "52D", "53A", "53B", "54A", "54B", "56A", "56C", "57A", "57B", "57C", "58A", "59", "59A", "70", "71A", "72", "77B"];
+
+function getSortedTags(fieldMap) {
+  return Object.keys(fieldMap).sort((a, b) => {
+    let idxA = SWIFT_TAG_ORDER.indexOf(a);
+    let idxB = SWIFT_TAG_ORDER.indexOf(b);
+    if (idxA === -1) idxA = 999;
+    if (idxB === -1) idxB = 999;
+    return idxA - idxB;
+  });
+}
+
 function renderBody(fieldMap) {
   const lines = ["{4:"];
-  const tags = Object.keys(fieldMap);
+  const tags = getSortedTags(fieldMap);
 
   for (const tag of tags) {
     const field = fieldMap[tag];
