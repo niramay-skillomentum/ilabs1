@@ -1,27 +1,39 @@
 // ======================================
 // RECONCILIATION SERVICE
-// Central orchestration service for the Reconciliation Desk.
-// Provides:
-//   - Atomic ID generation (REC000001, MATCH000001)
-//   - Recon Desk derivation from FO Region
-//   - Item Type derivation from source + direction
-//   - Query and statistics helpers
+// Business-logic orchestration for the Reconciliation Desk.
 //
-// This service is stateless — all state lives in MongoDB.
-// ======================================
-
-const ReconciliationItem = require("../models/ReconciliationItem");
-const ReconciliationConfig = require("../models/ReconciliationConfig");
-
-// ======================================
-// ATOMIC ID GENERATION
-// Uses MongoDB findOneAndUpdate with upsert to create
-// a thread-safe auto-incrementing counter.
+// Owns the domain rules that are NOT pure persistence:
+//   - Atomic ID generation (REC000001, MATCH000001)
+//   - Recon Desk derivation (from FO Region for ledger,
+//     from SWIFT BIC for statement)
+//   - Item Type derivation (from source + direction)
+//   - Query / statistics facade (delegates to the repository)
+//
+// All data access is delegated to reconciliationRepository so this
+// service never talks to Mongo directly (except the ID counter,
+// which is an infrastructure concern local to this module).
+//
+// Stateless — all durable state lives in MongoDB.
 // ======================================
 
 const mongoose = require("mongoose");
+const repo = require("./reconciliationRepository");
+const ReconciliationConfig = require("../models/ReconciliationConfig");
+const {
+  RECON_SOURCE,
+  RECON_ITEM_TYPE,
+  RECON_DESK,
+  REGION_TO_DESK,
+  ID_FORMAT,
+  COUNTER_KEYS,
+  SWIFT_DIRECTION
+} = require("./reconciliationConstants");
 
-// Lightweight counter schema (reused for both itemId and matchId)
+// ======================================
+// ATOMIC ID GENERATION
+// MongoDB findOneAndUpdate + upsert → thread-safe counter.
+// ======================================
+
 const CounterSchema = new mongoose.Schema({
   _id: { type: String, required: true },
   seq: { type: Number, default: 0 }
@@ -29,199 +41,133 @@ const CounterSchema = new mongoose.Schema({
 
 const Counter = mongoose.models.ReconCounter || mongoose.model("ReconCounter", CounterSchema);
 
-/**
- * Generate the next reconciliation item ID.
- * Format: REC000001, REC000002, ...
- */
-async function generateItemId() {
+async function nextSeq(key) {
   const counter = await Counter.findOneAndUpdate(
-    { _id: "reconciliation_item" },
+    { _id: key },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
-  return `REC${String(counter.seq).padStart(6, "0")}`;
+  return counter.seq;
 }
 
-/**
- * Generate the next match ID.
- * Format: MATCH000001, MATCH000002, ...
- */
+/** Generate the next reconciliation item ID (REC000001, ...). */
+async function generateItemId() {
+  const seq = await nextSeq(COUNTER_KEYS.ITEM);
+  return `${ID_FORMAT.ITEM_PREFIX}${String(seq).padStart(ID_FORMAT.PAD_WIDTH, "0")}`;
+}
+
+/** Generate the next match ID (MATCH000001, ...). */
 async function generateMatchId() {
-  const counter = await Counter.findOneAndUpdate(
-    { _id: "reconciliation_match" },
-    { $inc: { seq: 1 } },
-    { new: true, upsert: true }
-  );
-  return `MATCH${String(counter.seq).padStart(6, "0")}`;
+  const seq = await nextSeq(COUNTER_KEYS.MATCH);
+  return `${ID_FORMAT.MATCH_PREFIX}${String(seq).padStart(ID_FORMAT.PAD_WIDTH, "0")}`;
 }
 
 // ======================================
 // RECON DESK DERIVATION
-// Maps FO Region to Reconciliation Desk
 // ======================================
 
-const REGION_TO_DESK = {
-  "APAC": "APAC.Cash",
-  "EMEA": "EMEA.Cash",
-  "AMER": "AMER.Cash"
-};
-
 /**
- * Derive reconciliation desk from FO Region.
- * Falls back to "GLOBAL.Cash" if region is unknown.
- *
- * @param {string} foRegion - FO Region from trade (e.g., "APAC", "EMEA", "AMER")
- * @returns {string} Reconciliation desk name
+ * Derive reconciliation desk from FO Region (LEDGER path).
+ * Region is a trade-level attribute → legitimate for the ledger.
  */
 function deriveReconDesk(foRegion) {
-  if (!foRegion) return "GLOBAL.Cash";
+  if (!foRegion) return RECON_DESK.GLOBAL;
   const region = String(foRegion).toUpperCase().trim();
-  return REGION_TO_DESK[region] || "GLOBAL.Cash";
+  return REGION_TO_DESK[region] || RECON_DESK.GLOBAL;
+}
+
+/**
+ * Derive reconciliation desk from a SWIFT BIC (STATEMENT path).
+ * The country code (characters 5–6 of the BIC) maps to a region.
+ * This uses ONLY data present inside the SWIFT message — never the trade.
+ *
+ * @param {string} bic - Sender or receiver BIC from the SWIFT message
+ * @returns {string} Recon desk
+ */
+function deriveReconDeskFromBIC(bic) {
+  const code = String(bic || "").toUpperCase().trim();
+  if (code.length < 6) return RECON_DESK.GLOBAL;
+
+  const country = code.substring(4, 6);
+  return countryToDesk(country);
+}
+
+// ISO country → region desk. Deliberately compact; unknown → GLOBAL.
+const APAC = new Set(["AU", "NZ", "JP", "CN", "HK", "SG", "IN", "KR", "TW", "TH", "MY", "ID", "PH", "VN"]);
+const EMEA = new Set(["GB", "DE", "FR", "CH", "NL", "SE", "NO", "DK", "FI", "IT", "ES", "IE", "BE", "AT", "LU", "PL", "PT", "ZA", "AE", "SA", "RU", "TR"]);
+const AMER = new Set(["US", "CA", "MX", "BR", "AR", "CL", "CO", "PE"]);
+
+function countryToDesk(country) {
+  if (APAC.has(country)) return RECON_DESK.APAC;
+  if (EMEA.has(country)) return RECON_DESK.EMEA;
+  if (AMER.has(country)) return RECON_DESK.AMER;
+  return RECON_DESK.GLOBAL;
 }
 
 // ======================================
 // ITEM TYPE DERIVATION
-// Auto-derives from source + trade direction
 // ======================================
 
 /**
- * Derive item type from source and trade direction.
- *
- * @param {string} source    - "LEDGER" or "STATEMENT"
- * @param {string} direction - Trade direction ("BUY" or "SELL")
- * @returns {string} Item type
+ * Derive item type from source + direction.
+ * For LEDGER, direction is the trade direction.
+ * For STATEMENT, direction is the SWIFT paymentDirection (PAY/RECEIVE).
  */
 function deriveItemType(source, direction) {
   const dir = String(direction || "").toUpperCase().trim();
-  const isBuy = dir === "BUY" || dir === "PAY";
+  const isDebit = dir === "BUY" || dir === "PAY";
 
-  if (source === "LEDGER") {
-    return isBuy ? "Ledger Debit" : "Ledger Credit";
+  if (source === RECON_SOURCE.LEDGER) {
+    return isDebit ? RECON_ITEM_TYPE.LEDGER_DEBIT : RECON_ITEM_TYPE.LEDGER_CREDIT;
   }
-  if (source === "STATEMENT") {
-    return isBuy ? "Statement Debit" : "Statement Credit";
+  if (source === RECON_SOURCE.STATEMENT) {
+    return isDebit ? RECON_ITEM_TYPE.STATEMENT_DEBIT : RECON_ITEM_TYPE.STATEMENT_CREDIT;
   }
-  return "Ledger Credit"; // Fallback
+  return RECON_ITEM_TYPE.LEDGER_CREDIT;
+}
+
+/**
+ * Derive statement item type directly from the SWIFT paymentDirection.
+ * Uses ONLY the SWIFT message (never the trade).
+ */
+function deriveStatementItemType(paymentDirection) {
+  const dir = String(paymentDirection || "").toUpperCase().trim();
+  const isDebit = dir === SWIFT_DIRECTION.PAY;
+  return isDebit ? RECON_ITEM_TYPE.STATEMENT_DEBIT : RECON_ITEM_TYPE.STATEMENT_CREDIT;
 }
 
 // ======================================
-// QUERY HELPERS
+// QUERY FACADE (delegates to repository)
 // ======================================
 
 /**
  * Get reconciliation items with optional filtering.
- *
  * @param {Object} filters - { status, source, reconDesk, currency, tradeRef, matchId }
  * @param {Object} options - { limit, skip, sort }
- * @returns {Promise<Object>} { items, total, hasMore }
  */
 async function getItems(filters = {}, options = {}) {
   const query = {};
-
   if (filters.status) query.status = filters.status;
   if (filters.source) query.source = filters.source;
   if (filters.reconDesk) query.reconDesk = filters.reconDesk;
   if (filters.currency) query.currency = filters.currency;
   if (filters.tradeRef) query.itemRef1 = filters.tradeRef;
   if (filters.matchId) query.matchId = filters.matchId;
-
-  const limit = Math.min(Math.max(parseInt(options.limit, 10) || 200, 1), 1000);
-  const skip = Math.max(parseInt(options.skip, 10) || 0, 0);
-  const sort = options.sort || { createdAt: -1 };
-
-  const [items, total] = await Promise.all([
-    ReconciliationItem.find(query)
-      .sort(sort)
-      .skip(skip)
-      .limit(limit + 1)
-      .lean(),
-    ReconciliationItem.countDocuments(query)
-  ]);
-
-  const hasMore = items.length > limit;
-
-  return {
-    items: hasMore ? items.slice(0, limit) : items,
-    total,
-    hasMore
-  };
+  return repo.findByFilters(query, options);
 }
 
-/**
- * Get a single reconciliation item by itemId.
- */
 async function getItemById(itemId) {
-  return ReconciliationItem.findOne({ itemId }).lean();
+  return repo.findByItemId(itemId);
 }
 
-/**
- * Get reconciliation statistics for the dashboard.
- */
 async function getStats() {
-  const [
-    totalItems,
-    matchedItems,
-    outstandingItems,
-    ledgerItems,
-    statementItems,
-    byDesk,
-    byCurrency
-  ] = await Promise.all([
-    ReconciliationItem.countDocuments({}),
-    ReconciliationItem.countDocuments({ status: "Matched" }),
-    ReconciliationItem.countDocuments({ status: "Outstanding" }),
-    ReconciliationItem.countDocuments({ source: "LEDGER" }),
-    ReconciliationItem.countDocuments({ source: "STATEMENT" }),
-    ReconciliationItem.aggregate([
-      { $group: { _id: "$reconDesk", total: { $sum: 1 }, matched: { $sum: { $cond: [{ $eq: ["$status", "Matched"] }, 1, 0] } }, outstanding: { $sum: { $cond: [{ $eq: ["$status", "Outstanding"] }, 1, 0] } } } },
-      { $sort: { _id: 1 } }
-    ]),
-    ReconciliationItem.aggregate([
-      { $group: { _id: "$currency", total: { $sum: 1 } } },
-      { $sort: { total: -1 } },
-      { $limit: 10 }
-    ])
-  ]);
-
-  const matchRate = totalItems > 0 ? Math.round((matchedItems / totalItems) * 100) : 0;
-
-  return {
-    totalItems,
-    matchedItems,
-    outstandingItems,
-    ledgerItems,
-    statementItems,
-    matchRate,
-    byDesk,
-    byCurrency
-  };
+  return repo.getStats();
 }
 
-/**
- * Get all match pairs (matched items grouped by matchId).
- */
 async function getMatches(options = {}) {
-  const limit = Math.min(Math.max(parseInt(options.limit, 10) || 100, 1), 500);
-  const skip = Math.max(parseInt(options.skip, 10) || 0, 0);
-
-  const matches = await ReconciliationItem.aggregate([
-    { $match: { status: "Matched", matchId: { $ne: null } } },
-    { $group: {
-      _id: "$matchId",
-      items: { $push: "$$ROOT" },
-      matchedAt: { $max: "$updatedAt" }
-    }},
-    { $sort: { matchedAt: -1 } },
-    { $skip: skip },
-    { $limit: limit }
-  ]);
-
-  return matches;
+  return repo.getMatchPairs(options);
 }
 
-/**
- * Get the active matching configuration.
- */
 async function getActiveConfig() {
   return ReconciliationConfig.findOne({ active: true }).lean();
 }
@@ -230,7 +176,9 @@ module.exports = {
   generateItemId,
   generateMatchId,
   deriveReconDesk,
+  deriveReconDeskFromBIC,
   deriveItemType,
+  deriveStatementItemType,
   getItems,
   getItemById,
   getStats,

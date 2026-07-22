@@ -283,6 +283,17 @@ class QueueComposer {
       );
     }
 
+    // Trigger proactive CPTY SSI email for all SELL trades in a SETTLEMENT queue
+    if (desk === "SETTLEMENT") {
+      const { scheduleProactiveSellSSI } = require("./cptySellSettlementAI");
+      queue.forEach(t => {
+        if (t.direction === "SELL") {
+          // Fire and forget
+          scheduleProactiveSellSSI(t).catch(e => console.error("Failed to schedule proactive SSI:", e));
+        }
+      });
+    }
+
     // Create session record
     const sessionStart = new Date();
     const sessionExpiry = new Date(sessionStart.getTime() + SESSION_DURATION_MS);

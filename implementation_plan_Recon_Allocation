@@ -1,0 +1,332 @@
+# Enterprise Cash Reconciliation Desk — Implementation Plan
+
+## Executive Summary
+
+Implement an Enterprise Cash Reconciliation Desk as an **independent subsystem** within the existing Investment Banking Operations Simulator. The system consumes data from two independent sources (Trade Objects → Ledger Items, SWIFT Statements → Statement Items), stores both in a single `reconciliation_items` collection, and provides a user-driven manual matching workstation with automatic allocation of 20 settled trades (40 reconciliation rows).
+
+> [!IMPORTANT]
+> **Existing modules are partially implemented.** The `ReconciliationItem` model, `reconciliationService`, `matchingEngine`, `ledgerImporter`, `statementImporter`, and `reconciliation-desk` frontend page already exist on `Swift_Main`. However, they have several architectural violations that must be corrected:
+> 1. `statementImporter.js` enriches Statement items from Trade Object (violates data independence)
+> 2. `matchingEngine.js` performs auto-matching (must be manual user-driven)
+> 3. No allocation service exists (20 settled trades → 40 rows)
+> 4. No user-driven match selection in frontend
+> 5. No lifecycle auto-generation for insufficient settled trades
+
+---
+
+## Architecture Diagram (Current → After)
+
+```
+Architecture BEFORE (Existing Partial Implementation):
+┌──────────────┐     ┌──────────────────┐
+│ Trade Object │────▶│ LedgerImporter   │──▶ ReconciliationItem (LEDGER)
+└──────────────┘     └──────────────────┘
+                                              ⬇ Auto-Match Engine
+┌──────────────┐     ┌──────────────────┐
+│ SWIFT Message│────▶│ StatementImporter │──▶ ReconciliationItem (STATEMENT)
+└──────────────┘     │ ⚠️ ENRICHES FROM  │     ⬆ enriched with Trade data
+                     │   TRADE OBJECT    │
+                     └──────────────────┘
+
+Architecture AFTER (Enterprise Reconciliation Desk):
+┌──────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
+│ Trade Object │────▶│ LedgerCreationSvc   │────▶│                      │
+└──────────────┘     └─────────────────────┘     │  ReconciliationRepo  │
+                                                 │  (Single Collection) │
+┌──────────────┐     ┌─────────────────────┐     │                      │
+│ SWIFT Message│────▶│ StatementCreationSvc│────▶│  source: LEDGER      │
+└──────────────┘     │ ✅ SWIFT-ONLY DATA  │     │  source: STATEMENT   │
+                     └─────────────────────┘     └──────────┬───────────┘
+                                                            │
+                     ┌─────────────────────┐                │
+                     │  AllocationService   │◀───────────────┘
+                     │  (20 trades=40 rows) │
+                     └──────────┬───────────┘
+                                │
+                     ┌──────────▼───────────┐
+                     │  MatchingService     │ ◀── User selects 1L + 1S
+                     │  (Manual, Hidden     │
+                     │   Validation Logic)  │
+                     └──────────┬───────────┘
+                                │
+                     ┌──────────▼───────────┐
+                     │  Workstation (UI)    │
+                     │  40 mixed rows       │
+                     └──────────────────────┘
+```
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Statement Data Independence Fix**: The current `statementImporter.js` (lines 43-60) populates Statement items with trade-level data (`trade.tradeDate`, `trade.tradeRef`, `trade.underlyer`, `trade.entity`, `trade.product`, `trade.productType`, `trade.amount`, `trade.currency`). Per requirements, Statement items must contain **ONLY** data genuinely present inside the generated SWIFT message. This will be corrected — trade-specific fields (`tradeDate`, `itemRef1-6`) will be set to `null` on Statement items.
+
+> [!WARNING]
+> **Matching Engine Change**: The current `matchingEngine.js` performs automatic batch matching. This will be replaced with **manual user-driven matching** where the user selects one LEDGER + one STATEMENT row and clicks "Match". The auto-matching `runMatching()` function will be removed from the UI but preserved in the engine for potential future use.
+
+> [!IMPORTANT]
+> **Auto-Generation of Settled Trades**: When a user enters the Reconciliation Desk and fewer than 20 settled trades exist, the system will auto-generate additional trades and run them through the **complete lifecycle** (Trade → MO → Confirmation → Settlement → SWIFT → Statement). These trades will be created with `currentStatus: "SETTLED"` and `assignedTo: null` so they never appear in operational queues.
+
+---
+
+## Proposed Changes
+
+### Component 1: Reconciliation Repository Layer (NEW)
+
+Introduces the dedicated Repository/Query Service abstraction between all reconciliation services and MongoDB. All CRUD operations on `reconciliation_items` flow through this single gateway.
+
+#### [NEW] [reconciliationRepository.js](file:///d:/SBG/ilabs1/src/engine/reconciliationRepository.js)
+
+- Central data access layer for `reconciliation_items` collection
+- Encapsulates all MongoDB queries (find, create, update, aggregate)
+- Methods: `createItem()`, `findByItemId()`, `findByFilters()`, `updateMatchStatus()`, `countByQuery()`, `getStats()`, `getMatchPairs()`, `findByTradeRef()`, `findByMatchId()`, `allocateItems()`
+- All existing services (reconService, matchingEngine, ledgerImporter, statementImporter) will be refactored to use this repository
+- Future-proofs for partial matching, one-to-many, suspense items, TLM-style workflows
+
+---
+
+### Component 2: Statement Importer Fix (CRITICAL)
+
+#### [MODIFY] [statementImporter.js](file:///d:/SBG/ilabs1/src/engine/statementImporter.js)
+
+**Why**: Current implementation violates data independence by enriching Statement items from Trade Object. Lines 43-60 use `trade.tradeDate`, `trade.tradeRef`, `trade.underlyer`, `trade.entity`, `trade.product`, `trade.productType`.
+
+**What changes**:
+- `amount` → Use ONLY `swiftMessage.amount` (remove `|| trade.amount` fallback)
+- `currency` → Use ONLY `swiftMessage.currency` (remove `|| trade.currency` fallback)
+- `tradeDate` → Set to `null` (not present in SWIFT message)
+- `valueDate` → Use ONLY `swiftMessage.valueDate` (remove `|| trade.valueDate` fallback)
+- `reconDesk` → Derive from SWIFT message BIC geography (not from `trade.foRegion`)
+- `itemRef1` through `itemRef6` → ALL set to `null` (trade-specific data not in SWIFT)
+- `itemType` → Derive from SWIFT `paymentDirection` field instead of `trade.direction`
+- Keep ref1-ref8 SWIFT extractors unchanged (they correctly use SWIFT data)
+- Refactor to use `ReconciliationRepository` for persistence
+
+**Impact**: Statement items will have fewer populated fields, making reconciliation harder (as intended — user must investigate).
+
+---
+
+### Component 3: Ledger Importer Refactor
+
+#### [MODIFY] [ledgerImporter.js](file:///d:/SBG/ilabs1/src/engine/ledgerImporter.js)
+
+**Why**: Refactor to use ReconciliationRepository pattern. No business logic changes.
+
+**What changes**:
+- Replace direct `ReconciliationItem.create()` with `reconciliationRepository.createItem()`
+- Ensure SWIFT refs (ref1-ref8) remain explicitly `null` (already correct)
+- No change to trade-level field population (itemRef1-6 correctly populated from Trade)
+
+---
+
+### Component 4: Reconciliation Service Refactor
+
+#### [MODIFY] [reconciliationService.js](file:///d:/SBG/ilabs1/src/engine/reconciliationService.js)
+
+**Why**: Refactor query methods to delegate to ReconciliationRepository. Keep ID generation and derivation logic in service layer.
+
+**What changes**:
+- Move `getItems()`, `getItemById()`, `getStats()`, `getMatches()` to use repository
+- Keep `generateItemId()`, `generateMatchId()`, `deriveReconDesk()`, `deriveItemType()` in service (business logic, not data access)
+- Add `deriveReconDeskFromBIC()` — new method to derive desk from SWIFT BIC for statement items
+
+---
+
+### Component 5: Allocation Service (NEW)
+
+#### [NEW] [allocationService.js](file:///d:/SBG/ilabs1/src/engine/allocationService.js)
+
+Core allocation logic for the Reconciliation Desk workstation:
+
+1. **Check existing allocation**: If user already has a reconciliation allocation, return it (idempotent)
+2. **Count settled trades**: `Trade.countDocuments({ currentStatus: "SETTLED" })`
+3. **Auto-generate if insufficient**: If < 20 settled trades, generate `(20 - existingCount)` additional trades with full lifecycle completion:
+   - Generate trade via `tradeGenerator.generateSingleTrade()` with `forcedStatus: "SETTLED"`
+   - Save to DB via `tradeGenerator.saveGeneratedTrades()`
+   - Create Ledger item via `ledgerImporter.createLedgerItem()`
+   - Generate SWIFT via `swift.generateSwiftMessages()` (which triggers statementImporter internally)
+   - Mark trade `assignedTo: null` (not in any operational queue)
+4. **Allocate 40 rows**: Select 20 settled trades, fetch their 20 LEDGER + 20 STATEMENT recon items = 40 rows
+5. **Store allocation**: Persist in a user allocation record so re-entry returns existing allocation
+
+---
+
+### Component 6: Validation Service (NEW)
+
+#### [NEW] [reconciliationValidationService.js](file:///d:/SBG/ilabs1/src/engine/reconciliationValidationService.js)
+
+Hidden validation logic for manual matching:
+
+- `validateMatch(ledgerItemId, statementItemId)` → returns `{ valid: boolean }`
+- Validation rules (hidden from user):
+  - Both items must be `Outstanding`
+  - One must be `LEDGER`, other must be `STATEMENT`
+  - `amount` must match (penny tolerance)
+  - `currency` must match
+  - `valueDate` must match (date-only comparison)
+  - Internal cross-reference check via configured fields
+- User never sees WHY a match failed — only "Match successful" or "Items cannot be matched"
+- Uses `ReconciliationConfig` for configurable field matching
+
+---
+
+### Component 7: Matching Service Refactor
+
+#### [MODIFY] [matchingEngine.js](file:///d:/SBG/ilabs1/src/engine/matchingEngine.js)
+
+**Why**: Must change from auto-matching to manual user-driven matching.
+
+**What changes**:
+- Keep existing `runMatching()` function but it will NOT be exposed in the UI
+- Add new `manualMatch(ledgerItemId, statementItemId)` function:
+  1. Validate via `reconciliationValidationService.validateMatch()`
+  2. If valid: generate `matchId`, update both items to `Matched`
+  3. If invalid: return error (without revealing why)
+- Add `unmatch(matchId)` for potential future use
+- Preserve `findMatch()`, `compareField()` for backward compatibility
+
+---
+
+### Component 8: API Routes Extension
+
+#### [MODIFY] [reconciliationRoutes.js](file:///d:/SBG/ilabs1/src/routes/reconciliationRoutes.js)
+
+**Why**: Add allocation and manual matching endpoints.
+
+**New endpoints**:
+- `POST /api/reconciliation/allocate` — Trigger allocation (returns 40 recon items)
+- `GET /api/reconciliation/allocation` — Check existing allocation for user
+- `POST /api/reconciliation/manual-match` — User-driven match (body: `{ ledgerItemId, statementItemId }`)
+
+**Existing endpoints preserved**:
+- `GET /items` — unchanged
+- `GET /stats` — unchanged
+- `GET /item/:itemId` — unchanged
+- `POST /run-matching` — preserved (internal use) but removed from UI
+- `GET /config` — unchanged
+- `PUT /config/:id` — unchanged
+- `GET /matches` — unchanged
+
+---
+
+### Component 9: Frontend Reconciliation Desk (Major Rework)
+
+#### [MODIFY] [page.js](file:///d:/SBG/ilabs1/frontend/src/app/reconciliation-desk/page.js)
+
+**Why**: Implement full workstation with allocation, user-driven matching, and proper display.
+
+**What changes**:
+
+1. **Entry Flow**:
+   - On page load, call `POST /api/reconciliation/allocate`
+   - Show loading state: "Preparing Reconciliation Desk..." with progress
+   - If allocation exists, return existing 40 rows
+   - If insufficient trades, show "Generating training data..." status
+
+2. **Display**:
+   - Show all 40 rows in a single table (LEDGER + STATEMENT mixed naturally)
+   - No visual pairing — rows appear in creation order (shuffled)
+   - All columns: Status, Item ID, Source, Item Type, Amount, Trade Date, Value Date, Currency, Recon Desk, Match ID, ItemRef1-6, Ref1-8
+
+3. **Selection & Matching**:
+   - User can select rows by clicking (checkbox selection)
+   - Selection rules: exactly 1 LEDGER + 1 STATEMENT required
+   - "Match" button enabled only when valid pair selected
+   - On match click: `POST /api/reconciliation/manual-match`
+   - Success: both rows update to "Matched" with same Match ID
+   - Failure: toast "Items cannot be matched" (no reason given)
+
+4. **Remove auto-match button**: "Run Matching" button removed from UI
+
+5. **Stats bar**: Keep existing stats display
+
+6. **Filters**: Keep existing filter capabilities
+
+---
+
+### Component 10: Reconciliation Constants & Enums (NEW)
+
+#### [NEW] [reconciliationConstants.js](file:///d:/SBG/ilabs1/src/engine/reconciliationConstants.js)
+
+Centralized constants:
+- `RECON_SOURCE`: `{ LEDGER: "LEDGER", STATEMENT: "STATEMENT" }`
+- `RECON_STATUS`: `{ OUTSTANDING: "Outstanding", MATCHED: "Matched" }`
+- `RECON_ITEM_TYPE`: `{ LEDGER_CREDIT: "Ledger Credit", LEDGER_DEBIT: "Ledger Debit", STATEMENT_CREDIT: "Statement Credit", STATEMENT_DEBIT: "Statement Debit" }`
+- `RECON_DESK`: `{ APAC: "APAC.Cash", EMEA: "EMEA.Cash", AMER: "AMER.Cash", GLOBAL: "GLOBAL.Cash" }`
+- `ALLOCATION_TARGET`: `20`
+- `ALLOCATION_ROWS`: `40`
+
+---
+
+## Files Summary
+
+| Action | File | Component |
+|--------|------|-----------|
+| NEW | `src/engine/reconciliationRepository.js` | Repository Layer |
+| NEW | `src/engine/allocationService.js` | Allocation Service |
+| NEW | `src/engine/reconciliationValidationService.js` | Validation Service |
+| NEW | `src/engine/reconciliationConstants.js` | Constants & Enums |
+| MODIFY | `src/engine/statementImporter.js` | Statement Fix (Critical) |
+| MODIFY | `src/engine/ledgerImporter.js` | Ledger Refactor |
+| MODIFY | `src/engine/reconciliationService.js` | Service Refactor |
+| MODIFY | `src/engine/matchingEngine.js` | Manual Matching |
+| MODIFY | `src/routes/reconciliationRoutes.js` | API Extension |
+| MODIFY | `frontend/src/app/reconciliation-desk/page.js` | Frontend Rework |
+
+**Files NOT modified** (backward compatibility guaranteed):
+- Trade.js, SwiftMessage.js, ReconciliationItem.js, ReconciliationConfig.js
+- tradeGenerator.js, queueComposer.js, SwiftEngine.js
+- settlementRoutes.js, electronicSettlementRoutes.js, systemWorkflowEngine.js
+- server.js (reconciliation routes already registered)
+- All other existing models, routes, engines, and frontend pages
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+After implementation, a verification script will:
+
+1. Create 100 trades with `currentStatus: "SETTLED"`
+2. Generate SWIFT messages for all 100
+3. Verify:
+   - Every trade has exactly ONE Ledger item (`source: "LEDGER"`, `itemRef1: tradeRef`)
+   - Every settled trade with SWIFT has exactly ONE Statement item (`source: "STATEMENT"`)
+   - Statement items NEVER contain trade-only fields (`tradeDate`, `itemRef1-6` are all `null`)
+   - Ledger items NEVER contain SWIFT-only fields (`ref1-8` are all `null`)
+   - No duplicate `itemId` values
+   - No duplicate `matchId` values
+   - Allocation returns exactly 20 trades = 40 rows
+
+### Manual Verification
+
+- Navigate to Reconciliation Desk → verify allocation flow
+- Select 1 LEDGER + 1 STATEMENT → click Match → verify match succeeds/fails correctly
+- Verify matched items show same Match ID
+- Verify no auto-matching occurs
+- Verify Statement items have no trade-enriched data
+
+---
+
+## Performance Considerations
+
+- ReconciliationRepository uses existing compound indexes (`status+source`, `status+reconDesk`, `itemRef1`)
+- Allocation queries use indexed `currentStatus: "SETTLED"` field
+- Batch operations for auto-trade generation use `insertMany` with `ordered: false`
+- All fire-and-forget patterns preserved (ledger/statement creation never blocks trade lifecycle)
+
+---
+
+## Future Scalability
+
+The ReconciliationRepository abstraction enables:
+- Partial matching (match score < 100%)
+- One-to-many matching (1 ledger ↔ N statements)
+- Duplicate statement detection
+- Suspense items
+- Reconciliation profiles (cash, securities, nostro, FX)
+- Auto-match rules engine
+- TLM-style matching workflows
+- Reconciliation ageing and SLA tracking

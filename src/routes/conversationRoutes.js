@@ -72,10 +72,13 @@ router.post("/send", authenticateToken, async (req, res) => {
       }
     }
 
-    if (desk === "CONFIRMATION") {
+    if (desk === "CONFIRMATION" || desk === "SETTLEMENT") {
       const tradeObj = trade.toObject ? trade.toObject() : trade;
-      const updatedTrade = LifecycleEngine.transition(tradeObj, "LIASING_WITH_CPTY");
-      trade.currentStatus = updatedTrade.currentStatus;
+      // Only transition if not already LIASING_WITH_CPTY
+      if (tradeObj.currentStatus !== "LIASING_WITH_CPTY") {
+        const updatedTrade = LifecycleEngine.transition(tradeObj, "LIASING_WITH_CPTY");
+        trade.currentStatus = updatedTrade.currentStatus;
+      }
       trade.cptyContactCount = (trade.cptyContactCount || 0) + 1;
     }
 

@@ -137,10 +137,19 @@ async function generateSwiftMessages(tradeRef, userId) {
 
       generatedMessages.push(msg);
       console.log(`[SwiftEngine] ${spec.messageType} generated for ${tradeRef} (id: ${msg._id})`);
-
-      // Fire-and-forget: Create Statement Reconciliation Item
-      try { require("../statementImporter").createStatementItem(msg, trade); } catch (e) {}
     }
+
+    // Fire-and-forget: Create ONE Statement Reconciliation Item per trade.
+    // For an MT103 + MT202COV pair we pick the MT103 (it carries the plain
+    // tradeRef in Field 20); otherwise the first successfully generated
+    // message. The StatementCreationService also dedupes defensively.
+    try {
+      const successful = generatedMessages.filter(m => m.status === "GENERATED");
+      const primaryMsg = successful.find(m => m.messageType === "MT103") || successful[0];
+      if (primaryMsg) {
+        require("../statementImporter").createStatementItem(primaryMsg, trade);
+      }
+    } catch (e) {}
 
     // ── 7. Link related messages (MT103 ↔ MT202COV pair) ──
     if (generatedMessages.length === 2) {

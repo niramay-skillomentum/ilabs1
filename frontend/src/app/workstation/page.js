@@ -632,15 +632,35 @@ function WorkstationComponent() {
   };
 
   const viewSSI = useCallback(async (trade) => {
-    setPopupState({ type: "ssi", trade });
+    let tradeToView = { ...trade };
+
+    // For SELL trades on Settlement Desk, we want to view our OWN Entity SSI
+    if (desk === "SETTLEMENT" && trade.direction === "SELL") {
+      try {
+        const params = new URLSearchParams({ entityName: trade.entity, currency: trade.currency });
+        const res = await fetch(`/api/ssi/entity?${params.toString()}`, { headers: authHeaders() });
+        const data = await res.json();
+        if (data.success && data.ssi) {
+          tradeToView.settlementDetails = {
+            ...tradeToView.settlementDetails,
+            ...data.ssi,
+            counterpartyName: undefined // ensure we don't display counterparty name for our own SSI
+          };
+        }
+      } catch (err) {
+        console.error("Failed to load entity SSI:", err);
+      }
+    }
+
+    setPopupState({ type: "ssi", trade: tradeToView });
     setSelectedSsiId("");
     setSsiGroupList([]);
     // If trade has a settlement break, fetch SSI group for the dropdown
-    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus)) {
+    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(tradeToView.currentStatus)) {
       try {
-        const groupNameToUse = trade.counterpartyGroup || trade.counterparty || trade.settlementDetails?.counterpartyName;
+        const groupNameToUse = tradeToView.counterpartyGroup || tradeToView.counterparty || tradeToView.settlementDetails?.counterpartyName;
         const params = new URLSearchParams({ groupName: groupNameToUse });
-        if (trade.currency) params.set("currency", trade.currency);
+        if (tradeToView.currency) params.set("currency", tradeToView.currency);
         const res = await fetch(`/api/ssi/group?${params.toString()}`, { headers: authHeaders() });
         const data = await res.json();
         if (data.success && data.ssis) {
@@ -650,7 +670,7 @@ function WorkstationComponent() {
         console.error("Failed to load SSI group:", err);
       }
     }
-  }, []);
+  }, [desk]);
 
   const openTermsheet = () => {
     window.open(`/mo-risk?desk=${encodeURIComponent(desk)}`, "_blank");

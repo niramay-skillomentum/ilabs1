@@ -1,24 +1,25 @@
 // ======================================
-// LEDGER IMPORTER
+// LEDGER CREATION SERVICE (a.k.a. Ledger Importer)
 // Creates Ledger Reconciliation Items from Trade Objects.
 //
-// Called fire-and-forget after trade generation (queueComposer).
-// Never modifies the Trade Object.
-// Never blocks the trade generation flow.
+// Fired fire-and-forget after trade generation (queueComposer).
+// NEVER modifies the Trade Object. NEVER blocks the trade flow.
 //
-// For each trade:
-//   - Creates ONE ReconciliationItem with source = "LEDGER"
-//   - Status = "Outstanding"
-//   - MatchId = null
-//   - SWIFT refs (ref1-ref8) = null
+// Data-independence contract:
+//   - Populates ONLY from the Trade Object.
+//   - SWIFT references (ref1–ref8) MUST remain NULL on ledger items.
+//
+// For each trade → ONE ReconciliationItem { source: LEDGER,
+// status: Outstanding, matchId: null }.
 // ======================================
 
-const ReconciliationItem = require("../models/ReconciliationItem");
+const repo = require("./reconciliationRepository");
 const reconService = require("./reconciliationService");
+const { RECON_SOURCE, RECON_STATUS } = require("./reconciliationConstants");
 
 /**
  * Import an array of saved trades as Ledger Reconciliation Items.
- * Fire-and-forget — errors are logged but never propagated.
+ * Fire-and-forget — errors are logged, never propagated.
  *
  * @param {Object[]} trades - Array of saved trade documents
  */
@@ -30,25 +31,27 @@ async function importTradesAsLedgerItems(trades) {
 
   for (const trade of trades) {
     try {
-      await createLedgerItem(trade);
-      created++;
-    } catch (err) {
-      // Skip duplicates (same tradeRef already imported)
-      if (err.code === 11000) {
+      // Idempotency: never create a second ledger item for the same trade.
+      if (await repo.ledgerExistsForTrade(trade.tradeRef)) {
         skipped++;
         continue;
       }
-      console.warn(`[LedgerImporter] Error creating ledger item for ${trade.tradeRef}:`, err.message);
+      await createLedgerItem(trade);
+      created++;
+    } catch (err) {
+      if (err.code === 11000) { skipped++; continue; }
+      console.warn(`[LedgerCreation] Error creating ledger item for ${trade.tradeRef}:`, err.message);
     }
   }
 
   if (created > 0) {
-    console.log(`[LedgerImporter] Created ${created} ledger items (${skipped} skipped)`);
+    console.log(`[LedgerCreation] Created ${created} ledger items (${skipped} skipped)`);
   }
 }
 
 /**
  * Create a single Ledger Reconciliation Item from a trade.
+ * Populated ONLY from the Trade Object.
  *
  * @param {Object} trade - Trade document (plain object or mongoose doc)
  * @returns {Promise<Object>} Created ReconciliationItem
@@ -56,44 +59,35 @@ async function importTradesAsLedgerItems(trades) {
 async function createLedgerItem(trade) {
   const itemId = await reconService.generateItemId();
 
-  const item = await ReconciliationItem.create({
+  return repo.createItem({
     itemId,
-    status: "Outstanding",
-    source: "LEDGER",
-    itemType: reconService.deriveItemType("LEDGER", trade.direction),
+    status: RECON_STATUS.OUTSTANDING,
+    source: RECON_SOURCE.LEDGER,
+    itemType: reconService.deriveItemType(RECON_SOURCE.LEDGER, trade.direction),
 
-    // Trade economics
+    // Trade economics (trade-sourced)
     amount: trade.amount,
     currency: trade.currency,
     tradeDate: trade.tradeDate,
     valueDate: trade.valueDate,
 
-    // Recon desk (derived from FO Region)
+    // Recon desk derived from FO Region (trade-level attribute)
     reconDesk: reconService.deriveReconDesk(trade.foRegion),
 
-    // Match ID — null until matched
     matchId: null,
 
-    // Item References (trade-level)
-    itemRef1: trade.tradeRef || null,
-    itemRef2: trade.underlyer || null,
-    itemRef3: trade.entity || null,
-    itemRef4: trade.truths?.settlement?.country || null,
-    itemRef5: trade.product || null,
-    itemRef6: trade.productType || null,
+    // Item References (trade-level) — the ledger legitimately carries these.
+    itemRef1: trade.tradeRef || null,   // Trade ID
+    itemRef2: trade.underlyer || null,  // Underlyer
+    itemRef3: trade.entity || null,     // Entity Code
+    itemRef4: trade.truths?.settlement?.country || null, // Country
+    itemRef5: trade.product || null,    // Product
+    itemRef6: trade.productType || null, // Product Type
 
-    // SWIFT References — must remain NULL for ledger items
-    ref1: null,
-    ref2: null,
-    ref3: null,
-    ref4: null,
-    ref5: null,
-    ref6: null,
-    ref7: null,
-    ref8: null
+    // SWIFT References — MUST remain NULL for ledger items.
+    ref1: null, ref2: null, ref3: null, ref4: null,
+    ref5: null, ref6: null, ref7: null, ref8: null
   });
-
-  return item;
 }
 
 module.exports = {

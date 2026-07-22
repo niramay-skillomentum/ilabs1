@@ -97,6 +97,23 @@ async function generateResponse(parsedIntent, tradeRef, userMessage) {
   }
 
   const ssiRecord = await getSSIRecord(trade);
+  if (trade && trade.direction === "SELL") {
+    // For SELL trades, the counterparty is trying to pay us.
+    // If the user is emailing them, it's likely to correct an incorrect SSI.
+    // Let's assume any email from the user to the CPTY for a SELL trade on Settlement Desk
+    // is providing the correct SSI details.
+    if (trade.truths && trade.truths.settlement) {
+      trade.truths.settlement.cptyProvidedCorrectSSI = true;
+      trade.markModified("truths");
+      await trade.save();
+    }
+    
+    return {
+      action: "IMMEDIATE_ANSWER",
+      subject: "RE: Settlement Details",
+      body: `Okay thanks for confirming and we are proceeding with these SSI.\n\nBest regards,\nCounterparty Settlements`
+    };
+  }
 
   // ── ATTEMPT 1: Gemini LLM ──
   try {

@@ -46,6 +46,13 @@ function classifyElectronicStatus(trade) {
  * Returns true if there IS a break/discrepancy.
  */
 function checkForDiscrepancy(trade) {
+  if (trade.direction === "SELL") {
+    if (trade.truths && trade.truths.settlement && trade.truths.settlement.cptyProvidedCorrectSSI === false) {
+      return true;
+    }
+    return false; // If correct, no discrepancy
+  }
+
   const truth = trade.truths?.settlement || {};
   const details = trade.settlementDetails || {};
   const SSI_FIELDS = systemWorkflowEngine.SSI_FIELDS;

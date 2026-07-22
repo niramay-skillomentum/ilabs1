@@ -1,31 +1,108 @@
 // ======================================
-// MATCHING ENGINE
-// Configurable reconciliation matching engine.
+// MATCHING ENGINE / MATCHING SERVICE
+// Owns the RECONCILIATION matching operations.
 //
-// Compares Outstanding LEDGER items against Outstanding STATEMENT items
-// using the active ReconciliationConfig to determine which fields
-// participate in matching.
+// TWO matching modes:
 //
-// This mirrors enterprise reconciliation products:
-//   - SmartStream TLM
-//   - Duco
-//   - IntelliMatch
-//   - Gresham Clareti
+//   1. manualMatch(ledgerItemId, statementItemId)  ← PRIMARY (user-driven)
+//      The workstation sends a user-selected (Ledger, Statement) pair.
+//      The engine asks the hidden ValidationService for a verdict and,
+//      if valid, generates a MATCH id and flips BOTH rows to Matched.
+//      The caller learns only success/failure — never the reason.
 //
-// Matching rules are configurable, not embedded in code.
+//   2. runMatching()                                ← LEGACY (auto batch)
+//      Preserved for backward compatibility and potential future
+//      auto-match rules. NOT exposed in the reconciliation workstation.
+//
+// All data access goes through reconciliationRepository. Validation
+// logic lives in reconciliationValidationService (kept hidden).
 // ======================================
 
-const ReconciliationItem = require("../models/ReconciliationItem");
-const ReconciliationConfig = require("../models/ReconciliationConfig");
+const repo = require("./reconciliationRepository");
 const reconService = require("./reconciliationService");
+const validationService = require("./reconciliationValidationService");
+const ReconciliationConfig = require("../models/ReconciliationConfig");
+const { RECON_SOURCE, RECON_STATUS } = require("./reconciliationConstants");
+
+// ======================================
+// PRIMARY: MANUAL, USER-DRIVEN MATCH
+// ======================================
 
 /**
- * Run the matching engine.
- * Compares all Outstanding LEDGER items against all Outstanding STATEMENT items
- * using the active matching configuration.
+ * Attempt to match a user-selected Ledger + Statement pair.
+ * The two itemIds may be supplied in EITHER order.
  *
- * @returns {Promise<Object>} { matchesCreated, itemsProcessed, errors }
+ * @param {string} itemIdA - itemId of one selected row
+ * @param {string} itemIdB - itemId of the other selected row
+ * @returns {Promise<{ success: boolean, matchId?: string, message: string }>}
  */
+async function manualMatch(itemIdA, itemIdB) {
+  if (!itemIdA || !itemIdB || itemIdA === itemIdB) {
+    return fail("Select one Ledger and one Statement item.");
+  }
+
+  const [a, b] = await Promise.all([
+    repo.findByItemId(itemIdA),
+    repo.findByItemId(itemIdB)
+  ]);
+
+  if (!a || !b) {
+    return fail("Items cannot be matched.");
+  }
+
+  // Ask the hidden validation service for a verdict.
+  const verdict = validationService.validatePair(a, b);
+  if (!verdict.valid) {
+    // Reason is logged internally but NEVER returned to the user.
+    console.log(`[MatchingService] Manual match rejected (${a.itemId} / ${b.itemId}): ${verdict.reason}`);
+    return fail("Items cannot be matched.");
+  }
+
+  // Resolve which is ledger / statement for the ordered update.
+  const ledger = a.source === RECON_SOURCE.LEDGER ? a : b;
+  const statement = a.source === RECON_SOURCE.STATEMENT ? a : b;
+
+  const matchId = await reconService.generateMatchId();
+  const modified = await repo.applyMatch(ledger._id, statement._id, matchId);
+
+  // applyMatch only flips rows that were still Outstanding; if a
+  // concurrent request already matched one of them, modified < 2.
+  if (modified < 2) {
+    return fail("Items cannot be matched.");
+  }
+
+  console.log(`[MatchingService] Manual match: ${ledger.itemId} ↔ ${statement.itemId} → ${matchId}`);
+  return {
+    success: true,
+    matchId,
+    ledgerItemId: ledger.itemId,
+    statementItemId: statement.itemId,
+    message: "Match successful."
+  };
+}
+
+/**
+ * Reverse a match (return both rows to Outstanding).
+ * Reserved for future break/unmatch workflows; not yet wired to the UI.
+ *
+ * @param {string} matchId
+ * @returns {Promise<{ success: boolean, cleared: number }>}
+ */
+async function unmatch(matchId) {
+  if (!matchId) return { success: false, cleared: 0 };
+  const cleared = await repo.clearMatch(matchId);
+  return { success: cleared > 0, cleared };
+}
+
+function fail(message) {
+  return { success: false, message };
+}
+
+// ======================================
+// LEGACY: AUTO BATCH MATCHING (not exposed in the recon workstation)
+// Preserved verbatim in behaviour for backward compatibility.
+// ======================================
+
 async function runMatching() {
   console.log("[MatchingEngine] Starting reconciliation matching run...");
 
@@ -37,70 +114,39 @@ async function runMatching() {
   };
 
   try {
-    // 1. Load active matching configuration
     const config = await ReconciliationConfig.findOne({ active: true }).lean();
-    if (!config) {
-      console.warn("[MatchingEngine] No active matching configuration found. Using defaults.");
-    }
+    const enabledFields = config?.enabledFields || ["itemRef1", "amount", "currency", "valueDate"];
 
-    const enabledFields = config?.enabledFields || [
-      "itemRef1", "amount", "currency", "valueDate"
-    ];
-
-    console.log(`[MatchingEngine] Using profile: "${config?.matchingProfile || "Default"}" with ${enabledFields.length} matching fields`);
-
-    // 2. Fetch all Outstanding items
     const [ledgerItems, statementItems] = await Promise.all([
-      ReconciliationItem.find({ status: "Outstanding", source: "LEDGER" }).lean(),
-      ReconciliationItem.find({ status: "Outstanding", source: "STATEMENT" }).lean()
+      repo.findOutstandingBySource(RECON_SOURCE.LEDGER),
+      repo.findOutstandingBySource(RECON_SOURCE.STATEMENT)
     ]);
 
     result.ledgerItemsProcessed = ledgerItems.length;
     result.statementItemsProcessed = statementItems.length;
 
     if (ledgerItems.length === 0 || statementItems.length === 0) {
-      console.log(`[MatchingEngine] No items to match (Ledger: ${ledgerItems.length}, Statement: ${statementItems.length})`);
       return result;
     }
 
-    // 3. Build a lookup index on statement items for faster matching
-    // Track which statement items have been matched in this run
     const matchedStatementIds = new Set();
 
-    // 4. For each ledger item, find a matching statement item
     for (const ledgerItem of ledgerItems) {
       const matchingStatement = findMatch(ledgerItem, statementItems, enabledFields, matchedStatementIds);
-
       if (matchingStatement) {
         try {
-          // Generate a match ID
           const matchId = await reconService.generateMatchId();
-
-          // Update BOTH items atomically
-          await Promise.all([
-            ReconciliationItem.updateOne(
-              { _id: ledgerItem._id },
-              { $set: { status: "Matched", matchId } }
-            ),
-            ReconciliationItem.updateOne(
-              { _id: matchingStatement._id },
-              { $set: { status: "Matched", matchId } }
-            )
-          ]);
-
+          await repo.applyMatch(ledgerItem._id, matchingStatement._id, matchId);
           matchedStatementIds.add(matchingStatement._id.toString());
           result.matchesCreated++;
-
-          console.log(`[MatchingEngine] Match: ${ledgerItem.itemId} ↔ ${matchingStatement.itemId} → ${matchId}`);
         } catch (err) {
           result.errors.push(`Failed to match ${ledgerItem.itemId}: ${err.message}`);
         }
       }
     }
 
-    console.log(`[MatchingEngine] Completed. Created ${result.matchesCreated} matches from ${ledgerItems.length} ledger / ${statementItems.length} statement items.`);
+    console.log(`[MatchingEngine] Completed. Created ${result.matchesCreated} matches.`);
     return result;
-
   } catch (err) {
     console.error("[MatchingEngine] Fatal error:", err.message);
     result.errors.push(err.message);
@@ -108,83 +154,46 @@ async function runMatching() {
   }
 }
 
-/**
- * Find a matching statement item for a given ledger item.
- *
- * @param {Object}   ledgerItem        - Ledger reconciliation item
- * @param {Object[]} statementItems    - All outstanding statement items
- * @param {string[]} enabledFields     - Fields that must match
- * @param {Set}      matchedStatementIds - Already matched statement IDs (this run)
- * @returns {Object|null} Matching statement item, or null
- */
+// ── Legacy field-comparison helpers (used by runMatching) ──
+
 function findMatch(ledgerItem, statementItems, enabledFields, matchedStatementIds) {
   for (const statementItem of statementItems) {
-    // Skip already matched in this run
     if (matchedStatementIds.has(statementItem._id.toString())) continue;
-
-    // Check all enabled fields
-    const allMatch = enabledFields.every(field => {
-      return compareField(ledgerItem[field], statementItem[field], field);
-    });
-
+    const allMatch = enabledFields.every(field =>
+      compareField(ledgerItem[field], statementItem[field], field)
+    );
     if (allMatch) return statementItem;
   }
-
   return null;
 }
 
-/**
- * Compare two field values for matching purposes.
- * Handles type coercion, null/undefined, and date comparison.
- *
- * @param {*} val1  - Value from ledger item
- * @param {*} val2  - Value from statement item
- * @param {string} fieldName - Field name (for type-specific logic)
- * @returns {boolean} Whether the values match
- */
 function compareField(val1, val2, fieldName) {
-  // Both null/undefined/empty → match
   const v1 = normalizeValue(val1);
   const v2 = normalizeValue(val2);
-
   if (v1 === "" && v2 === "") return true;
 
-  // Date fields — compare by date string (ignore time)
   if (fieldName === "tradeDate" || fieldName === "valueDate") {
     return compareDates(val1, val2);
   }
-
-  // Amount — numeric comparison with tolerance
   if (fieldName === "amount") {
     const n1 = parseFloat(v1);
     const n2 = parseFloat(v2);
     if (isNaN(n1) && isNaN(n2)) return true;
     if (isNaN(n1) || isNaN(n2)) return false;
-    return Math.abs(n1 - n2) < 0.01; // Penny tolerance
+    return Math.abs(n1 - n2) < 0.01;
   }
-
-  // String comparison (case-insensitive)
   return v1.toLowerCase() === v2.toLowerCase();
 }
 
-/**
- * Compare two date values by date only (ignore time).
- */
 function compareDates(d1, d2) {
   if (!d1 && !d2) return true;
   if (!d1 || !d2) return false;
-
   const date1 = new Date(d1);
   const date2 = new Date(d2);
-
   if (isNaN(date1.getTime()) || isNaN(date2.getTime())) return false;
-
   return date1.toISOString().split("T")[0] === date2.toISOString().split("T")[0];
 }
 
-/**
- * Normalize a value to a string for comparison.
- */
 function normalizeValue(val) {
   if (val === null || val === undefined) return "";
   if (val instanceof Date) return val.toISOString();
@@ -192,6 +201,10 @@ function normalizeValue(val) {
 }
 
 module.exports = {
+  // primary (user-driven)
+  manualMatch,
+  unmatch,
+  // legacy (auto batch)
   runMatching,
   findMatch,
   compareField

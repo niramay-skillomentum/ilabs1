@@ -207,6 +207,38 @@ const RECON_STYLE = `
 
   .ref-cell { color: #64748b; font-family: 'Consolas', monospace; font-size: 10.5px; }
 
+  /* Selection */
+  .sel-cell { text-align: center; width: 34px; }
+  tr.row-selected td { background-color: #dbeafe !important; }
+  tr.row-selected:hover td { background-color: #bfdbfe !important; }
+  .sel-checkbox { width: 15px; height: 15px; cursor: pointer; accent-color: #0A4D68; }
+
+  .match-tray {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 30px;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-bottom: 1px solid #1e293b;
+    flex-wrap: wrap;
+  }
+  .tray-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Consolas', monospace;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .tray-chip.filled-ledger { background: rgba(139,92,246,0.25); border-color: #8b5cf6; }
+  .tray-chip.filled-statement { background: rgba(20,184,166,0.25); border-color: #14b8a6; }
+  .tray-hint { font-size: 12px; opacity: 0.65; }
+
   .empty-state {
     text-align: center;
     padding: 60px 20px;
@@ -274,6 +306,7 @@ export default function ReconciliationDeskPage() {
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingLabel, setLoadingLabel] = useState("Preparing Reconciliation Desk...");
   const [isMatching, setIsMatching] = useState(false);
 
   // Filters
@@ -283,8 +316,9 @@ export default function ReconciliationDeskPage() {
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [tradeRefFilter, setTradeRefFilter] = useState("");
 
-  // Detail panel
-  const [selectedItem, setSelectedItem] = useState(null);
+  // Selection for user-driven matching: at most one LEDGER + one STATEMENT.
+  const [selectedLedger, setSelectedLedger] = useState(null);      // itemId
+  const [selectedStatement, setSelectedStatement] = useState(null); // itemId
 
   // ============ Auth ============
   useEffect(() => {
@@ -297,58 +331,101 @@ export default function ReconciliationDeskPage() {
     }
   }, [router]);
 
-  // ============ Data Fetching ============
-  const fetchData = useCallback(async () => {
+  // ============ Stats ============
+  const fetchStats = useCallback(async () => {
     if (!getToken()) return;
-
     try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.set("status", statusFilter);
-      if (sourceFilter) params.set("source", sourceFilter);
-      if (deskFilter) params.set("reconDesk", deskFilter);
-      if (currencyFilter) params.set("currency", currencyFilter);
-      if (tradeRefFilter) params.set("tradeRef", tradeRefFilter);
-      params.set("limit", "500");
-
-      const [itemsRes, statsRes] = await Promise.all([
-        fetch(`${API}/api/reconciliation/items?${params}`, { headers: authHeaders() }),
-        fetch(`${API}/api/reconciliation/stats`, { headers: authHeaders() })
-      ]);
-
-      const itemsData = await itemsRes.json();
-      const statsData = await statsRes.json();
-
-      if (itemsData.success) setItems(itemsData.items || []);
-      if (statsData.success) setStats(statsData);
+      const res = await fetch(`${API}/api/reconciliation/stats`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) setStats(data);
     } catch (err) {
-      console.error("[ReconDesk] Fetch error:", err);
-    } finally {
-      setIsLoading(false);
+      console.error("[ReconDesk] Stats error:", err);
     }
-  }, [statusFilter, sourceFilter, deskFilter, currencyFilter, tradeRefFilter]);
+  }, []);
 
-  useEffect(() => {
-    if (userId) fetchData();
-  }, [userId, fetchData]);
-
-  // ============ Run Matching ============
-  const handleRunMatching = async () => {
-    setIsMatching(true);
+  // ============ Allocation entry ============
+  // On entry we ensure an allocation exists (20 settled trades → 40 rows).
+  // This is idempotent server-side: an existing allocation is returned as-is;
+  // otherwise the backend auto-generates the shortfall through the full
+  // lifecycle. Filtering is applied client-side over the allocated rows so
+  // Ledger/Statement rows always stay together as one mixed set.
+  const loadAllocation = useCallback(async () => {
+    if (!getToken()) return;
+    setIsLoading(true);
+    setLoadingLabel("Preparing Reconciliation Desk...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/run-matching`, {
+      const res = await fetch(`${API}/api/reconciliation/allocate`, {
         method: "POST",
         headers: authHeaders()
       });
       const data = await res.json();
-
       if (data.success) {
-        toast.success(`Matching complete: ${data.matchesCreated} matches created`);
-        fetchData();
+        setItems(data.items || []);
+        if (data.generated > 0) {
+          toast.success(`Prepared ${data.rowCount} rows (${data.generated} training trade(s) generated).`);
+        }
       } else {
-        toast.error(data.error || "Matching failed");
+        toast.error(data.error || "Failed to prepare reconciliation desk.");
       }
     } catch (err) {
-      toast.error("Matching engine error");
+      console.error("[ReconDesk] Allocation error:", err);
+      toast.error("Failed to prepare reconciliation desk.");
+    } finally {
+      setIsLoading(false);
+      fetchStats();
+    }
+  }, [fetchStats]);
+
+  useEffect(() => {
+    if (userId) loadAllocation();
+  }, [userId, loadAllocation]);
+
+  // ============ Selection ============
+  const toggleSelect = (item) => {
+    if (item.status === "Matched") return; // matched rows are locked
+    if (item.source === "LEDGER") {
+      setSelectedLedger(prev => prev === item.itemId ? null : item.itemId);
+    } else {
+      setSelectedStatement(prev => prev === item.itemId ? null : item.itemId);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedLedger(null);
+    setSelectedStatement(null);
+  };
+
+  // ============ User-driven Match ============
+  const canMatch = selectedLedger && selectedStatement && !isMatching;
+
+  const handleMatch = async () => {
+    if (!canMatch) return;
+    setIsMatching(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/manual-match`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ ledgerItemId: selectedLedger, statementItemId: selectedStatement })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(`Match successful — ${data.matchId}`);
+        // Update both rows locally to Matched with the new matchId.
+        setItems(prev => prev.map(it => {
+          if (it.itemId === data.ledgerItemId || it.itemId === data.statementItemId) {
+            return { ...it, status: "Matched", matchId: data.matchId };
+          }
+          return it;
+        }));
+        clearSelection();
+        fetchStats();
+      } else {
+        // Neutral message — the backend never reveals WHY.
+        toast.error(data.message || "Items cannot be matched.");
+      }
+    } catch (err) {
+      toast.error("Items cannot be matched.");
     } finally {
       setIsMatching(false);
     }
@@ -362,6 +439,16 @@ export default function ReconciliationDeskPage() {
     if (desk.startsWith("AMER")) return "desk-amer";
     return "desk-global";
   };
+
+  // ============ Client-side filtering (over the allocated set) ============
+  const filteredItems = items.filter(i => {
+    if (statusFilter && i.status !== statusFilter) return false;
+    if (sourceFilter && i.source !== sourceFilter) return false;
+    if (deskFilter && i.reconDesk !== deskFilter) return false;
+    if (currencyFilter && i.currency !== currencyFilter) return false;
+    if (tradeRefFilter && !String(i.itemRef1 || "").toLowerCase().includes(tradeRefFilter.toLowerCase())) return false;
+    return true;
+  });
 
   // ============ Unique values for filters ============
   const uniqueDesks = [...new Set(items.map(i => i.reconDesk).filter(Boolean))].sort();
@@ -379,7 +466,7 @@ export default function ReconciliationDeskPage() {
           <div style={{ textAlign: "center", color: "white" }}>
             <div className="loading-spinner" style={{ margin: "0 auto 12px" }} />
             <div style={{ fontSize: 14, fontWeight: 500 }}>
-              {isMatching ? "Running Matching Engine..." : "Loading Reconciliation Data..."}
+              {isMatching ? "Matching..." : loadingLabel}
             </div>
           </div>
         </div>
@@ -392,13 +479,30 @@ export default function ReconciliationDeskPage() {
           <div className="topbar-subtitle">Enterprise Cash Settlement Reconciliation</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-match" onClick={handleRunMatching} disabled={isMatching}>
-            {isMatching ? "⏳ Running..." : "▶ Run Matching"}
-          </button>
           <button className="btn btn-back" onClick={() => router.push("/dashboard")}>
             ← Dashboard
           </button>
         </div>
+      </div>
+
+      {/* Match Tray — user selects one Ledger + one Statement, then matches */}
+      <div className="match-tray">
+        <span style={{ fontSize: 13, fontWeight: 700 }}>Manual Match</span>
+        <span className={`tray-chip ${selectedLedger ? "filled-ledger" : ""}`}>
+          Ledger: {selectedLedger || "—"}
+        </span>
+        <span className={`tray-chip ${selectedStatement ? "filled-statement" : ""}`}>
+          Statement: {selectedStatement || "—"}
+        </span>
+        <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
+          {isMatching ? "⏳ Matching..." : "🔗 Match"}
+        </button>
+        {(selectedLedger || selectedStatement) && (
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={clearSelection}>
+            ✕ Clear Selection
+          </button>
+        )}
+        <span className="tray-hint">Select one Ledger row and one Statement row, then click Match.</span>
       </div>
 
       {/* Stats Bar */}
@@ -464,7 +568,6 @@ export default function ReconciliationDeskPage() {
           placeholder="Trade ID..."
           value={tradeRefFilter}
           onChange={(e) => setTradeRefFilter(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && fetchData()}
         />
 
         <button className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => {
@@ -480,16 +583,17 @@ export default function ReconciliationDeskPage() {
 
       {/* Main Table */}
       <div className="container">
-        {items.length === 0 && !isLoading ? (
+        {filteredItems.length === 0 && !isLoading ? (
           <div className="empty-state">
             <h3>No Reconciliation Items</h3>
-            <p>Generate trades and settle them to create reconciliation items.</p>
+            <p>The reconciliation desk allocation is empty. Try reloading the desk.</p>
           </div>
         ) : (
           <div className="table-container">
             <table>
               <thead>
                 <tr>
+                  <th className="sel-cell">✓</th>
                   <th>Status</th>
                   <th>Item ID</th>
                   <th>Source</th>
@@ -517,14 +621,26 @@ export default function ReconciliationDeskPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {filteredItems.map((item) => {
+                  const isMatched = item.status === "Matched";
+                  const isSelected = item.itemId === selectedLedger || item.itemId === selectedStatement;
+                  return (
                   <tr
-                    key={item._id}
-                    onClick={() => setSelectedItem(item)}
-                    style={selectedItem?._id === item._id ? { outline: "2px solid #3b82f6" } : {}}
+                    key={item._id || item.itemId}
+                    className={isSelected ? "row-selected" : ""}
+                    onClick={() => toggleSelect(item)}
                   >
+                    <td className="sel-cell" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="sel-checkbox"
+                        disabled={isMatched}
+                        checked={isSelected}
+                        onChange={() => toggleSelect(item)}
+                      />
+                    </td>
                     <td>
-                      <span className={`status-badge ${item.status === "Matched" ? "status-matched" : "status-outstanding"}`}>
+                      <span className={`status-badge ${isMatched ? "status-matched" : "status-outstanding"}`}>
                         {item.status}
                       </span>
                     </td>
@@ -562,86 +678,13 @@ export default function ReconciliationDeskPage() {
                     <td className="ref-cell">{item.ref7 || "—"}</td>
                     <td className="ref-cell">{item.ref8 || "—"}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
-
-      {/* Detail Panel */}
-      {selectedItem && (
-        <>
-          <div className="detail-overlay" onClick={() => setSelectedItem(null)} />
-          <div className="detail-panel">
-            <div className="detail-header">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <h3>{selectedItem.itemId}</h3>
-                  <p>{selectedItem.source} • {selectedItem.itemType}</p>
-                </div>
-                <button
-                  onClick={() => setSelectedItem(null)}
-                  style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: 14 }}
-                >✕</button>
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <span className={`status-badge ${selectedItem.status === "Matched" ? "status-matched" : "status-outstanding"}`}>
-                  {selectedItem.status}
-                </span>
-                <span className={`source-badge ${selectedItem.source === "LEDGER" ? "source-ledger" : "source-statement"}`}>
-                  {selectedItem.source}
-                </span>
-                <span className={`desk-badge ${deskClass(selectedItem.reconDesk)}`}>
-                  {selectedItem.reconDesk}
-                </span>
-              </div>
-            </div>
-
-            <div className="detail-section">
-              <h4>Trade Economics</h4>
-              <div className="detail-row"><span className="detail-key">Amount</span><span className="detail-value">{formatAmount(selectedItem.amount)}</span></div>
-              <div className="detail-row"><span className="detail-key">Currency</span><span className="detail-value">{selectedItem.currency}</span></div>
-              <div className="detail-row"><span className="detail-key">Trade Date</span><span className="detail-value">{formatDate(selectedItem.tradeDate)}</span></div>
-              <div className="detail-row"><span className="detail-key">Value Date</span><span className="detail-value">{formatDate(selectedItem.valueDate)}</span></div>
-              <div className="detail-row"><span className="detail-key">Recon Desk</span><span className="detail-value">{selectedItem.reconDesk}</span></div>
-              {selectedItem.matchId && (
-                <div className="detail-row"><span className="detail-key">Match ID</span><span className="detail-value" style={{ color: "#059669" }}>{selectedItem.matchId}</span></div>
-              )}
-            </div>
-
-            <div className="detail-section">
-              <h4>Item References</h4>
-              <div className="detail-row"><span className="detail-key">Trade ID</span><span className="detail-value">{selectedItem.itemRef1 || "—"}</span></div>
-              <div className="detail-row"><span className="detail-key">Underlyer</span><span className="detail-value">{selectedItem.itemRef2 || "—"}</span></div>
-              <div className="detail-row"><span className="detail-key">Entity</span><span className="detail-value">{selectedItem.itemRef3 || "—"}</span></div>
-              <div className="detail-row"><span className="detail-key">Country</span><span className="detail-value">{selectedItem.itemRef4 || "—"}</span></div>
-              <div className="detail-row"><span className="detail-key">Product</span><span className="detail-value">{selectedItem.itemRef5 || "—"}</span></div>
-              <div className="detail-row"><span className="detail-key">Product Type</span><span className="detail-value">{selectedItem.itemRef6 || "—"}</span></div>
-            </div>
-
-            {selectedItem.source === "STATEMENT" && (
-              <div className="detail-section">
-                <h4>SWIFT References</h4>
-                <div className="detail-row"><span className="detail-key">Buyer BIC</span><span className="detail-value">{selectedItem.ref1 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">Seller Account</span><span className="detail-value">{selectedItem.ref2 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">Buyer Account</span><span className="detail-value">{selectedItem.ref3 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">Seller BIC</span><span className="detail-value">{selectedItem.ref4 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">Field 20</span><span className="detail-value">{selectedItem.ref5 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">56A Intermediary</span><span className="detail-value">{selectedItem.ref6 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">Institution</span><span className="detail-value">{selectedItem.ref7 || "—"}</span></div>
-                <div className="detail-row"><span className="detail-key">Bank Name</span><span className="detail-value">{selectedItem.ref8 || "—"}</span></div>
-              </div>
-            )}
-
-            <div className="detail-section" style={{ borderBottom: "none" }}>
-              <h4>Timestamps</h4>
-              <div className="detail-row"><span className="detail-key">Created</span><span className="detail-value" style={{ fontSize: 11 }}>{selectedItem.createdAt ? new Date(selectedItem.createdAt).toLocaleString() : "—"}</span></div>
-              <div className="detail-row"><span className="detail-key">Updated</span><span className="detail-value" style={{ fontSize: 11 }}>{selectedItem.updatedAt ? new Date(selectedItem.updatedAt).toLocaleString() : "—"}</span></div>
-            </div>
-          </div>
-        </>
-      )}
     </>
   );
 }

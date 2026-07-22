@@ -5,7 +5,10 @@
 // GET  /api/reconciliation/items          — List all recon items (filtered)
 // GET  /api/reconciliation/stats          — Dashboard statistics
 // GET  /api/reconciliation/item/:itemId   — Get single item detail
-// POST /api/reconciliation/run-matching   — Trigger matching engine
+// POST /api/reconciliation/allocate       — Ensure & return the 40-row allocation
+// GET  /api/reconciliation/allocation     — Check existing allocation (no generation)
+// POST /api/reconciliation/manual-match   — User-driven Ledger↔Statement match
+// POST /api/reconciliation/run-matching   — Legacy auto-match (not used by UI)
 // GET  /api/reconciliation/config         — Get matching configuration
 // PUT  /api/reconciliation/config/:id     — Update matching configuration
 // GET  /api/reconciliation/matches        — List all match pairs
@@ -16,6 +19,7 @@ const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const reconService = require("../engine/reconciliationService");
 const matchingEngine = require("../engine/matchingEngine");
+const allocationService = require("../engine/allocationService");
 const ReconciliationConfig = require("../models/ReconciliationConfig");
 
 // ======================================
@@ -85,7 +89,61 @@ router.get("/item/:itemId", authenticateToken, async (req, res) => {
 });
 
 // ======================================
-// POST /run-matching — Trigger the matching engine
+// POST /allocate — Ensure & return the reconciliation allocation
+// Idempotent: returns the existing 40-row allocation if 20 reconcilable
+// trades already exist; otherwise auto-generates the shortfall as settled
+// trades (full lifecycle) and returns the resulting rows.
+// ======================================
+router.post("/allocate", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId || "SYSTEM";
+    const result = await allocationService.ensureAllocation(userId);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("[Reconciliation Route] POST /allocate error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ======================================
+// GET /allocation — Check existing allocation (no generation)
+// ======================================
+router.get("/allocation", authenticateToken, async (req, res) => {
+  try {
+    const status = await allocationService.getAllocationStatus();
+    return res.json({ success: true, ...status });
+  } catch (err) {
+    console.error("[Reconciliation Route] GET /allocation error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ======================================
+// POST /manual-match — User-driven Ledger ↔ Statement match
+// Body: { ledgerItemId, statementItemId } (order-independent)
+// Returns only a success/failure verdict — never the validation reason.
+// ======================================
+router.post("/manual-match", authenticateToken, async (req, res) => {
+  try {
+    const { ledgerItemId, statementItemId } = req.body || {};
+    if (!ledgerItemId || !statementItemId) {
+      return res.status(400).json({ success: false, message: "Select one Ledger and one Statement item." });
+    }
+
+    const result = await matchingEngine.manualMatch(ledgerItemId, statementItemId);
+    // Business rejection returns HTTP 200 with success:false so the UI can
+    // show a neutral toast without treating it as a server error.
+    return res.json(result);
+  } catch (err) {
+    console.error("[Reconciliation Route] POST /manual-match error:", err);
+    res.status(500).json({ success: false, message: "Items cannot be matched." });
+  }
+});
+
+// ======================================
+// POST /run-matching — Trigger the LEGACY auto-match engine
+// Preserved for backward compatibility / future auto-match rules.
+// NOT used by the reconciliation workstation UI.
 // ======================================
 router.post("/run-matching", authenticateToken, async (req, res) => {
   try {
