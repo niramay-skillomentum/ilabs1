@@ -221,6 +221,8 @@ class QueueComposer {
 
       const generated = await tradeGenerator.generateTrades(remainingClean, remainingBreaks, desk, settlementInitialState);
       const saved = await tradeGenerator.saveGeneratedTrades(generated);
+      // Fire-and-forget: Create Ledger Reconciliation Items
+      try { require("./ledgerImporter").importTradesAsLedgerItems(saved); } catch (e) {}
 
       const genClean = [];
       const genBreaks = [];
@@ -249,6 +251,8 @@ class QueueComposer {
         settlementInitialState
       );
       const savedFiller = await tradeGenerator.saveGeneratedTrades(filler);
+      // Fire-and-forget: Create Ledger Reconciliation Items
+      try { require("./ledgerImporter").importTradesAsLedgerItems(savedFiller); } catch (e) {}
       queue = queue.concat(savedFiller);
     }
 
@@ -277,6 +281,17 @@ class QueueComposer {
         })),
         { ordered: false }
       );
+    }
+
+    // Trigger proactive CPTY SSI email for all SELL trades in a SETTLEMENT queue
+    if (desk === "SETTLEMENT") {
+      const { scheduleProactiveSellSSI } = require("./cptySellSettlementAI");
+      queue.forEach(t => {
+        if (t.direction === "SELL") {
+          // Fire and forget
+          scheduleProactiveSellSSI(t).catch(e => console.error("Failed to schedule proactive SSI:", e));
+        }
+      });
     }
 
     // Create session record

@@ -89,4 +89,36 @@ router.get("/group", authenticateToken, async (req, res) => {
   }
 });
 
+// Entity lookup — returns the entity's own SSI based on entity name and currency.
+// Used for SELL trades where the entity is the beneficiary.
+router.get("/entity", authenticateToken, async (req, res) => {
+  const { entityName, currency } = req.query;
+  if (!entityName || !currency) {
+    return res.status(400).json({ success: false, error: "entityName and currency are required" });
+  }
+
+  try {
+    const Entity = require("../models/Entity");
+    const entity = await Entity.findOne({ entityName, currency });
+    if (!entity) {
+      return res.status(404).json({ success: false, error: "Entity not found for this currency" });
+    }
+    
+    // Map the Entity to an SSI-like structure for the frontend
+    const ssi = {
+      beneficiaryName: entity.accountName || entity.entityName,
+      accountNumber: entity.accountNumber,
+      beneficiaryBIC: entity.bic,
+      currency: entity.currency,
+      settlementMethod: "SWIFT",
+      isEntity: true // Flag to indicate this is our own SSI
+    };
+    
+    return res.json({ success: true, ssi });
+  } catch (err) {
+    console.error("[SSI Entity Lookup] Error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

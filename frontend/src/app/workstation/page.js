@@ -64,12 +64,12 @@ const allowed = {
   MO_VALIDATE_PASS: ["MO_PENDING", "PENDING_FO_RESPONSE"],
   MO_RAISE_BREAK: ["MO_PENDING"],
   MO_SEND_TO_FO: ["MO_BREAK_OPEN"],
-  CONFIRM_TRADE: ["LIASING_WITH_CPTY"],
+  CONFIRM_TRADE: ["LIASING_WITH_CPTY", "CONFIRMATION_PENDING"],
   CONFIRM_RAISE_BREAK: ["LIASING_WITH_CPTY"],
   CONFIRM_SEND_TO_CPTY: ["CONFIRMATION_PENDING", "CONFIRMATION_BREAK", "LIASING_WITH_FO", "LIASING_WITH_CPTY"],
   CONFIRM_REJECT_CLAIM: ["CONFIRMATION_BREAK"],
   CONFIRM_REQUEST_EVIDENCE: ["CONFIRMATION_BREAK"],
-  CONFIRM_ESCALATE_TO_FO: ["CONFIRMATION_BREAK"],
+  CONFIRM_ESCALATE_TO_FO: ["CONFIRMATION_BREAK", "LIASING_WITH_CPTY", "LIASING_WITH_FO"],
   CONFIRM_RAISE_AMENDMENT: ["CONFIRMATION_BREAK"],
   CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
   CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
@@ -632,15 +632,35 @@ function WorkstationComponent() {
   };
 
   const viewSSI = useCallback(async (trade) => {
-    setPopupState({ type: "ssi", trade });
+    let tradeToView = { ...trade };
+
+    // For SELL trades on Settlement Desk, we want to view our OWN Entity SSI
+    if (desk === "SETTLEMENT" && trade.direction === "SELL") {
+      try {
+        const params = new URLSearchParams({ entityName: trade.entity, currency: trade.currency });
+        const res = await fetch(`/api/ssi/entity?${params.toString()}`, { headers: authHeaders() });
+        const data = await res.json();
+        if (data.success && data.ssi) {
+          tradeToView.settlementDetails = {
+            ...tradeToView.settlementDetails,
+            ...data.ssi,
+            counterpartyName: undefined // ensure we don't display counterparty name for our own SSI
+          };
+        }
+      } catch (err) {
+        console.error("Failed to load entity SSI:", err);
+      }
+    }
+
+    setPopupState({ type: "ssi", trade: tradeToView });
     setSelectedSsiId("");
     setSsiGroupList([]);
     // If trade has a settlement break, fetch SSI group for the dropdown
-    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus)) {
+    if (["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(tradeToView.currentStatus)) {
       try {
-        const groupNameToUse = trade.counterpartyGroup || trade.counterparty || trade.settlementDetails?.counterpartyName;
+        const groupNameToUse = tradeToView.counterpartyGroup || tradeToView.counterparty || tradeToView.settlementDetails?.counterpartyName;
         const params = new URLSearchParams({ groupName: groupNameToUse });
-        if (trade.currency) params.set("currency", trade.currency);
+        if (tradeToView.currency) params.set("currency", tradeToView.currency);
         const res = await fetch(`/api/ssi/group?${params.toString()}`, { headers: authHeaders() });
         const data = await res.json();
         if (data.success && data.ssis) {
@@ -650,7 +670,7 @@ function WorkstationComponent() {
         console.error("Failed to load SSI group:", err);
       }
     }
-  }, []);
+  }, [desk]);
 
   const openTermsheet = () => {
     window.open(`/mo-risk?desk=${encodeURIComponent(desk)}`, "_blank");
@@ -728,37 +748,38 @@ function WorkstationComponent() {
                 ⚠️ Actions for Electronic trades must be performed in the STCC Electronic Settlement dashboard.
               </div>
             ) : (
+
               <>
-            {desk === "MO" && (
-              <>
-                <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
-                <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
-                <button className="btn primary" onClick={sendToFO}>Send to FO</button>
-              </>
-            )}
-            {desk === "CONFIRMATION" && (
-              <>
-                <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
-                <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
-                <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
-                <button className="btn primary" onClick={() => {
-                  if(!selectedTrade) return toast.error("Select a trade first");
-                  if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
-                  const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
-                  window.open("/communication?" + mailParams.toString(), "_blank");
-                }}>Escalate to FO</button>
-              </>
-            )}
-            {desk === "SETTLEMENT" && (
-              <>
-                <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
-                <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
-                <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
-              </>
-            )}
+                {desk === "MO" && (
+                  <>
+                    <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
+                    <button className="btn primary" onClick={sendToFO}>Send to FO</button>
+                  </>
+                )}
+                {desk === "CONFIRMATION" && (
+                  <>
+                    <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
+                    <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
+                    <button className="btn primary" onClick={() => {
+                      if(!selectedTrade) return toast.error("Select a trade first");
+                      if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+                      const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
+                      window.open("/communication?" + mailParams.toString(), "_blank");
+                    }}>Escalate to FO</button>
+                  </>
+                )}
+                {desk === "SETTLEMENT" && (
+                  <>
+                    <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
+                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
+                    <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
+                    <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -1003,7 +1024,12 @@ function WorkstationComponent() {
         const messages = swiftData.messages;
         const activeMsg = messages[swiftActiveTab] || messages[0];
         const fieldMap = activeMsg.fieldMap || {};
-        const fieldTags = Object.keys(fieldMap);
+        const SWIFT_TAG_ORDER = ["20", "21", "23B", "32A", "33B", "50A", "50F", "50K", "52A", "52D", "53A", "53B", "54A", "54B", "56A", "56C", "57A", "57B", "57C", "58A", "59", "59A", "70", "71A", "72", "77B"];
+        const fieldTags = Object.keys(fieldMap).sort((a, b) => {
+          let idxA = SWIFT_TAG_ORDER.indexOf(a); let idxB = SWIFT_TAG_ORDER.indexOf(b);
+          if (idxA === -1) idxA = 999; if (idxB === -1) idxB = 999;
+          return idxA - idxB;
+        });
         const msgType = activeMsg.messageType;
 
         // MT103 descriptive field labels (matching the reference image exactly)
@@ -1125,10 +1151,11 @@ function WorkstationComponent() {
                   <pre style={{fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white'}}>
                     {fieldTags.map(tag => {
                       const field = fieldMap[tag];
-                      const label = MT103_LABELS[tag] || field.description || tag;
                       const val = String(field.value || "");
                       const valLines = val.split("\n");
-                      return `${tag}: ${label}\n${valLines.map(l => `    ${l}`).join("\n")}\n`;
+                      const firstLine = valLines[0];
+                      const restLines = valLines.slice(1).map(l => `    ${l}`).join("\n");
+                      return `${tag}: ${firstLine}\n${restLines ? restLines + "\n" : ""}`;
                     }).join("")}
                   </pre>
                 ) : (

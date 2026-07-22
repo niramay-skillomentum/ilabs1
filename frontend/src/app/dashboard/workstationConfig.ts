@@ -107,35 +107,35 @@ export const workstationConfig: Workstation[] = [
   },
   {
     id: "tlm",
-    title: "Reconciliation Operations",
-    description: "Monitor and visualize the complete operational journey of every trade across all desks.",
+    title: "Reconciliation Desk",
+    description: "Match ledger entries against SWIFT statements to ensure every trade is accounted for across all settlement channels.",
     icon: "Network",
     accentColor: "cyan",
     responsibilities: [
-      "Monitor lifecycle progression",
-      "View state transitions",
-      "Track workflow movement",
-      "Review operational history",
-      "Investigate lifecycle events",
-      "Monitor enterprise workflow"
+      "View ledger reconciliation items",
+      "View statement reconciliation items",
+      "Run configurable matching engine",
+      "Investigate outstanding breaks",
+      "Review matched pairs",
+      "Monitor reconciliation by desk"
     ],
     exploreItems: [
-      "Trade Timeline",
-      "Lifecycle Progress",
-      "State History",
-      "Workflow Monitor",
-      "Cross Desk Journey",
-      "Audit Trail"
+      "Ledger Items",
+      "Statement Items",
+      "Matching Engine",
+      "Outstanding Breaks",
+      "Match Pairs",
+      "Recon Configuration"
     ],
     experienceItems: [
-      "Lifecycle Visualization",
-      "Cross Desk Monitoring",
-      "Workflow Investigation",
-      "Operational Timeline",
-      "Audit Exploration"
+      "Ledger vs Statement Matching",
+      "Break Investigation",
+      "Configurable Matching Rules",
+      "Cross-Desk Reconciliation",
+      "Enterprise Cash Recon"
     ],
-    buttonLabel: "Open Reconciliation Operations",
-    navigationRoute: "TLM"
+    buttonLabel: "Open Reconciliation Desk",
+    navigationRoute: "RECONCILIATION"
   },
   {
     id: "reporting",

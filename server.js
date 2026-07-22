@@ -148,6 +148,7 @@ app.use("/api/system-mailbox", require("./src/routes/systemMailboxRoutes"));
 app.use("/api/ssi", require("./src/routes/ssiRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));
 app.use("/api/swift", require("./src/routes/swiftRoutes"));
+app.use("/api/reconciliation", require("./src/routes/reconciliationRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START

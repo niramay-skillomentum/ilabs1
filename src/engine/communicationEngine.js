@@ -112,7 +112,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
       "COUNTERPARTY",
       finalBody,
       cptyResponse.followUpSubject || "RE: Trade Clarification",
-      null, // desk
+      reply.desk, // use reply.desk to assign conversation to the correct desk
       true  // skipEmit
     );
 
