@@ -315,6 +315,12 @@ export default function ReconciliationDeskPage() {
   const [deskFilter, setDeskFilter] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [tradeRefFilter, setTradeRefFilter] = useState("");
+  const [tradeDateFrom, setTradeDateFrom] = useState("");
+  const [tradeDateTo, setTradeDateTo] = useState("");
+  const [valueDateFrom, setValueDateFrom] = useState("");
+  const [valueDateTo, setValueDateTo] = useState("");
+  const [amountFrom, setAmountFrom] = useState("");
+  const [amountTo, setAmountTo] = useState("");
 
   // Selection for user-driven matching: at most one LEDGER + one STATEMENT.
   const [selectedLedger, setSelectedLedger] = useState(null);      // itemId
@@ -442,8 +448,14 @@ export default function ReconciliationDeskPage() {
     if (statusFilter && i.status !== statusFilter) return false;
     if (sourceFilter && i.source !== sourceFilter) return false;
     if (deskFilter && i.reconDesk !== deskFilter) return false;
-    if (currencyFilter && i.currency !== currencyFilter) return false;
+    if (currencyFilter && !String(i.currency || "").toLowerCase().includes(currencyFilter.toLowerCase())) return false;
     if (tradeRefFilter && !String(i.itemRef1 || "").toLowerCase().includes(tradeRefFilter.toLowerCase())) return false;
+    if (tradeDateFrom && new Date(i.tradeDate) < new Date(tradeDateFrom)) return false;
+    if (tradeDateTo && new Date(i.tradeDate) > new Date(tradeDateTo)) return false;
+    if (valueDateFrom && new Date(i.valueDate) < new Date(valueDateFrom)) return false;
+    if (valueDateTo && new Date(i.valueDate) > new Date(valueDateTo)) return false;
+    if (amountFrom !== "" && i.amount < Number(amountFrom)) return false;
+    if (amountTo !== "" && i.amount > Number(amountTo)) return false;
     return true;
   });
 
@@ -555,10 +567,13 @@ export default function ReconciliationDeskPage() {
         </select>
 
         <span className="filter-label" style={{ marginLeft: 8 }}>Currency:</span>
-        <select className="filter-select" value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
-          <option value="">All</option>
-          {uniqueCurrencies.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <input
+          className="filter-input"
+          placeholder="e.g. USD"
+          style={{width: 70}}
+          value={currencyFilter}
+          onChange={(e) => setCurrencyFilter(e.target.value)}
+        />
 
         <input
           className="filter-input"
@@ -567,12 +582,39 @@ export default function ReconciliationDeskPage() {
           onChange={(e) => setTradeRefFilter(e.target.value)}
         />
 
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+
+        <span className="filter-label">T-Date:</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={tradeDateFrom} onChange={e => setTradeDateFrom(e.target.value)} />
+        <span className="filter-label" style={{margin: "0 2px"}}>-</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={tradeDateTo} onChange={e => setTradeDateTo(e.target.value)} />
+
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+
+        <span className="filter-label">V-Date:</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={valueDateFrom} onChange={e => setValueDateFrom(e.target.value)} />
+        <span className="filter-label" style={{margin: "0 2px"}}>-</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={valueDateTo} onChange={e => setValueDateTo(e.target.value)} />
+
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+
+        <span className="filter-label">Amount:</span>
+        <input type="number" className="filter-input" style={{width: 80}} placeholder="Min" value={amountFrom} onChange={e => setAmountFrom(e.target.value)} />
+        <span className="filter-label" style={{margin: "0 2px"}}>-</span>
+        <input type="number" className="filter-input" style={{width: 80}} placeholder="Max" value={amountTo} onChange={e => setAmountTo(e.target.value)} />
+
         <button className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => {
           setStatusFilter(null);
           setSourceFilter(null);
           setDeskFilter("");
           setCurrencyFilter("");
           setTradeRefFilter("");
+          setTradeDateFrom("");
+          setTradeDateTo("");
+          setValueDateFrom("");
+          setValueDateTo("");
+          setAmountFrom("");
+          setAmountTo("");
         }}>
           ✕ Clear
         </button>
