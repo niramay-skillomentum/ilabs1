@@ -176,18 +176,22 @@ class QueueComposer {
       const fetchLimit = Math.min(unassignedCount, dbAllocation * 3);
 
       const dbTrades = await Trade.find(unassignedQuery)
+        .sort({ _id: -1 })
         .limit(fetchLimit)
         .lean();
 
       // Recalculate age for each DB trade using desk-specific rules
       // and filter out stale trades (age > 1) so only recent trades are assigned
+      let maxAllowedAge = 2;
+      if (desk === "SETTLEMENT") maxAllowedAge = 1;
+
       const now = new Date();
       const freshDbTrades = dbTrades
         .map(t => {
           t.age = ageCalculator.calculateAge(t.tradeDate, now, desk);
           return t;
         })
-        .filter(t => t.age <= 1);
+        .filter(t => t.age <= maxAllowedAge);
 
       const shuffledDbTrades = shuffle(freshDbTrades);
 

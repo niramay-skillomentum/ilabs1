@@ -239,6 +239,13 @@ function CommunicationComponent() {
               setComposeBody("");
             }
             setComposeModalOpen(true);
+            
+            // Clean up URL to prevent reopen on refresh
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete("composeFor");
+            newParams.delete("composeTo");
+            newParams.delete("composeAction");
+            window.history.replaceState(null, "", `/communication?${newParams.toString()}`);
           }
         });
     } else if (ch === "SYSTEM") {

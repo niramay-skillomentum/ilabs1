@@ -119,6 +119,20 @@ router.get("/allocation", authenticateToken, async (req, res) => {
 });
 
 // ======================================
+// GET /my-allocation — Get explicit assigned un-matched items for user
+// ======================================
+router.get("/my-allocation", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId || "SYSTEM";
+    const result = await allocationService.allocateUserItems(userId);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("[Reconciliation Route] GET /my-allocation error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ======================================
 // POST /manual-match — User-driven Ledger ↔ Statement match
 // Body: { ledgerItemId, statementItemId } (order-independent)
 // Returns only a success/failure verdict — never the validation reason.
@@ -187,7 +201,7 @@ router.put("/config/:id", authenticateToken, async (req, res) => {
     const config = await ReconciliationConfig.findByIdAndUpdate(
       req.params.id,
       { $set: update },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
 
     if (!config) {
@@ -216,6 +230,19 @@ router.get("/matches", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("[Reconciliation Route] GET /matches error:", err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ======================================
+// POST /sync — Backfill Ledger and Statement Items
+// ======================================
+router.post("/sync", authenticateToken, async (req, res) => {
+  try {
+    const result = await reconService.syncLedgerAndStatements();
+    res.json({ success: true, message: "Sync complete", data: result });
+  } catch (error) {
+    console.error("[ReconSync] Sync error:", error);
+    res.status(500).json({ success: false, message: "Sync failed", error: error.message });
   }
 });
 

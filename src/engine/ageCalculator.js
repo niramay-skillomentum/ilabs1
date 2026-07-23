@@ -56,6 +56,21 @@ function calculateConfirmationAge(tradeDate, currentDate = new Date()) {
 }
 
 /**
+ * Settlement Desk age: calendar-day difference from tradeDate + 2 days.
+ * Trades within T+2 of tradeDate get age 0 (grace period).
+ *
+ * @param {Date|string} tradeDate
+ * @param {Date|string} [currentDate=now]
+ * @returns {number} age in calendar days (min 0)
+ */
+function calculateSettlementAge(tradeDate, currentDate = new Date()) {
+  const tPlus2 = new Date(tradeDate);
+  tPlus2.setDate(tPlus2.getDate() + 2);
+
+  return Math.max(0, calendarDayDiff(currentDate, tPlus2));
+}
+
+/**
  * Dispatcher — calculates age based on desk.
  *
  * @param {Date|string} tradeDate
@@ -71,6 +86,8 @@ function calculateAge(tradeDate, currentDate, desk) {
       return calculateMOAge(tradeDate, currentDate);
     case "CONFIRMATION":
       return calculateConfirmationAge(tradeDate, currentDate);
+    case "SETTLEMENT":
+      return calculateSettlementAge(tradeDate, currentDate);
     default:
       // Fallback: use MO-style for any other desk
       return calculateMOAge(tradeDate, currentDate);
@@ -80,6 +97,7 @@ function calculateAge(tradeDate, currentDate, desk) {
 module.exports = {
   calculateMOAge,
   calculateConfirmationAge,
+  calculateSettlementAge,
   calculateAge,
   calendarDayDiff
 };

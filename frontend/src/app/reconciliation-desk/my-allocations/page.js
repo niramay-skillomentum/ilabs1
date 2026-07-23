@@ -354,7 +354,7 @@ export default function ReconciliationDeskPage() {
     setIsLoading(true);
     setLoadingLabel("Preparing Reconciliation Desk...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/items?limit=10000`, {
+      const res = await fetch(`${API}/api/reconciliation/my-allocation`, {
         method: "GET",
         headers: authHeaders()
       });
@@ -472,15 +472,12 @@ export default function ReconciliationDeskPage() {
       {/* Top Bar */}
       <div className="topbar">
         <div>
-          <div className="topbar-title">⚖️ Reconciliation Desk</div>
+          <div className="topbar-title">⚖️ My Allocations</div>
           <div className="topbar-subtitle">Enterprise Cash Settlement Reconciliation</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-secondary" onClick={() => router.push("/reconciliation-desk/my-allocations")} style={{ marginRight: "10px" }}>
-            My Allocations
-          </button>
-          <button className="btn btn-back" onClick={() => router.push("/dashboard")}>
-              ← Dashboard
+          <button className="btn btn-back" onClick={() => router.push("/reconciliation-desk")}>
+              ← Back to Desk
           </button>
         </div>
       </div>

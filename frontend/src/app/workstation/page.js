@@ -559,7 +559,7 @@ function WorkstationComponent() {
     if (forceComposeTo) {
       mailParams.set("composeTo", forceComposeTo);
     }
-    window.open("/communication?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "mailbox_tab");
   };
 
   const sendToFO = () => {
@@ -568,7 +568,7 @@ function WorkstationComponent() {
     const mailParams = new URLSearchParams({
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO"
     });
-    window.open("/communication?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "mailbox_tab");
   };
 
   const startCptyFlow = () => {
@@ -578,7 +578,7 @@ function WorkstationComponent() {
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
       composeAction: "CONFIRM_SEND_TO_CPTY"
     });
-    window.open("/communication?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "mailbox_tab");
   };
 
   const startSettlementCptyFlow = () => {
@@ -588,7 +588,7 @@ function WorkstationComponent() {
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
       composeAction: "SETTLEMENT_MAIL_CPTY"
     });
-    window.open("/communication?" + mailParams.toString(), "_blank");
+    window.open("/communication?" + mailParams.toString(), "mailbox_tab");
   };
 
   const sendEmail = async () => {
@@ -766,7 +766,7 @@ function WorkstationComponent() {
                       if(!selectedTrade) return toast.error("Select a trade first");
                       if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
                       const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
-                      window.open("/communication?" + mailParams.toString(), "_blank");
+                      window.open("/communication?" + mailParams.toString(), "mailbox_tab");
                     }}>Escalate to FO</button>
                   </>
                 )}

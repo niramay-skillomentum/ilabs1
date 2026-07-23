@@ -53,6 +53,9 @@ const ReconciliationItemSchema = new mongoose.Schema({
   // Match ID — null until matched, then MATCH000001, MATCH000002, ...
   matchId: { type: String, default: null, index: true },
 
+  // Assigned user for My Allocations
+  assignedTo: { type: String, default: null, index: true },
+
   // ======================================
   // ITEM REFERENCES (Trade-level data)
   // Populated for BOTH Ledger and Statement items

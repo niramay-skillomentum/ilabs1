@@ -210,8 +210,69 @@ function shuffle(arr) {
   return a;
 }
 
+/**
+ * Allocate 10 distinct Ledger and 10 distinct Statement items to a user.
+ * The 10 ledgers and 10 statements must NOT form pairs.
+ */
+async function allocateUserItems(userId) {
+  // 1. Fetch current assignment
+  const currentAssigned = await ReconciliationItem.find({ assignedTo: userId, status: "Outstanding" }).lean();
+  
+  let ledgers = currentAssigned.filter(i => i.source === RECON_SOURCE.LEDGER);
+  let statements = currentAssigned.filter(i => i.source === RECON_SOURCE.STATEMENT);
+
+  const neededLedgers = Math.max(0, 10 - ledgers.length);
+  const neededStatements = Math.max(0, 10 - statements.length);
+
+  if (neededLedgers > 0 || neededStatements > 0) {
+    // Get existing trade refs so we don't accidentally pair them
+    const existingLedgerTradeRefs = new Set(ledgers.map(i => i.itemRef1).filter(Boolean));
+    const existingStatementTradeRefs = new Set(statements.map(i => i.ref5).filter(Boolean));
+    
+    if (neededLedgers > 0) {
+      // Find unassigned ledgers whose tradeRef is NOT in existingStatementTradeRefs
+      const newLedgers = await ReconciliationItem.find({
+        source: RECON_SOURCE.LEDGER,
+        status: "Outstanding",
+        assignedTo: null,
+        itemRef1: { $nin: Array.from(existingStatementTradeRefs) }
+      }).limit(neededLedgers).lean();
+
+      for (let item of newLedgers) {
+        await ReconciliationItem.updateOne({ _id: item._id }, { $set: { assignedTo: userId } });
+        ledgers.push(item);
+        existingLedgerTradeRefs.add(item.itemRef1);
+      }
+    }
+
+    if (neededStatements > 0) {
+      // Find unassigned statements whose tradeRef is NOT in existingLedgerTradeRefs
+      const newStatements = await ReconciliationItem.find({
+        source: RECON_SOURCE.STATEMENT,
+        status: "Outstanding",
+        assignedTo: null,
+        ref5: { $nin: Array.from(existingLedgerTradeRefs) }
+      }).limit(neededStatements).lean();
+
+      for (let item of newStatements) {
+        await ReconciliationItem.updateOne({ _id: item._id }, { $set: { assignedTo: userId } });
+        statements.push(item);
+        existingStatementTradeRefs.add(item.ref5);
+      }
+    }
+  }
+
+  const allItems = [...ledgers, ...statements];
+  return {
+    items: shuffle(allItems),
+    ledgerCount: ledgers.length,
+    statementCount: statements.length
+  };
+}
+
 module.exports = {
   ensureAllocation,
   getAllocationStatus,
-  getReconcilableTradeRefs
+  getReconcilableTradeRefs,
+  allocateUserItems
 };

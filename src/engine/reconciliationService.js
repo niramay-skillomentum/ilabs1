@@ -172,6 +172,55 @@ async function getActiveConfig() {
   return ReconciliationConfig.findOne({ active: true }).lean();
 }
 
+// ======================================
+// SYNC & BACKFILL (Ledger + Statements)
+// ======================================
+
+/**
+ * Synchronize the database by backfilling missing Ledger and Statement items.
+ * Safe to run multiple times (idempotent).
+ */
+async function syncLedgerAndStatements() {
+  console.log("[ReconSync] Starting ledger and statement backfill...");
+  
+  const Trade = require("../models/Trade");
+  const SwiftMessage = require("../models/SwiftMessage");
+  const ledgerImporter = require("./ledgerImporter");
+  const statementImporter = require("./statementImporter");
+  const swiftEngine = require("./swift/SwiftEngine");
+
+  // 1. Ledger Sync
+  const allTrades = await Trade.find({}).lean();
+  console.log(`[ReconSync] Found ${allTrades.length} trades for ledger sync.`);
+  await ledgerImporter.importTradesAsLedgerItems(allTrades);
+
+  // 2. Statement Sync
+  const settledTrades = allTrades.filter(t => t.currentStatus === "SETTLED");
+  console.log(`[ReconSync] Found ${settledTrades.length} SETTLED trades for statement sync.`);
+
+  let statementsCreated = 0;
+  for (const trade of settledTrades) {
+    let messages = await SwiftMessage.find({ tradeRef: trade.tradeRef, status: "GENERATED" }).lean();
+    
+    // If no SWIFT messages exist, generate them now (this will auto-create statement)
+    if (messages.length === 0) {
+      console.log(`[ReconSync] Generating missing SWIFTs for ${trade.tradeRef}...`);
+      await swiftEngine.generateSwiftMessages(trade.tradeRef, "SYSTEM");
+    } else {
+      // SWIFTs exist, let's just make sure statement exists
+      const primaryMsg = messages.find(m => m.messageType === "MT103") || messages[0];
+      if (primaryMsg) {
+        // statementImporter handles idempotency internally via repo
+        await statementImporter.createStatementItem(primaryMsg, trade);
+        statementsCreated++;
+      }
+    }
+  }
+
+  console.log(`[ReconSync] Statement sync complete. Evaluated ${settledTrades.length} trades.`);
+  return { tradesScanned: allTrades.length, settledTrades: settledTrades.length };
+}
+
 module.exports = {
   generateItemId,
   generateMatchId,
@@ -183,5 +232,6 @@ module.exports = {
   getItemById,
   getStats,
   getMatches,
-  getActiveConfig
+  getActiveConfig,
+  syncLedgerAndStatements
 };

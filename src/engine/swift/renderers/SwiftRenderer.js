@@ -96,7 +96,6 @@ function renderHeader(senderBIC, receiverBIC, messageType) {
   return `${block1}\n${block2}`;
 }
 
-/**
 const SWIFT_TAG_ORDER = ["20", "21", "23B", "32A", "33B", "50A", "50F", "50K", "52A", "52D", "53A", "53B", "54A", "54B", "56A", "56C", "57A", "57B", "57C", "58A", "59", "59A", "70", "71A", "72", "77B"];
 
 function getSortedTags(fieldMap) {

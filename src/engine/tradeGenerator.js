@@ -26,6 +26,7 @@ const Trade = require("../models/Trade");
 const AuditLog = require("../models/AuditLog");
 const ageCalculator = require("./ageCalculator");
 const ssiRepository = require("./ssiRepository");
+const SystemConfig = require("../models/SystemConfig");
 
 // ============================
 // 3-TIER PRODUCT TAXONOMY
@@ -411,11 +412,14 @@ function generateXmlAudit(trade) {
  * @param {Object|null} ssiPairData - Pre-selected SSI pair from ssiRepository
  * @returns {Object} Trade object (not yet saved to DB)
  */
-function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false, settlementInitialState = "SETTLEMENT_PENDING", hasSettlementBreak = false, ssiPairData = null) {
+function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmationBreak = false, settlementInitialState = "SETTLEMENT_PENDING", hasSettlementBreak = false, ssiPairData = null, options = {}) {
   const now = new Date();
   const tradeDate = new Date(now);
 
-  const maxDaysAgo = desk === "CONFIRMATION" ? 2 : 1;
+  let maxDaysAgo = 2; // MO default max days ago
+  if (desk === "CONFIRMATION") maxDaysAgo = 3;
+  if (desk === "SETTLEMENT") maxDaysAgo = 3;
+  
   tradeDate.setDate(tradeDate.getDate() - Math.floor(Math.random() * (maxDaysAgo + 1)));
 
   // ── PRODUCT TAXONOMY SELECTION ──
@@ -454,7 +458,19 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let valueDate = new Date(tradeDate);
   valueDate.setDate(tradeDate.getDate() + 2);
 
-  const baseAmount = generateRealisticAmount(currency);
+  let baseAmount;
+  const recentAmounts = options.recentAmounts || [];
+  if (recentAmounts.length > 0 && Math.random() < 0.20) {
+    baseAmount = pick(recentAmounts);
+  } else {
+    baseAmount = generateRealisticAmount(currency);
+    if (options.recentAmounts) {
+      options.recentAmounts.push(baseAmount);
+      // Keep memory short to encourage turnover
+      if (options.recentAmounts.length > 20) options.recentAmounts.shift();
+    }
+  }
+
   const initialCounterpartyGroup = (ssiPairData && ssiPairData.truthSSI?.counterpartyGroup) ? ssiPairData.truthSSI.counterpartyGroup : (ssiPairData?.counterpartyName || pick(COUNTERPARTIES));
   const initialCounterparty = (ssiPairData && ssiPairData.truthSSI?.counterpartyName) ? ssiPairData.truthSSI.counterpartyName : initialCounterpartyGroup;
 
@@ -739,7 +755,12 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
 
   let ssiIndex = 0;
 
-  // ── Generate CLEAN trades ──
+  // ── Pre-fetch RECENT_AMOUNTS from MongoDB ──
+  let recentAmountsDoc = await SystemConfig.findOne({ key: "RECENT_AMOUNTS" });
+  let recentAmounts = recentAmountsDoc ? (recentAmountsDoc.value || []) : [];
+  const genOptions = { recentAmounts };
+
+  // 1. Generate Clean Trades ──
   for (let i = 0; i < cleanCount; i++) {
     let hasConfirmationBreak = false;
     if (desk === "MO") {
@@ -749,7 +770,7 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
     const ssiPairData = ssiPairs[ssiIndex] || null;
     if (ssiPairData) ssiIndex++;
 
-    const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak, settlementInitialState, false, ssiPairData);
+    const trade = generateSingleTrade(desk, false, defaultCleanStatus, hasConfirmationBreak, settlementInitialState, false, ssiPairData, genOptions);
 
     const { xml } = generateXmlAudit(trade);
     trade.auditXml = xml;
@@ -781,12 +802,23 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
     const ssiPairData = ssiPairs[ssiIndex] || null;
     if (ssiPairData) ssiIndex++;
 
-    const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak, settlementInitialState, hasSettlementBreak, ssiPairData);
+    const trade = generateSingleTrade(desk, isMoBreak, status, hasConfirmationBreak, settlementInitialState, hasSettlementBreak, ssiPairData, genOptions);
 
     const { xml } = generateXmlAudit(trade);
     trade.auditXml = xml;
 
     trades.push(trade);
+  }
+
+  // ── Save updated RECENT_AMOUNTS back to MongoDB ──
+  try {
+    await SystemConfig.findOneAndUpdate(
+      { key: "RECENT_AMOUNTS" },
+      { $set: { value: genOptions.recentAmounts } },
+      { upsert: true, returnDocument: 'after' }
+    );
+  } catch (e) {
+    console.error("[TradeGen] Error saving RECENT_AMOUNTS:", e);
   }
 
   return trades;
