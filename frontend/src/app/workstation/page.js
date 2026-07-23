@@ -774,9 +774,9 @@ function WorkstationComponent() {
                   <>
                     <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
                     <button 
-                      className={`btn primary ${trade.direction === 'SELL' && trade.settlementType === 'BILATERAL' && !trade.cptySSIAcknowledged ? 'disabled' : ''}`}
-                      disabled={trade.direction === 'SELL' && trade.settlementType === 'BILATERAL' && !trade.cptySSIAcknowledged}
-                      title={trade.direction === 'SELL' && trade.settlementType === 'BILATERAL' && !trade.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''}
+                      className={`btn primary ${selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'disabled' : ''}`}
+                      disabled={selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged}
+                      title={selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''}
                       onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
                     >Approve Settlement</button>
                     <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
