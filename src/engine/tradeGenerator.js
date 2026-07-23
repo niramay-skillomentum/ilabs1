@@ -569,30 +569,62 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let presentedSSIRefId = null;
 
   if (ssiPairData) {
-    // ── REFERENCE DATA PATH (MongoDB-backed) ──
+    // 🚀 REFERENCE DATA PATH (MongoDB-backed) 🚀
     truthSSIRefId = ssiPairData.truthSSIRefId;
     presentedSSIRefId = ssiPairData.presentedSSIRefId;
 
-    truthSettlement = {
-      ...ssiPairData.truthSSI,
-      ssiRefId: ssiPairData.truthSSIRefId,
-      amount: universalTruth.amount,
-      valueDate: universalTruth.valueDate,
-      currency: universalTruth.currency,
-      counterparty: universalTruth.counterparty,
-      paymentReference: sPaymentReference,
-      settlementDate: sSettlementDate,
-      settlementType: ssiPairData.settlementType || derivedSettlementType
-    };
+    if (direction === "SELL") {
+      const allEntities = options.allEntities || [];
+      const entityObj = allEntities.find(e => e.entityName === entity && e.currency === currency);
+      
+      truthSettlement = {
+        ssiRefId: "ENTITY-SSI",
+        beneficiaryName: entityObj ? (entityObj.accountName || entityObj.entityName) : entity,
+        beneficiaryBank: entityObj ? entityObj.accountWithInstitution : "Fallback Bank",
+        beneficiaryBIC: entityObj ? entityObj.bic : "FLLBK00",
+        accountNumber: entityObj ? entityObj.accountNumber : "00000000",
+        accountType: "Nostro",
+        settlementMethod: "SWIFT",
+        correspondentBank: "Fallback Bank",
+        amount: universalTruth.amount,
+        valueDate: universalTruth.valueDate,
+        currency: universalTruth.currency,
+        counterparty: universalTruth.counterparty,
+        paymentReference: sPaymentReference,
+        settlementDate: sSettlementDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
+      
+      presentedSettlement = {
+        ...ssiPairData.presentedSSI,
+        ssiRefId: ssiPairData.presentedSSIRefId,
+        currency: universalTruth.currency,
+        paymentReference: sPaymentReference,
+        settlementDate: bookingValueDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
+    } else {
+      truthSettlement = {
+        ...ssiPairData.truthSSI,
+        ssiRefId: ssiPairData.truthSSIRefId,
+        amount: universalTruth.amount,
+        valueDate: universalTruth.valueDate,
+        currency: universalTruth.currency,
+        counterparty: universalTruth.counterparty,
+        paymentReference: sPaymentReference,
+        settlementDate: sSettlementDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
 
-    presentedSettlement = {
-      ...ssiPairData.presentedSSI,
-      ssiRefId: ssiPairData.presentedSSIRefId,
-      currency: universalTruth.currency,
-      paymentReference: sPaymentReference,
-      settlementDate: bookingValueDate,
-      settlementType: ssiPairData.settlementType || derivedSettlementType
-    };
+      presentedSettlement = {
+        ...ssiPairData.presentedSSI,
+        ssiRefId: ssiPairData.presentedSSIRefId,
+        currency: universalTruth.currency,
+        paymentReference: sPaymentReference,
+        settlementDate: bookingValueDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
+    }
 
     console.log(`[TradeGen] SSI from reference data: truth=${truthSSIRefId}, presented=${presentedSSIRefId}, break=${ssiPairData.breakScenario || 'NONE'}`);
   } else {
@@ -755,10 +787,11 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
 
   let ssiIndex = 0;
 
-  // ── Pre-fetch RECENT_AMOUNTS from MongoDB ──
+  // 🔍 Pre-fetch RECENT_AMOUNTS from MongoDB 🔍
   let recentAmountsDoc = await SystemConfig.findOne({ key: "RECENT_AMOUNTS" });
   let recentAmounts = recentAmountsDoc ? (recentAmountsDoc.value || []) : [];
-  const genOptions = { recentAmounts };
+  const allEntities = await ssiRepository.getAllEntities();
+  const genOptions = { recentAmounts, allEntities };
 
   // 1. Generate Clean Trades ──
   for (let i = 0; i < cleanCount; i++) {
