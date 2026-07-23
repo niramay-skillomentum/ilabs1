@@ -321,6 +321,7 @@ export default function ReconciliationDeskPage() {
   const [valueDateTo, setValueDateTo] = useState("");
   const [amountFrom, setAmountFrom] = useState("");
   const [amountTo, setAmountTo] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({});
 
   // Selection for user-driven matching: at most one LEDGER + one STATEMENT.
   const [selectedLedger, setSelectedLedger] = useState(null);      // itemId
@@ -445,17 +446,17 @@ export default function ReconciliationDeskPage() {
 
   // ============ Client-side filtering (over the allocated set) ============
   const filteredItems = items.filter(i => {
-    if (statusFilter && i.status !== statusFilter) return false;
-    if (sourceFilter && i.source !== sourceFilter) return false;
-    if (deskFilter && i.reconDesk !== deskFilter) return false;
-    if (currencyFilter && !String(i.currency || "").toLowerCase().includes(currencyFilter.toLowerCase())) return false;
-    if (tradeRefFilter && !String(i.itemRef1 || "").toLowerCase().includes(tradeRefFilter.toLowerCase())) return false;
-    if (tradeDateFrom && new Date(i.tradeDate) < new Date(tradeDateFrom)) return false;
-    if (tradeDateTo && new Date(i.tradeDate) > new Date(tradeDateTo)) return false;
-    if (valueDateFrom && new Date(i.valueDate) < new Date(valueDateFrom)) return false;
-    if (valueDateTo && new Date(i.valueDate) > new Date(valueDateTo)) return false;
-    if (amountFrom !== "" && i.amount < Number(amountFrom)) return false;
-    if (amountTo !== "" && i.amount > Number(amountTo)) return false;
+    if (appliedFilters.status && i.status !== appliedFilters.status) return false;
+    if (appliedFilters.source && i.source !== appliedFilters.source) return false;
+    if (appliedFilters.desk && i.reconDesk !== appliedFilters.desk) return false;
+    if (appliedFilters.currency && !String(i.currency || "").toLowerCase().includes(appliedFilters.currency.toLowerCase())) return false;
+    if (appliedFilters.tradeRef && !String(i.itemRef1 || "").toLowerCase().includes(appliedFilters.tradeRef.toLowerCase())) return false;
+    if (appliedFilters.tradeDateFrom && new Date(i.tradeDate) < new Date(appliedFilters.tradeDateFrom)) return false;
+    if (appliedFilters.tradeDateTo && new Date(i.tradeDate) > new Date(appliedFilters.tradeDateTo)) return false;
+    if (appliedFilters.valueDateFrom && new Date(i.valueDate) < new Date(appliedFilters.valueDateFrom)) return false;
+    if (appliedFilters.valueDateTo && new Date(i.valueDate) > new Date(appliedFilters.valueDateTo)) return false;
+    if (appliedFilters.amountFrom !== undefined && appliedFilters.amountFrom !== "" && i.amount < Number(appliedFilters.amountFrom)) return false;
+    if (appliedFilters.amountTo !== undefined && appliedFilters.amountTo !== "" && i.amount > Number(appliedFilters.amountTo)) return false;
     return true;
   });
 
@@ -575,23 +576,25 @@ export default function ReconciliationDeskPage() {
           onChange={(e) => setCurrencyFilter(e.target.value)}
         />
 
+        <span className="filter-label">Trade ID:</span>
         <input
           className="filter-input"
           placeholder="Trade ID..."
+          style={{width: 150}}
           value={tradeRefFilter}
           onChange={(e) => setTradeRefFilter(e.target.value)}
         />
 
-        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+        <div style={{ flexBasis: "100%", height: 10 }}></div>
 
-        <span className="filter-label">T-Date:</span>
+        <span className="filter-label">Trade-Date:</span>
         <input type="date" className="filter-input" style={{width: 110}} value={tradeDateFrom} onChange={e => setTradeDateFrom(e.target.value)} />
         <span className="filter-label" style={{margin: "0 2px"}}>-</span>
         <input type="date" className="filter-input" style={{width: 110}} value={tradeDateTo} onChange={e => setTradeDateTo(e.target.value)} />
 
         <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
 
-        <span className="filter-label">V-Date:</span>
+        <span className="filter-label">Value-Date:</span>
         <input type="date" className="filter-input" style={{width: 110}} value={valueDateFrom} onChange={e => setValueDateFrom(e.target.value)} />
         <span className="filter-label" style={{margin: "0 2px"}}>-</span>
         <input type="date" className="filter-input" style={{width: 110}} value={valueDateTo} onChange={e => setValueDateTo(e.target.value)} />
@@ -603,7 +606,23 @@ export default function ReconciliationDeskPage() {
         <span className="filter-label" style={{margin: "0 2px"}}>-</span>
         <input type="number" className="filter-input" style={{width: 80}} placeholder="Max" value={amountTo} onChange={e => setAmountTo(e.target.value)} />
 
-        <button className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => {
+        <button className="btn btn-primary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
+          setAppliedFilters({
+            status: statusFilter,
+            source: sourceFilter,
+            desk: deskFilter,
+            currency: currencyFilter,
+            tradeRef: tradeRefFilter,
+            tradeDateFrom,
+            tradeDateTo,
+            valueDateFrom,
+            valueDateTo,
+            amountFrom,
+            amountTo
+          });
+        }}>Execute Query</button>
+
+        <button className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
           setStatusFilter(null);
           setSourceFilter(null);
           setDeskFilter("");
@@ -615,6 +634,7 @@ export default function ReconciliationDeskPage() {
           setValueDateTo("");
           setAmountFrom("");
           setAmountTo("");
+          setAppliedFilters({});
         }}>
           ✕ Clear
         </button>

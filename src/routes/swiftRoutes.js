@@ -14,6 +14,7 @@ const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const swift = require("../engine/swift");
 const Trade = require("../models/Trade");
+const SwiftMessage = require("../models/SwiftMessage");
 
 // ======================================
 // POST /generate — Generate SWIFT for a settled trade
@@ -73,6 +74,46 @@ router.get("/trade/:tradeRef", authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error("[SWIFT Route] Get trade messages error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ======================================
+// GET /all — Get all generated SWIFT messages for GCMS
+// ======================================
+router.get("/all", authenticateToken, async (req, res) => {
+  try {
+    const messages = await SwiftMessage.find().sort({ generatedAt: -1 }).lean();
+    
+    // Build display versions for each message
+    const enriched = messages.map(msg => {
+      let displayPayload = "";
+      try {
+        const SwiftRenderer = require("../engine/swift/renderers/SwiftRenderer");
+        displayPayload = SwiftRenderer.renderDisplay(
+          msg.messageType,
+          msg.fieldMap || {},
+          msg.senderBIC,
+          msg.receiverBIC
+        );
+      } catch (e) {
+        displayPayload = msg.messagePayload || "";
+      }
+
+      return {
+        ...msg,
+        displayPayload,
+        messageTitle: getMessageTitle(msg.messageType)
+      };
+    });
+
+    return res.json({
+      success: true,
+      messages: enriched,
+      count: enriched.length
+    });
+  } catch (err) {
+    console.error("[SWIFT Route] Get all messages error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
