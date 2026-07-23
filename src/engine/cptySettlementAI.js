@@ -137,11 +137,24 @@ async function generateResponse(parsedIntent, tradeRef, userMessage) {
     
     // 2. Otherwise, it's a natural language reply. Use LLM to classify intent.
     const sellSystemPrompt = `You are a Counterparty Operations professional replying to a bank's Settlement desk regarding SELL Trade ${trade.tradeRef}.
-We previously sent them our standard settlement instructions and they just replied.
-Parse their reply to determine if they are ACCEPTING/AGREEING to our instructions or REJECTING/DISPUTING them.
-Note: Even if they use the word 'confirm' in their sentence (e.g. "details are incorrect can you pls confirm"), if they are stating the details are wrong, that is a REJECT.
-If they are apologizing and agreeing to proceed (e.g. "Apologies, we confirm now", "Please proceed", "We have verified"), that is an ACCEPT.
-Respond ONLY in this JSON format:
+They just replied to your settlement instructions.
+Your goal is to determine if their reply is ACCEPTING or REJECTING your instructions.
+
+Examples of ACCEPT:
+- "Apologies, we confirm now"
+- "Please proceed"
+- "We have verified, they are correct"
+- "SSIs are correct pls procced"
+- "we have checked again your provided SSIs are correct pls procced"
+
+Examples of REJECT:
+- "details are incorrect can you pls confirm"
+- "wrong account"
+- "incorrect beneficiary"
+- "we cannot confirm"
+
+Analyze the user's message and determine the intent.
+Respond ONLY in this JSON format (no markdown):
 { "intent": "ACCEPT" | "REJECT" }`;
 
     try {
