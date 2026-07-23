@@ -290,10 +290,20 @@ class QueueComposer {
     // Trigger proactive CPTY SSI email for all SELL trades in a SETTLEMENT queue
     if (desk === "SETTLEMENT") {
       const { scheduleProactiveSellSSI } = require("./cptySellSettlementAI");
+      
+      const bilateralSellTrades = queue.filter(t => t.direction === "SELL" && t.settlementType === "BILATERAL");
+      
+      let incorrectTradeId = null;
+      if (bilateralSellTrades.length > 0) {
+        const randomIndex = Math.floor(Math.random() * bilateralSellTrades.length);
+        incorrectTradeId = bilateralSellTrades[randomIndex].tradeRef;
+      }
+
       queue.forEach(t => {
         if (t.direction === "SELL") {
+          const isCorrect = (t.tradeRef !== incorrectTradeId);
           // Fire and forget
-          scheduleProactiveSellSSI(t).catch(e => console.error("Failed to schedule proactive SSI:", e));
+          scheduleProactiveSellSSI(t, isCorrect).catch(e => console.error("Failed to schedule proactive SSI:", e));
         }
       });
     }

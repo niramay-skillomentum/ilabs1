@@ -3,12 +3,9 @@ const Entity = require("../models/Entity");
 const conversationEngine = require("./conversationEngine");
 
 // Schedules a proactive email from the CPTY stating their intent to settle and the SSI they will use
-async function scheduleProactiveSellSSI(trade) {
+async function scheduleProactiveSellSSI(trade, isCorrect = true) {
   // Random delay between 3 and 8 seconds
   const delay = Math.floor(Math.random() * (8000 - 3000 + 1)) + 3000;
-  
-  // Decide whether to give the correct or incorrect SSI (80% correct, 20% incorrect)
-  const isCorrect = Math.random() < 0.8;
   
   const Trade = require("../models/Trade");
   await Trade.updateOne(
