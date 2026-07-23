@@ -83,6 +83,7 @@ async function createLedgerItem(trade) {
     itemRef4: trade.truths?.settlement?.country || null, // Country
     itemRef5: trade.product || null,    // Product
     itemRef6: trade.productType || null, // Product Type
+    itemRef7: trade.counterparty || null, // Counterparty
 
     // SWIFT References — MUST remain NULL for ledger items.
     ref1: null, ref2: null, ref3: null, ref4: null,

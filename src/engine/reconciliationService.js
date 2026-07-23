@@ -45,7 +45,7 @@ async function nextSeq(key) {
   const counter = await Counter.findOneAndUpdate(
     { _id: key },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true }
+    { returnDocument: 'after', upsert: true }
   );
   return counter.seq;
 }
@@ -115,7 +115,7 @@ function countryToDesk(country) {
  */
 function deriveItemType(source, direction) {
   const dir = String(direction || "").toUpperCase().trim();
-  const isDebit = dir === "BUY" || dir === "PAY";
+  const isDebit = dir === "SELL" || dir === "PAY";
 
   if (source === RECON_SOURCE.LEDGER) {
     return isDebit ? RECON_ITEM_TYPE.LEDGER_DEBIT : RECON_ITEM_TYPE.LEDGER_CREDIT;

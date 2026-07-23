@@ -610,6 +610,7 @@ export default function ReconciliationDeskPage() {
                   <th title="Country">Ref4: Country</th>
                   <th title="Product">Ref5: Product</th>
                   <th title="Product Type">Ref6: ProdType</th>
+                  <th title="Counterparty Name">Ref7: Counterparty</th>
                   <th title="Buyer BIC">SWIFT1: BuyerBIC</th>
                   <th title="Seller Account">SWIFT2: SellerAcc</th>
                   <th title="Buyer Account">SWIFT3: BuyerAcc</th>
@@ -669,6 +670,7 @@ export default function ReconciliationDeskPage() {
                     <td className="ref-cell">{item.itemRef4 || "—"}</td>
                     <td className="ref-cell">{item.itemRef5 || "—"}</td>
                     <td className="ref-cell">{item.itemRef6 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef7 || "—"}</td>
                     <td className="ref-cell">{item.ref1 || "—"}</td>
                     <td className="ref-cell">{item.ref2 || "—"}</td>
                     <td className="ref-cell">{item.ref3 || "—"}</td>

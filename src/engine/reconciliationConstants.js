@@ -27,10 +27,10 @@ const RECON_STATUS = Object.freeze({
 
 // Derived item type (never user-entered). Derived from source + direction.
 const RECON_ITEM_TYPE = Object.freeze({
-  LEDGER_CREDIT: "Ledger Credit",
-  LEDGER_DEBIT: "Ledger Debit",
-  STATEMENT_CREDIT: "Statement Credit",
-  STATEMENT_DEBIT: "Statement Debit"
+  LEDGER_CREDIT: "LC",
+  LEDGER_DEBIT: "LD",
+  STATEMENT_CREDIT: "SC",
+  STATEMENT_DEBIT: "SD"
 });
 
 // Reconciliation desk assignment.

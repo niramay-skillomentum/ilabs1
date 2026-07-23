@@ -38,7 +38,7 @@ const ReconciliationItemSchema = new mongoose.Schema({
   // Derived item type (auto-calculated, never user-entered)
   itemType: {
     type: String,
-    enum: ["Ledger Credit", "Ledger Debit", "Statement Credit", "Statement Debit"]
+    enum: ["LC", "LD", "SC", "SD"]
   },
 
   // Trade economics
@@ -66,6 +66,7 @@ const ReconciliationItemSchema = new mongoose.Schema({
   itemRef4: { type: String, default: null },  // Country
   itemRef5: { type: String, default: null },  // Product
   itemRef6: { type: String, default: null },  // Product Type
+  itemRef7: { type: String, default: null },  // Counterparty
 
   // ======================================
   // SWIFT REFERENCES (Statement-level data)
