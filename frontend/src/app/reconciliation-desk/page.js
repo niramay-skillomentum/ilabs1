@@ -661,6 +661,8 @@ export default function ReconciliationDeskPage() {
                   <th title="56A Intermediary">SWIFT6: 56A</th>
                   <th title="Institution Name">SWIFT7: Inst</th>
                   <th title="Bank Name">SWIFT8: Bank</th>
+                  <th title="Field72">SWIFT9: Field72</th>
+                  <th title="Field70">SWIFT10: Field70</th>
                 </tr>
               </thead>
               <tbody>
@@ -721,6 +723,8 @@ export default function ReconciliationDeskPage() {
                     <td className="ref-cell">{item.ref6 || "—"}</td>
                     <td className="ref-cell">{item.ref7 || "—"}</td>
                     <td className="ref-cell">{item.ref8 || "—"}</td>
+                    <td className="ref-cell">{item.ref9 || "—"}</td>
+                    <td className="ref-cell">{item.ref10 || "—"}</td>
                   </tr>
                   );
                 })}

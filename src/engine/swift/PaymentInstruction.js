@@ -31,7 +31,7 @@ function build(trade, ourBank, counterpartySSI) {
     // Economics (always from trade — source of truth)
     amount: trade.amount,
     currency: trade.currency,
-    valueDate: trade.valueDate,
+    valueDate: trade.truths?.settlement?.settlementDate || trade.valueDate,
 
     // Payment direction
     paymentDirection: direction,

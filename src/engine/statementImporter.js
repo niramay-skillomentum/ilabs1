@@ -29,6 +29,8 @@
 
 const repo = require("./reconciliationRepository");
 const reconService = require("./reconciliationService");
+const Entity = require("../models/Entity");
+const SSIReference = require("../models/SSIReference");
 const {
   RECON_SOURCE,
   RECON_STATUS,
@@ -85,6 +87,44 @@ async function createStatementItem(swiftMessage, trade) {
     const buyerAccount = parseAccount(tagValue(fieldMap, SWIFT_TAG.ORDERING_CUSTOMER));
     const sellerAccount = parseAccount(tagValue(fieldMap, SWIFT_TAG.BENEFICIARY_CUSTOMER));
 
+    // Fetch extended bank and counterparty data if trade is available
+    let payerBankName = "Unknown Payer Bank";
+    let receiverBankName = "Unknown Receiver Bank";
+    let payerAcc3 = "000";
+    let payerGroup = "Unknown Payer Group";
+    let receiverGroup = "Unknown Receiver Group";
+
+    if (trade && trade.truths && trade.truths.settlement) {
+      try {
+        const ourBank = await Entity.findOne({ entityCode: trade.entity, currency: trade.currency }).lean();
+        const cptySSI = await SSIReference.findOne({ ssiId: trade.truths.settlement.ssiId }).lean();
+        
+        const ourBankName = ourBank ? ourBank.entityName : "Unknown Our Bank";
+        const ourAcc = ourBank && ourBank.accountNumber ? String(ourBank.accountNumber) : "000";
+        const ourGroup = ourBank ? ourBank.entityName : "Skillomentum";
+        
+        const cptyBankName = cptySSI ? cptySSI.accountWithInstitution || cptySSI.swiftBicCode : "Unknown Cpty Bank";
+        const cptyAcc = cptySSI && cptySSI.accountNumber ? String(cptySSI.accountNumber) : "000";
+        const cptyGroup = cptySSI ? cptySSI.groupCounterPartyName : "Unknown Cpty Group";
+        
+        if (isPay) {
+          payerBankName = ourBankName;
+          receiverBankName = cptyBankName;
+          payerAcc3 = ourAcc.length >= 3 ? ourAcc.slice(-3) : ourAcc.padStart(3, '0');
+          payerGroup = ourGroup;
+          receiverGroup = cptyGroup;
+        } else {
+          payerBankName = cptyBankName;
+          receiverBankName = ourBankName;
+          payerAcc3 = cptyAcc.length >= 3 ? cptyAcc.slice(-3) : cptyAcc.padStart(3, '0');
+          payerGroup = cptyGroup;
+          receiverGroup = ourGroup;
+        }
+      } catch (e) {
+        console.warn("[StatementCreation] Error fetching entity/ssi for ref mappings", e);
+      }
+    }
+
     const item = await repo.createItem({
       itemId,
       status: RECON_STATUS.OUTSTANDING,
@@ -115,10 +155,10 @@ async function createStatementItem(swiftMessage, trade) {
       ref4: sellerBIC || null,                                  // Seller BIC
       ref5: txnRef || null,                                    // Field 20/21 (Transaction Ref)
       ref6: firstLine(tagValue(fieldMap, SWIFT_TAG.INTERMEDIARY)),      // 56A Intermediary
-      ref7: parseBIC(tagValue(fieldMap, SWIFT_TAG.ACCOUNT_WITH_INST))
-            || firstLine(tagValue(fieldMap, SWIFT_TAG.ACCOUNT_WITH_INST)), // 57A Institution
-      ref8: parseBIC(tagValue(fieldMap, SWIFT_TAG.ORDERING_INSTITUTION))
-            || parseBIC(tagValue(fieldMap, SWIFT_TAG.BENEFICIARY_INSTITUTION)) // 52A/58A Bank
+      ref7: `${receiverBankName} // ${payerBankName} // ${payerAcc3}`,
+      ref8: `${receiverGroup} // ${payerGroup}`,
+      ref9: tagValue(fieldMap, SWIFT_TAG.SENDER_TO_RECEIVER) || null,   // Field 72
+      ref10: tagValue(fieldMap, SWIFT_TAG.REMITTANCE_INFO) || null      // Field 70
     });
 
     console.log(`[StatementCreation] Created statement item ${itemId} (${swiftMessage.messageType}, Ref=${txnRef || "n/a"})`);
