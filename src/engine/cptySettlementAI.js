@@ -161,11 +161,10 @@ Respond ONLY in this JSON format (no markdown):
       const llmResult = await llmService.generateResponse(sellSystemPrompt, userMessage);
       
       let intent = "ACCEPT"; // default fallback
-      try {
-        const parsed = JSON.parse(llmResult.body.replace(/\`\`\`json/g, "").replace(/\`\`\`/g, ""));
-        if (parsed.intent) intent = parsed.intent;
-      } catch(e) {
-        if (llmResult.body.includes("REJECT")) intent = "REJECT";
+      if (llmResult && llmResult.intent) {
+        intent = llmResult.intent;
+      } else if (llmResult && typeof llmResult === "string" && llmResult.includes("REJECT")) {
+        intent = "REJECT";
       }
       
       if (intent === "ACCEPT") {
