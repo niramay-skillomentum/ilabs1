@@ -144,6 +144,7 @@ async function importEntityData(importBatch) {
     const bic = String(row[4] || "").trim();
     const accountName = String(row[5] || "").trim();
     const accountNumber = String(row[6] || "").trim();
+    const accountWithInstitution = String(row[7] || "").trim();
 
     if (!entityName || !currency) {
       stats.entities.skipped++;
@@ -156,8 +157,8 @@ async function importEntityData(importBatch) {
       currency,
       address,
       bic: bic || null,
-      accountName: accountName || null,
       accountNumber: accountNumber || null,
+      accountWithInstitution: accountWithInstitution || null,
       region: deriveRegion(entityName, address),
       importBatch,
       importedAt: new Date()
@@ -228,7 +229,7 @@ async function importSSIReference(importBatch) {
 
   const workbook = XLSX.readFile(SSI_FILE);
   const sheetName = "Final Table";
-  
+
   if (!workbook.SheetNames.includes(sheetName)) {
     console.error(`  ❌ Sheet "${sheetName}" not found. Available: ${workbook.SheetNames.join(", ")}`);
     return;
@@ -590,7 +591,7 @@ async function main() {
   console.log(`  SSI References:  ${stats.ssi.inserted} records`);
   console.log(`  Securities:      ${stats.securities.inserted} records`);
   console.log(`  Counterparties:  ${stats.counterparties.inserted} records`);
-  
+
   const totalErrors = stats.ssi.errors.length + stats.securities.errors.length + stats.counterparties.errors.length + stats.entities.errors.length;
   if (totalErrors > 0) {
     console.log(`\n  ⚠️ ${totalErrors} error(s) encountered during import. Review logs above.`);

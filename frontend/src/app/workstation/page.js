@@ -107,7 +107,7 @@ const SessionClock = memo(function SessionClock({ sessionExpiry, sessionStart, o
       currentSimTime.setHours(9, 0, 0, 0);
       currentSimTime.setTime(currentSimTime.getTime() + elapsedMs);
       const pad = (n) => String(n).padStart(2, "0");
-      setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth()+1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
+      setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth() + 1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
 
       const totalMinutesLeft = Math.floor(diff / (1000 * 60));
       if (totalMinutesLeft <= 60 && !alert1hrShown.current) {
@@ -152,11 +152,11 @@ const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewS
       <td>{t.product}</td>
       <td>{t.productType || ''}</td>
       <td>{t.tradeType}</td>
-      <td style={{maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis'}} title={t.underlyer || ''}>{t.underlyer || ''}</td>
+      <td style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.underlyer || ''}>{t.underlyer || ''}</td>
       <td>{t.settlementType}</td>
       {desk === "SETTLEMENT" && (
         <td>
-          <button className="btn secondary" style={{padding: "4px 8px", fontSize: "11px", margin: 0}} onClick={(e) => { e.stopPropagation(); onViewSSI(t); }}>View SSI</button>
+          <button className="btn secondary" style={{ padding: "4px 8px", fontSize: "11px", margin: 0 }} onClick={(e) => { e.stopPropagation(); onViewSSI(t); }}>View SSI</button>
         </td>
       )}
       <td>{t.direction}</td>
@@ -231,7 +231,7 @@ function WorkstationComponent() {
           if (data.sessionStart) setSessionStart(data.sessionStart);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }, [desk]);
 
   // (F4) Debounce so a burst of new_email/trade_update events collapses into one fetch.
@@ -243,7 +243,7 @@ function WorkstationComponent() {
   useEffect(() => {
     const uid = loadUserId();
     const dsk = searchParams.get("desk");
-    
+
     if (!dsk) {
       toast.error("Select desk first");
       router.push("/dashboard");
@@ -440,7 +440,7 @@ function WorkstationComponent() {
         setSelectedSsiId("");
         setSsiGroupList([]);
         refreshQueueSilent();
-        setPopupState({type: null});
+        setPopupState({ type: null });
       } else {
         toast.error(data.error || "Failed to send for amendment");
       }
@@ -455,7 +455,7 @@ function WorkstationComponent() {
       "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "CP Group", "Counterparty", "Entity", "FO Region",
       "Product", "Product Type", "Trade Type", "Underlyer"
     ];
-    
+
     let headers = [...baseHeaders, "Settlement Mode"];
     if (desk === "SETTLEMENT") {
       headers = headers.concat(["SSI ID", "Beneficiary Name", "Beneficiary BIC", "Account Number", "Account Type", "Settlement Method", "Direction", "Currency", "Amount"]);
@@ -466,11 +466,11 @@ function WorkstationComponent() {
     let csv = headers.join(",") + "\n";
     queue.forEach(t => {
       let row = [
-        t.tradeRef, t.currentStatus, t.nextDesk, t.age, format(t.tradeDate), format(t.valueDate), 
+        t.tradeRef, t.currentStatus, t.nextDesk, t.age, format(t.tradeDate), format(t.valueDate),
         t.counterpartyGroup || "", t.counterparty, t.entity, t.foRegion, t.product, t.productType || "", t.tradeType, t.underlyer || "",
         t.settlementType || ""
       ];
-      
+
       if (desk === "SETTLEMENT") {
         row = row.concat([
           t.ssiId || "",
@@ -486,7 +486,7 @@ function WorkstationComponent() {
       } else {
         row = row.concat([t.direction, t.currency, t.amount]);
       }
-      
+
       csv += row.join(",") + "\n";
     });
     const blob = new Blob([csv], { type: "text/csv" });
@@ -502,12 +502,12 @@ function WorkstationComponent() {
     if (!selectedTrade) return toast.error("Select trade first");
     const res = await fetch("/api/audit/" + selectedTrade.tradeRef, { headers: authHeaders() });
     const data = await res.json();
-    
+
     const trail = data.trail || data;
     const auditArray = Array.isArray(trail) ? trail : [];
-    setAuditData({ 
-      xml: data.xmlAudit || null, 
-      trail: auditArray.filter(a => a.action !== "SYSTEM_GENERATED") 
+    setAuditData({
+      xml: data.xmlAudit || null,
+      trail: auditArray.filter(a => a.action !== "SYSTEM_GENERATED")
     });
     setPopupState({ type: "audit" });
   };
@@ -594,7 +594,7 @@ function WorkstationComponent() {
   const sendEmail = async () => {
     if (!selectedTrade) return toast.error("Select trade first");
     if (!emailText || emailText.trim() === "") return toast.error("Email content required");
-    
+
     setIsSendingEmail(true);
     if (popupState.action === "CONFIRM_SEND_TO_CPTY") {
       const res = await fetch("/api/trade/action", {
@@ -609,7 +609,7 @@ function WorkstationComponent() {
       refreshQueueSilent();
       return;
     }
-    
+
     // Generic
     const res = await fetch("/api/conversation/send", {
       method: "POST", headers: authHeaders(),
@@ -625,8 +625,8 @@ function WorkstationComponent() {
 
   const viewTruth = () => {
     if (!selectedTrade) return toast.error("Select trade first");
-    const truthContent = selectedTrade.truths ? JSON.stringify(selectedTrade.truths, null, 2) : 
-                        selectedTrade.truth ? JSON.stringify(selectedTrade.truth, null, 2) : "No truths object found for this trade.";
+    const truthContent = selectedTrade.truths ? JSON.stringify(selectedTrade.truths, null, 2) :
+      selectedTrade.truth ? JSON.stringify(selectedTrade.truth, null, 2) : "No truths object found for this trade.";
     setAuditData({ xml: truthContent, trail: [] });
     setPopupState({ type: "truth" });
   };
@@ -680,17 +680,17 @@ function WorkstationComponent() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{__html: WORKSTATION_STYLE}}/>
+      <style dangerouslySetInnerHTML={{ __html: WORKSTATION_STYLE }} />
 
-      {popupState.type && <div className="overlay" onClick={() => setPopupState({type: null})}></div>}
+      {popupState.type && <div className="overlay" onClick={() => setPopupState({ type: null })}></div>}
 
       <div className="topbar" style={{ background: desk === "SETTLEMENT" ? "#3A1F1F" : desk === "CONFIRMATION" ? "#1E3A5F" : "#0B1F3A" }}>
         <div className="desk-title">{desk} Desk | Welcome, {userId}</div>
         <div>
-          {desk === "MO" && <button className="btn" onClick={openTermsheet} style={{background:"#f59e0b", color:"white", marginRight: "10px"}}>📄 View Termsheet</button>}
+          {desk === "MO" && <button className="btn" onClick={openTermsheet} style={{ background: "#f59e0b", color: "white", marginRight: "10px" }}>📄 View Termsheet</button>}
           <button className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
           {desk === "SETTLEMENT" && (
-            <button className="btn" style={{background:"#0f766e", color:"white", marginLeft:"10px"}}
+            <button className="btn" style={{ background: "#0f766e", color: "white", marginLeft: "10px" }}
               onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
               🖥️ System Mailbox
             </button>
@@ -709,10 +709,10 @@ function WorkstationComponent() {
           <button className="btn warning" onClick={generateQueue} disabled={isGeneratingQueue} style={{ margin: 0 }}>
             {isGeneratingQueue ? "Generating..." : "Generate Queue"}
           </button>
-          
+
           <TutorialPanel desk={desk} />
         </div>
-        
+
         <div className="table-container">
           <table>
             <thead>
@@ -744,7 +744,7 @@ function WorkstationComponent() {
         <div className="action-bar">
           <div>
             {selectedTrade?.tradeType === "ELECTRONIC" ? (
-              <div style={{color: '#dc2626', fontWeight: 600, fontSize: '13px', marginLeft: '12px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px'}}>
+              <div style={{ color: '#dc2626', fontWeight: 600, fontSize: '13px', marginLeft: '12px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px' }}>
                 ⚠️ Actions for Electronic trades must be performed in the STCC Electronic Settlement dashboard.
               </div>
             ) : (
@@ -763,9 +763,9 @@ function WorkstationComponent() {
                     <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
                     <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
                     <button className="btn primary" onClick={() => {
-                      if(!selectedTrade) return toast.error("Select a trade first");
+                      if (!selectedTrade) return toast.error("Select a trade first");
                       if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
-                      const mailParams = new URLSearchParams({desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO"});
+                      const mailParams = new URLSearchParams({ desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO" });
                       window.open("/communication?" + mailParams.toString(), "mailbox_tab");
                     }}>Escalate to FO</button>
                   </>
@@ -773,7 +773,7 @@ function WorkstationComponent() {
                 {desk === "SETTLEMENT" && (
                   <>
                     <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
-                    <button 
+                    <button
                       className={`btn primary ${selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'disabled' : ''}`}
                       disabled={selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged}
                       title={selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''}
@@ -781,8 +781,8 @@ function WorkstationComponent() {
                     >Approve Settlement</button>
                     <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                     <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                    <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
-                    <button className="btn" style={{background:"#1a1a1a", color:"white", border:"none", marginLeft: "8px"}} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
+                    <button className="btn secondary" style={{ backgroundColor: "#0f766e", color: "white", border: "none" }} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
+                    <button className="btn" style={{ background: "#1a1a1a", color: "white", border: "none", marginLeft: "8px" }} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
                   </>
                 )}
               </>
@@ -792,9 +792,9 @@ function WorkstationComponent() {
             <button className="btn secondary" onClick={downloadCSV}>Download Excel</button>
             <button className="btn secondary" onClick={openAudit}>Audit</button>
             <button className="btn secondary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
-            <button className="btn secondary" style={{backgroundColor:"#8b5cf6", color:"white", border:"none"}} onClick={viewTruth}>👁️ View Truth</button>
+            <button className="btn secondary" style={{ backgroundColor: "#8b5cf6", color: "white", border: "none" }} onClick={viewTruth}>👁️ View Truth</button>
             {selectedTrade?.currentStatus === "SETTLED" && (
-              <button className="btn" style={{background:"linear-gradient(135deg, #0d9488 0%, #0f766e 100%)", color:"white", border:"none", fontWeight: 600}} onClick={viewSwift} disabled={isLoadingSwift}>
+              <button className="btn" style={{ background: "linear-gradient(135deg, #0d9488 0%, #0f766e 100%)", color: "white", border: "none", fontWeight: 600 }} onClick={viewSwift} disabled={isLoadingSwift}>
                 {isLoadingSwift ? "Loading..." : "📄 View SWIFT"}
               </button>
             )}
@@ -806,12 +806,12 @@ function WorkstationComponent() {
       </div>
 
       {popupState.type === "action" && (
-        <div className="popup" style={{display: 'block'}}>
-          <h3 style={{marginBottom: '10px'}}>{popupState.action?.replace(/_/g, ' ')}</h3>
-          <div style={{color: '#475569', fontSize: '14px', marginBottom: '15px'}}>Are you sure you want to proceed with this action?</div>
+        <div className="popup" style={{ display: 'block' }}>
+          <h3 style={{ marginBottom: '10px' }}>{popupState.action?.replace(/_/g, ' ')}</h3>
+          <div style={{ color: '#475569', fontSize: '14px', marginBottom: '15px' }}>Are you sure you want to proceed with this action?</div>
           <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add comment (recommended for audit & scoring)"></textarea>
-          <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
-            <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSubmittingAction}>Cancel</button>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+            <button className="btn secondary" onClick={() => setPopupState({ type: null })} disabled={isSubmittingAction}>Cancel</button>
             <button className="btn primary" onClick={submitAction} disabled={isSubmittingAction}>
               {isSubmittingAction ? "Submitting..." : "Submit"}
             </button>
@@ -820,11 +820,11 @@ function WorkstationComponent() {
       )}
 
       {popupState.type === "email" && (
-        <div className="popup" style={{display: 'block'}}>
-          <h3 style={{marginBottom: '15px'}}>Send Email</h3>
+        <div className="popup" style={{ display: 'block' }}>
+          <h3 style={{ marginBottom: '15px' }}>Send Email</h3>
           <textarea value={emailText} onChange={e => setEmailText(e.target.value)} placeholder="Type your email body here..."></textarea>
-          <div style={{display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end'}}>
-            <button className="btn secondary" onClick={() => setPopupState({type: null})} disabled={isSendingEmail}>Cancel</button>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+            <button className="btn secondary" onClick={() => setPopupState({ type: null })} disabled={isSendingEmail}>Cancel</button>
             <button className="btn primary" onClick={sendEmail} disabled={isSendingEmail}>
               {isSendingEmail ? "Sending..." : "Send"}
             </button>
@@ -833,17 +833,17 @@ function WorkstationComponent() {
       )}
 
       {(popupState.type === "audit" || popupState.type === "truth") && (
-        <div className="popup" style={{display: 'block', width: '550px'}}>
+        <div className="popup" style={{ display: 'block', width: '550px' }}>
           <h3>{popupState.type === "truth" ? "Underlying Truths (Testing Only)" : "Audit Trail"}</h3>
           <div id="auditContent">
             {auditData.xml && (
-              <pre className="xml-section" style={{marginBottom: "15px"}}>{auditData.xml}</pre>
+              <pre className="xml-section" style={{ marginBottom: "15px" }}>{auditData.xml}</pre>
             )}
             {auditData.trail.length > 0 ? (
               auditData.trail.map((a, i) => (
                 <div key={i} className={`audit-card ${a.isAutomated ? "system" : ""}`}>
                   <div className="audit-header">
-                    <strong>{a.userId || 'System'}</strong> 
+                    <strong>{a.userId || 'System'}</strong>
                     <span>{new Date(a.timestamp).toLocaleString()}</span>
                   </div>
                   <div className="audit-action">{a.action}</div>
@@ -851,10 +851,10 @@ function WorkstationComponent() {
                 </div>
               ))
             ) : (
-              !auditData.xml && <p style={{color:'#94a3b8'}}>No audit entries yet.</p>
+              !auditData.xml && <p style={{ color: '#94a3b8' }}>No audit entries yet.</p>
             )}
           </div>
-          <button onClick={() => setPopupState({type: null})}>Close</button>
+          <button onClick={() => setPopupState({ type: null })}>Close</button>
         </div>
       )}
 
@@ -866,112 +866,112 @@ function WorkstationComponent() {
         const DASH = "─".repeat(62);
 
         return (
-          <div className="popup" style={{display: 'block', width: '680px', maxHeight: '90vh', overflowY: 'auto', padding: '0'}}>
-            <div style={{padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isCorrespondent ? '#1E3A5F' : '#0B1F3A'}}>
-              <h3 style={{margin: 0, color: 'white', fontSize: '15px'}}>
+          <div className="popup" style={{ display: 'block', width: '680px', maxHeight: '90vh', overflowY: 'auto', padding: '0' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isCorrespondent ? '#1E3A5F' : '#0B1F3A' }}>
+              <h3 style={{ margin: 0, color: 'white', fontSize: '15px' }}>
                 Standard Settlement Instruction ({settlType})
               </h3>
-              <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-                {sd.alertCode && (
-                  <div style={{background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white"}}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {sd.alertCode && popupState.trade.direction !== 'SELL' && (
+                  <div style={{ background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white" }}>
                     Alert: {sd.alertCode}
                   </div>
                 )}
-                {sd.alertAcronym && (
-                  <div style={{background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white"}}>
+                {sd.alertAcronym && popupState.trade.direction !== 'SELL' && (
+                  <div style={{ background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white" }}>
                     Acronym: {sd.alertAcronym}
                   </div>
                 )}
                 {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
-                  <button onClick={handleSendToSystemAmendment} style={{padding: "4px 10px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer", fontWeight: 600}}>Send to System for Amendment</button>
+                  <button onClick={handleSendToSystemAmendment} style={{ padding: "4px 10px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Send to System for Amendment</button>
                 )}
-                <span style={{background: isCorrespondent ? '#f59e0b' : '#22c55e', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700}}>
+                <span style={{ background: isCorrespondent ? '#f59e0b' : '#22c55e', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>
                   {settlType}
                 </span>
               </div>
             </div>
 
-            <div style={{fontFamily: "'Consolas', 'Courier New', monospace", fontSize: '13px', backgroundColor: '#fdfdfd', padding: '20px 24px', color: '#1e293b', lineHeight: '1.7'}}>
+            <div style={{ fontFamily: "'Consolas', 'Courier New', monospace", fontSize: '13px', backgroundColor: '#fdfdfd', padding: '20px 24px', color: '#1e293b', lineHeight: '1.7' }}>
               {!isEditingSSI ? (
                 <>
                   {/* Header */}
-                  <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
-                  <div style={{fontWeight: 'bold', fontSize: '14px', padding: '4px 0', background: '#f1f5f9', textAlign: 'center'}}>
+                  <div style={{ color: '#64748b', fontSize: '12px', letterSpacing: '1px' }}>{LINE}</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '14px', padding: '4px 0', background: '#f1f5f9', textAlign: 'center' }}>
                     STANDARD SETTLEMENT INSTRUCTION ({settlType} SETTLEMENT)
                   </div>
-                  <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
+                  <div style={{ color: '#64748b', fontSize: '12px', letterSpacing: '1px' }}>{LINE}</div>
 
                   {/* SSI ID & Currency & Asset Class */}
-                  <div style={{padding: '8px 0'}}>
+                  <div style={{ padding: '8px 0' }}>
                     {(popupState.trade.ssiId || sd.ssiId) && (
-                      <div style={{marginBottom: '6px'}}><strong style={{display: 'inline-block', width: '200px', color: '#0f766e'}}>SSI ID:</strong> <span style={{color: '#0f766e', fontWeight: 'bold', fontSize: '14px'}}>{popupState.trade.ssiId || sd.ssiId}</span></div>
+                      <div style={{ marginBottom: '6px' }}><strong style={{ display: 'inline-block', width: '200px', color: '#0f766e' }}>SSI ID:</strong> <span style={{ color: '#0f766e', fontWeight: 'bold', fontSize: '14px' }}>{popupState.trade.ssiId || sd.ssiId}</span></div>
                     )}
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Currency:</strong> {sd.currency || popupState.trade.currency}</div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Asset Class:</strong> {popupState.trade.product || 'FX / Cash'}</div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Product Type:</strong> {popupState.trade.productType || ''}</div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Underlyer:</strong> {popupState.trade.underlyer || 'N/A'}</div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Settlement Method:</strong> {sd.settlementMethod || 'SWIFT'}</div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Currency:</strong> {sd.currency || popupState.trade.currency}</div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Asset Class:</strong> {popupState.trade.product || 'FX / Cash'}</div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Product Type:</strong> {popupState.trade.productType || ''}</div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Underlyer:</strong> {popupState.trade.underlyer || 'N/A'}</div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Settlement Method:</strong> {sd.settlementMethod || 'SWIFT'}</div>
                     {sd.counterpartyName && (
-                      <div><strong style={{display: 'inline-block', width: '200px'}}>Counterparty:</strong> {sd.counterpartyName}</div>
+                      <div><strong style={{ display: 'inline-block', width: '200px' }}>Counterparty:</strong> {sd.counterpartyName}</div>
                     )}
                   </div>
-                  <div style={{color: '#cbd5e1', letterSpacing: '1px'}}>{DASH}</div>
+                  <div style={{ color: '#cbd5e1', letterSpacing: '1px' }}>{DASH}</div>
 
                   {/* Agent Bank Section (Correspondent only) */}
                   {isCorrespondent && (
                     <>
-                      <div style={{padding: '8px 0'}}>
-                        <div style={{color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px'}}>▎ Agent / Intermediary Bank</div>
-                        <div><strong style={{display: 'inline-block', width: '200px'}}>Agent Bank (Inter):</strong> <span style={{color: '#0f172a'}}>{sd.intermediaryBIC || ''} ({sd.intermediaryBank || sd.correspondentBank || ''})</span></div>
-                        <div><strong style={{display: 'inline-block', width: '200px'}}>Account at Agent:</strong> <span style={{color: '#0f172a'}}>{sd.intermediaryAccount || ''}</span></div>
+                      <div style={{ padding: '8px 0' }}>
+                        <div style={{ color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px' }}>▎ Agent / Intermediary Bank</div>
+                        <div><strong style={{ display: 'inline-block', width: '200px' }}>Agent Bank (Inter):</strong> <span style={{ color: '#0f172a' }}>{sd.intermediaryBIC || ''} ({sd.intermediaryBank || sd.correspondentBank || ''})</span></div>
+                        <div><strong style={{ display: 'inline-block', width: '200px' }}>Account at Agent:</strong> <span style={{ color: '#0f172a' }}>{sd.intermediaryAccount || ''}</span></div>
                       </div>
-                      <div style={{color: '#cbd5e1', letterSpacing: '1px'}}>{DASH}</div>
+                      <div style={{ color: '#cbd5e1', letterSpacing: '1px' }}>{DASH}</div>
                     </>
                   )}
 
                   {/* Beneficiary Bank Section */}
-                  <div style={{padding: '8px 0'}}>
-                    <div style={{color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px'}}>▎ Beneficiary Bank</div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Beneficiary Bank:</strong> <span style={{color: '#0f172a'}}>{sd.beneficiaryBIC || ''} ({sd.beneficiaryBank || ''})</span></div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Account Number/IBAN:</strong> <span style={{color: '#0f172a'}}>{sd.accountNumber || ''}</span></div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Beneficiary Name:</strong> <span style={{color: '#0f172a'}}>{sd.beneficiaryName || ''}</span></div>
-                    <div><strong style={{display: 'inline-block', width: '200px'}}>Account Type:</strong> <span style={{color: '#0f172a'}}>{sd.accountType || ''}</span></div>
+                  <div style={{ padding: '8px 0' }}>
+                    <div style={{ color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px' }}>▎ Beneficiary Bank</div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Beneficiary Bank:</strong> <span style={{ color: '#0f172a' }}>{sd.beneficiaryBIC || ''} ({sd.beneficiaryBank || ''})</span></div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Account Number/IBAN:</strong> <span style={{ color: '#0f172a' }}>{sd.accountNumber || ''}</span></div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Beneficiary Name:</strong> <span style={{ color: '#0f172a' }}>{sd.beneficiaryName || ''}</span></div>
+                    <div><strong style={{ display: 'inline-block', width: '200px' }}>Account Type:</strong> <span style={{ color: '#0f172a' }}>{sd.accountType || ''}</span></div>
                     {sd.country && (
-                      <div><strong style={{display: 'inline-block', width: '200px'}}>Country:</strong> <span style={{color: '#0f172a'}}>{sd.country}</span></div>
+                      <div><strong style={{ display: 'inline-block', width: '200px' }}>Country:</strong> <span style={{ color: '#0f172a' }}>{sd.country}</span></div>
                     )}
                   </div>
-                  <div style={{color: '#cbd5e1', letterSpacing: '1px'}}>{DASH}</div>
+                  <div style={{ color: '#cbd5e1', letterSpacing: '1px' }}>{DASH}</div>
 
                   {/* Notes */}
-                  <div style={{padding: '8px 0'}}>
-                    <div style={{color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px'}}>▎ Notes</div>
-                    <div style={{color: '#475569'}}>
+                  <div style={{ padding: '8px 0' }}>
+                    <div style={{ color: '#1E3A5F', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px' }}>▎ Notes</div>
+                    <div style={{ color: '#475569' }}>
                       {isCorrespondent
                         ? `Route via ${sd.intermediaryBank || sd.correspondentBank || 'Agent Bank'}. ${sd.intermediaryBank || 'Agent'} will credit ${sd.beneficiaryBank || 'Beneficiary Bank'}'s ledger before final credit.`
                         : `Direct settlement. Funds credit the beneficiary's account directly at ${sd.beneficiaryBank || 'the beneficiary bank'}.`
                       }
                     </div>
                     {sd.field72 && (
-                      <div style={{marginTop: '4px', color: '#64748b', fontSize: '12px'}}>Field 72: {sd.field72}</div>
+                      <div style={{ marginTop: '4px', color: '#64748b', fontSize: '12px' }}>Field 72: {sd.field72}</div>
                     )}
                   </div>
-                  <div style={{color: '#64748b', fontSize: '12px', letterSpacing: '1px'}}>{LINE}</div>
+                  <div style={{ color: '#64748b', fontSize: '12px', letterSpacing: '1px' }}>{LINE}</div>
 
                   {/* Ref IDs */}
                   {popupState.trade.truthSSIRefId && (
-                    <div style={{marginTop: '8px', fontSize: '11px', color: '#94a3b8'}}>
+                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8' }}>
                       Truth Ref: {popupState.trade.truthSSIRefId} | Presented Ref: {popupState.trade.presentedSSIRefId}
                     </div>
                   )}
 
                   {/* SSI ID Selection Dropdown — shown for settlement breaks */}
                   {ssiGroupList.length > 0 && ['SETTLEMENT_BREAK', 'REJECTED_REVERIFY'].includes(popupState.trade.currentStatus) && (
-                    <div style={{marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', border: '1px solid #f59e0b'}}>
-                      <div style={{fontWeight: 'bold', fontSize: '13px', color: '#92400e', marginBottom: '8px'}}>⚠️ Select SSI ID for Amendment</div>
+                    <div style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', border: '1px solid #f59e0b' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#92400e', marginBottom: '8px' }}>⚠️ Select SSI ID for Amendment</div>
                       <select
                         value={selectedSsiId}
                         onChange={e => setSelectedSsiId(e.target.value)}
-                        style={{width: '100%', padding: '8px', border: '1px solid #d97706', borderRadius: '4px', fontSize: '13px', background: 'white', marginBottom: '8px'}}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #d97706', borderRadius: '4px', fontSize: '13px', background: 'white', marginBottom: '8px' }}
                       >
                         <option value="">-- Select an SSI ID --</option>
                         {ssiGroupList.map((ssi, idx) => (
@@ -981,7 +981,7 @@ function WorkstationComponent() {
                         ))}
                       </select>
                       {selectedSsiId && (
-                        <div style={{fontSize: '11px', color: '#78716c'}}>
+                        <div style={{ fontSize: '11px', color: '#78716c' }}>
                           Selected: <strong>{selectedSsiId}</strong>
                         </div>
                       )}
@@ -989,24 +989,24 @@ function WorkstationComponent() {
                   )}
                 </>
               ) : (
-                <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {["beneficiaryName", "accountNumber", "accountType", "beneficiaryBank", "beneficiaryBIC", "settlementMethod", "correspondentBank", "intermediaryBank", "intermediaryBIC", "intermediaryAccount"].map(field => (
-                    <div key={field} style={{display: "flex", alignItems: "center"}}>
-                      <label style={{width: "180px", fontWeight: "bold"}}>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
-                      <input 
-                        style={{flex: 1, padding: "6px", border: "1px solid #cbd5e1", borderRadius: "4px"}}
+                    <div key={field} style={{ display: "flex", alignItems: "center" }}>
+                      <label style={{ width: "180px", fontWeight: "bold" }}>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</label>
+                      <input
+                        style={{ flex: 1, padding: "6px", border: "1px solid #cbd5e1", borderRadius: "4px" }}
                         value={ssiFormData[field] || ""}
-                        onChange={e => setSsiFormData({...ssiFormData, [field]: e.target.value})}
+                        onChange={e => setSsiFormData({ ...ssiFormData, [field]: e.target.value })}
                       />
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <div style={{display: 'flex', justifyContent: 'flex-end', padding: '12px 24px', gap: '10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc'}}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 24px', gap: '10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
               {!isEditingSSI ? (
                 <>
-                  <button className="btn secondary" onClick={() => setPopupState({type: null})}>Close</button>
+                  <button className="btn secondary" onClick={() => setPopupState({ type: null })}>Close</button>
                   {['SETTLEMENT_BREAK', 'REJECTED_REVERIFY'].includes(popupState.trade.currentStatus) && (
                     <button className="btn primary" onClick={handleSendToSystemAmendment} disabled={ssiGroupList.length > 0 && !selectedSsiId}>
                       Send to System for Amendment
@@ -1108,19 +1108,19 @@ function WorkstationComponent() {
         };
 
         return (
-          <div className="popup" style={{display: 'block', width: '1000px', maxWidth: '96vw', maxHeight: '92vh', overflowY: 'auto', padding: '0', borderRadius: '8px', border: '1px solid #ccc', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', background: 'white' }}>
+          <div className="popup" style={{ display: 'block', width: '1000px', maxWidth: '96vw', maxHeight: '92vh', overflowY: 'auto', padding: '0', borderRadius: '8px', border: '1px solid #ccc', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', background: 'white' }}>
 
             {/* Title Bar */}
-            <div style={{padding: '14px 24px', background: 'white', borderBottom: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                <span style={{fontSize: '22px', fontWeight: 700, color: '#1e293b'}}>{msgType} Swift Message</span>
+            <div style={{ padding: '14px 24px', background: 'white', borderBottom: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>{msgType} Swift Message</span>
               </div>
-              <button onClick={() => { setPopupState({type: null}); setSwiftData(null); }}
-                style={{background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#94a3b8', fontWeight: 700, lineHeight: 1}}>&times;</button>
+              <button onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}
+                style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#94a3b8', fontWeight: 700, lineHeight: 1 }}>&times;</button>
             </div>
 
             {/* Description bar */}
-            <div style={{padding: '12px 24px', background: '#fafafa', borderBottom: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', lineHeight: '1.6'}}>
+            <div style={{ padding: '12px 24px', background: '#fafafa', borderBottom: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
               {msgType === "MT103" && "An MT103 is a standardized SWIFT message used by banks to confirm an international wire transfer, known as a \"Single Customer Credit Transfer\". It contains all necessary details for cross-border payments, such as sender and receiver information, currency, amount, and transaction references, making it a vital tool for communication, tracking, and proof of payment within the SWIFT network."}
               {msgType === "MT202" && "An MT202 is a SWIFT message for General Financial Institution Transfers — bank-to-bank payments. It is used to order the movement of funds between financial institutions and does not carry customer payment details."}
               {msgType === "MT202COV" && "An MT202 COV (Cover Payment) is a SWIFT message used for the cover leg of a customer credit transfer. It carries the interbank routing details (Sequence A) alongside the underlying customer payment information (Sequence B) from the paired MT103."}
@@ -1128,7 +1128,7 @@ function WorkstationComponent() {
 
             {/* Tabs if multiple messages */}
             {messages.length > 1 && (
-              <div style={{display: 'flex', borderBottom: '2px solid #e2e8f0', background: 'white'}}>
+              <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', background: 'white' }}>
                 {messages.map((m, idx) => (
                   <button key={idx} onClick={() => setSwiftActiveTab(idx)}
                     style={{
@@ -1146,14 +1146,14 @@ function WorkstationComponent() {
             )}
 
             {/* Main Content — split into message (left) + field reference (right) */}
-            <div style={{display: 'flex', gap: '0', borderBottom: '1px solid #e2e8f0'}}>
+            <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid #e2e8f0' }}>
 
               {/* LEFT: SWIFT Message Body */}
-              <div style={{flex: '1 1 55%', padding: '20px 24px', borderRight: '1px solid #e2e8f0', maxHeight: '500px', overflowY: 'auto', background: 'white'}}>
+              <div style={{ flex: '1 1 55%', padding: '20px 24px', borderRight: '1px solid #e2e8f0', maxHeight: '500px', overflowY: 'auto', background: 'white' }}>
 
                 {msgType === "MT103" ? (
                   /* MT103: Descriptive format — tag: description \n    value */
-                  <pre style={{fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white'}}>
+                  <pre style={{ fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white' }}>
                     {fieldTags.map(tag => {
                       const field = fieldMap[tag];
                       const val = String(field.value || "");
@@ -1165,7 +1165,7 @@ function WorkstationComponent() {
                   </pre>
                 ) : (
                   /* MT202 / MT202COV: Raw SWIFT block format */
-                  <pre style={{fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white'}}>
+                  <pre style={{ fontFamily: "'Courier New', Courier, monospace", fontSize: '12.5px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap', color: '#1e293b', background: 'white' }}>
                     {(() => {
                       const senderBIC = (activeMsg.senderBIC || "BANKUS33XXX").replace(/\s/g, "").toUpperCase();
                       const receiverBIC = (activeMsg.receiverBIC || "DEUTDEFFXXX").replace(/\s/g, "").toUpperCase();
@@ -1174,7 +1174,7 @@ function WorkstationComponent() {
                       const msgNum = "202";
                       const covPrefix = msgType === "MT202COV" ? "COV" : "";
 
-                      let header = `{1:F01${padSender}1234567890}{2:I${msgNum}\n${covPrefix}${padReceiver}N}{3:{108:REF${(activeMsg.tradeRef || swiftData.tradeRef || "20250928").substring(0,10)}}}`;
+                      let header = `{1:F01${padSender}1234567890}{2:I${msgNum}\n${covPrefix}${padReceiver}N}{3:{108:REF${(activeMsg.tradeRef || swiftData.tradeRef || "20250928").substring(0, 10)}}}`;
                       let body = "{4:";
                       for (const tag of fieldTags) {
                         const val = String(fieldMap[tag].value || "");
@@ -1192,35 +1192,35 @@ function WorkstationComponent() {
               </div>
 
               {/* RIGHT: Field Reference Table */}
-              <div style={{flex: '1 1 45%', maxHeight: '500px', overflowY: 'auto', background: 'white'}}>
-                <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '12px'}}>
+              <div style={{ flex: '1 1 45%', maxHeight: '500px', overflowY: 'auto', background: 'white' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
-                    <tr style={{background: '#16a34a', position: 'sticky', top: 0, zIndex: 2}}>
-                      <th style={{padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.3)', width: '80px'}}>
+                    <tr style={{ background: '#16a34a', position: 'sticky', top: 0, zIndex: 2 }}>
+                      <th style={{ padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.3)', width: '80px' }}>
                         {msgType === "MT103" ? "FIELD" : "Field Tag"}
                       </th>
                       {msgType !== "MT103" && (
-                        <th style={{padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.3)'}}>
+                        <th style={{ padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.3)' }}>
                           Content (from Example)
                         </th>
                       )}
-                      <th style={{padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600}}>
+                      <th style={{ padding: '8px 12px', color: 'white', textAlign: 'left', fontWeight: 600 }}>
                         {msgType === "MT103" ? "DESCRIPTION" : "Meaning / Purpose"}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {fieldTags.map((tag, i) => (
-                      <tr key={tag} style={{background: i % 2 === 0 ? 'white' : '#f9f9f9', borderBottom: '1px solid #e5e5e5'}}>
-                        <td style={{padding: '6px 12px', fontFamily: "'Courier New', monospace", fontWeight: 600, color: '#1e293b', borderRight: '1px solid #e5e5e5', verticalAlign: 'top'}}>
+                      <tr key={tag} style={{ background: i % 2 === 0 ? 'white' : '#f9f9f9', borderBottom: '1px solid #e5e5e5' }}>
+                        <td style={{ padding: '6px 12px', fontFamily: "'Courier New', monospace", fontWeight: 600, color: '#1e293b', borderRight: '1px solid #e5e5e5', verticalAlign: 'top' }}>
                           {msgType === "MT103" ? tag : `:${tag}:`}
                         </td>
                         {msgType !== "MT103" && (
-                          <td style={{padding: '6px 12px', fontFamily: "'Courier New', monospace", color: '#1e293b', borderRight: '1px solid #e5e5e5', verticalAlign: 'top', fontSize: '11.5px', wordBreak: 'break-all'}}>
+                          <td style={{ padding: '6px 12px', fontFamily: "'Courier New', monospace", color: '#1e293b', borderRight: '1px solid #e5e5e5', verticalAlign: 'top', fontSize: '11.5px', wordBreak: 'break-all' }}>
                             {String(fieldMap[tag].value || "").split("\n")[0]}
                           </td>
                         )}
-                        <td style={{padding: '6px 12px', color: '#374151', verticalAlign: 'top', fontSize: '12px'}}>
+                        <td style={{ padding: '6px 12px', color: '#374151', verticalAlign: 'top', fontSize: '12px' }}>
                           {msgType === "MT103"
                             ? (MT103_LABELS[tag] || fieldMap[tag].description || "")
                             : (MT202_DESCRIPTIONS[tag] || fieldMap[tag].description || "")}
@@ -1233,11 +1233,11 @@ function WorkstationComponent() {
             </div>
 
             {/* Footer */}
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px', background: 'white', borderTop: '1px solid #e2e8f0'}}>
-              <div style={{fontSize: '11px', color: '#94a3b8'}}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 24px', background: 'white', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
                 Trade Ref: {swiftData.tradeRef} | Generated: {activeMsg.generatedAt ? new Date(activeMsg.generatedAt).toLocaleString() : new Date().toLocaleString()}
               </div>
-              <button className="btn secondary" onClick={() => { setPopupState({type: null}); setSwiftData(null); }}>Close</button>
+              <button className="btn secondary" onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}>Close</button>
             </div>
           </div>
         );

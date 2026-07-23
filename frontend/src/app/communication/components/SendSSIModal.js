@@ -51,13 +51,14 @@ export default function SendSSIModal({
   };
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content" style={{ width: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div className="modal-header">
-          <h3 style={{ margin: 0 }}>Send Settlement Instructions</h3>
-          <button className="btn-close-tab" onClick={() => setIsOpen(false)}>✕</button>
+    <>
+      <div className="modal-overlay" onClick={() => setIsOpen(false)}></div>
+      <div className="compose-modal" style={{ width: '600px', display: 'flex', flexDirection: 'column' }}>
+        <div className="compose-titlebar">
+          <span className="compose-titlebar-text">Send Settlement Instructions</span>
+          <button className="compose-close" onClick={() => setIsOpen(false)}>✕</button>
         </div>
-        <div className="modal-body" style={{ padding: '20px' }}>
+        <div className="compose-fields" style={{ padding: '20px', overflowY: 'auto' }}>
           <p style={{ marginTop: 0, marginBottom: '20px', fontSize: '13px', color: '#605e5c' }}>
             Provide the correct settlement instructions. These details will be sent to the counterparty for verification.
           </p>
@@ -100,13 +101,13 @@ export default function SendSSIModal({
             </div>
           </div>
         </div>
-        <div className="modal-footer" style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-          <button className="btn-action" onClick={() => setIsOpen(false)}>Cancel</button>
-          <button className="btn-action primary" disabled={isSendingReply} onClick={handleSubmit}>
+        <div className="compose-footer" style={{ justifyContent: 'flex-end', gap: '8px', padding: '16px' }}>
+          <button className="btn-send" style={{ backgroundColor: '#0078d4', color: 'white' }} disabled={isSendingReply} onClick={handleSubmit}>
             {isSendingReply ? "Sending..." : "Send Instructions"}
           </button>
+          <button className="btn-discard" onClick={() => setIsOpen(false)}>Cancel</button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
