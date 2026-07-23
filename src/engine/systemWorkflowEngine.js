@@ -301,6 +301,33 @@ async function processVerification(job) {
       action: "VERIFICATION_FAILED"
     });
 
+    // Trigger counterparty email for SELL trades when verification fails
+    if (trade.direction === "SELL") {
+      const PendingReply = require("../models/PendingReply");
+      const fallbacks = [
+        "Unfortunately, the payment instruction could not be completed as the settlement details provided resulted in a payment rejection.\n\nCould you kindly reconfirm your settlement instructions so we may re-initiate settlement processing?",
+        "The payment has been rejected during settlement processing.\n\nWould you please reconfirm your current settlement instructions?",
+        "Our payment attempt using the provided settlement instructions was returned by our bank.\n\nPlease verify and provide your corrected SSI so we can process the settlement."
+      ];
+      const body = fallbacks[Math.floor(Math.random() * fallbacks.length)] + "\n\nBest regards,\nCounterparty Settlements";
+      
+      await PendingReply.create({
+        tradeRef: trade.tradeRef,
+        replyType: "CPTY_EMAIL",
+        isFinalReply: true,
+        desk: "SETTLEMENT",
+        payload: {
+          followUpBody: body,
+          followUpSubject: `RE: Settlement Details`
+        },
+        sendAt: new Date(Date.now() + 2000) // Delay by 2 seconds
+      });
+      
+      // Also explicitly disable cptySSIAcknowledged so the user must send it again
+      trade.cptySSIAcknowledged = false;
+      await trade.save();
+    }
+
     await auditEngine.recordEvent(
       trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_FAILED",
       `PENDING_APPROVAL → SETTLEMENT_PENDING | ${errors.length} issue(s): ${errors.join("; ")}`,
