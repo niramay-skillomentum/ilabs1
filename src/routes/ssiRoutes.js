@@ -107,6 +107,7 @@ router.get("/entity", authenticateToken, async (req, res) => {
     // Map the Entity to an SSI-like structure for the frontend
     const ssi = {
       beneficiaryName: entity.accountName || entity.entityName,
+      beneficiaryBank: entity.accountWithInstitution,
       accountNumber: entity.accountNumber,
       beneficiaryBIC: entity.bic,
       currency: entity.currency,

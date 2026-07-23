@@ -144,6 +144,7 @@ async function importEntityData(importBatch) {
     const bic = String(row[4] || "").trim();
     const accountName = String(row[5] || "").trim();
     const accountNumber = String(row[6] || "").trim();
+    const accountWithInstitution = String(row[7] || "").trim();
 
     if (!entityName || !currency) {
       stats.entities.skipped++;
@@ -158,6 +159,7 @@ async function importEntityData(importBatch) {
       bic: bic || null,
       accountName: accountName || null,
       accountNumber: accountNumber || null,
+      accountWithInstitution: accountWithInstitution || null,
       region: deriveRegion(entityName, address),
       importBatch,
       importedAt: new Date()

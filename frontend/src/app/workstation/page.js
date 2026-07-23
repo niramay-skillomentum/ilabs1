@@ -867,12 +867,12 @@ function WorkstationComponent() {
                 Standard Settlement Instruction ({settlType})
               </h3>
               <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-                {sd.alertCode && (
+                {sd.alertCode && popupState.trade.direction !== 'SELL' && (
                   <div style={{background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white"}}>
                     Alert: {sd.alertCode}
                   </div>
                 )}
-                {sd.alertAcronym && (
+                {sd.alertAcronym && popupState.trade.direction !== 'SELL' && (
                   <div style={{background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white"}}>
                     Acronym: {sd.alertAcronym}
                   </div>
