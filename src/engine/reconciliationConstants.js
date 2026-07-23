@@ -88,7 +88,9 @@ const SWIFT_TAG = Object.freeze({
   INTERMEDIARY: "56A",     // Field 56A — Intermediary Institution BIC
   ACCOUNT_WITH_INST: "57A", // Field 57A — Account With Institution BIC
   BENEFICIARY_CUSTOMER: "59", // Field 59 — Beneficiary Customer (account/name)
-  BENEFICIARY_INSTITUTION: "58A" // Field 58A — Beneficiary Institution BIC (MT202)
+  BENEFICIARY_INSTITUTION: "58A", // Field 58A — Beneficiary Institution BIC (MT202)
+  SENDER_TO_RECEIVER: "72", // Field 72 — Sender to Receiver Information
+  REMITTANCE_INFO: "70"    // Field 70 — Remittance Information
 });
 
 // Payment direction as stored on the SWIFT message (paymentDirection).

@@ -64,9 +64,9 @@ async function createStatementItem(swiftMessage, trade) {
     // Field 21 (Related Reference) carries the plain tradeRef — so we
     // prefer Field 21 when present. This keeps EXACTLY ONE statement item
     // per settled trade and makes ref5 equal the ledger's tradeRef.
-    const field21 = tagValue(fieldMap, SWIFT_TAG.RELATED_REF);
+    // Prefer Field 20 (Transaction Reference) as requested.
     const field20 = tagValue(fieldMap, SWIFT_TAG.TRANSACTION_REF);
-    const txnRef = field21 || field20;
+    const txnRef = field20;
 
     // Idempotency: one statement item per SWIFT transaction reference
     // (dedupes the MT103 + MT202COV pair down to a single row).
@@ -96,7 +96,7 @@ async function createStatementItem(swiftMessage, trade) {
 
     if (trade && trade.truths && trade.truths.settlement) {
       try {
-        const ourBank = await Entity.findOne({ entityCode: trade.entity, currency: trade.currency }).lean();
+        const ourBank = await Entity.findOne({ entityName: trade.entity, currency: trade.currency }).lean();
         const cptySSI = await SSIReference.findOne({ ssiId: trade.truths.settlement.ssiId }).lean();
         
         const ourBankName = ourBank ? ourBank.entityName : "Unknown Our Bank";
@@ -113,16 +113,28 @@ async function createStatementItem(swiftMessage, trade) {
           payerAcc3 = ourAcc.length >= 3 ? ourAcc.slice(-3) : ourAcc.padStart(3, '0');
           payerGroup = ourGroup;
           receiverGroup = cptyGroup;
+          payerAccFull = ourAcc;
+          receiverAccFull = cptyAcc;
         } else {
           payerBankName = cptyBankName;
           receiverBankName = ourBankName;
           payerAcc3 = cptyAcc.length >= 3 ? cptyAcc.slice(-3) : cptyAcc.padStart(3, '0');
           payerGroup = cptyGroup;
           receiverGroup = ourGroup;
+          payerAccFull = cptyAcc;
+          receiverAccFull = ourAcc;
         }
       } catch (e) {
         console.warn("[StatementCreation] Error fetching entity/ssi for ref mappings", e);
       }
+    }
+
+    let finalRef2 = sellerAccount || null;
+    let finalRef3 = buyerAccount || null;
+
+    if (trade && trade.truths && trade.truths.settlement) {
+      if (receiverAccFull !== "000") finalRef2 = receiverAccFull;
+      if (payerAccFull !== "000") finalRef3 = payerAccFull;
     }
 
     const item = await repo.createItem({
@@ -150,8 +162,8 @@ async function createStatementItem(swiftMessage, trade) {
 
       // SWIFT References (statement-level) — all SWIFT-sourced.
       ref1: buyerBIC || null,                                   // Buyer BIC
-      ref2: sellerAccount || null,                              // Seller Account
-      ref3: buyerAccount || null,                               // Buyer Account
+      ref2: finalRef2,                                          // SWIFT 2: Seller Account (Receiver Acc)
+      ref3: finalRef3,                                          // SWIFT 3: Buyer Account (Payer Acc)
       ref4: sellerBIC || null,                                  // Seller BIC
       ref5: txnRef || null,                                    // Field 20/21 (Transaction Ref)
       ref6: firstLine(tagValue(fieldMap, SWIFT_TAG.INTERMEDIARY)),      // 56A Intermediary

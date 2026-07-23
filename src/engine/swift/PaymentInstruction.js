@@ -27,11 +27,14 @@ function build(trade, ourBank, counterpartySSI) {
     tradeRef: trade.tradeRef,
     settlementRef: trade.tradeRef,   // Settlement ref = trade ref in this system
     relatedRef: trade.tradeRef,
+    transactionRef: generatePatternRef("TR", 8),
+    remittanceRef: generatePatternRef("RF", 6),
+    corrRef: generatePatternRef("CR", 10),
 
     // Economics (always from trade — source of truth)
     amount: trade.amount,
     currency: trade.currency,
-    valueDate: trade.truths?.settlement?.settlementDate || trade.valueDate,
+    valueDate: trade.truths?.settlement?.settlementDate || trade.settlementDate || trade.valueDate,
 
     // Payment direction
     paymentDirection: direction,
@@ -144,6 +147,15 @@ function resolveDirection(tradeDirection) {
   if (dir === "SELL" || dir === "RECEIVE") return "RECEIVE";
   // Default to PAY for safety
   return "PAY";
+}
+
+function generatePatternRef(prefix, totalLength) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = prefix;
+  while (result.length < totalLength) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 module.exports = {
