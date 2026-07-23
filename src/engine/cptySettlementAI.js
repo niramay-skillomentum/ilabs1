@@ -98,21 +98,108 @@ async function generateResponse(parsedIntent, tradeRef, userMessage) {
 
   const ssiRecord = await getSSIRecord(trade);
   if (trade && trade.direction === "SELL") {
-    // For SELL trades, the counterparty is trying to pay us.
-    // If the user is emailing them, it's likely to correct an incorrect SSI.
-    // Let's assume any email from the user to the CPTY for a SELL trade on Settlement Desk
-    // is providing the correct SSI details.
-    if (trade.truths && trade.truths.settlement) {
-      trade.truths.settlement.cptyProvidedCorrectSSI = true;
-      trade.markModified("truths");
+    // 1. Check if user sent structured SSI via "Send SSI" form
+    if (userMessage.includes("[PROVIDED_SSI_START]")) {
+      console.log("[CPTY AI] Detected user-provided SSI for SELL trade");
+      // Extract the structured block (for verification bot later)
+      const ssiBlock = userMessage.split("[PROVIDED_SSI_START]")[1].split("[PROVIDED_SSI_END]")[0];
+      
+      // We parse it simply by splitting lines
+      const parsedSSI = {};
+      ssiBlock.split("\n").forEach(line => {
+        const parts = line.split(":");
+        if (parts.length >= 2) {
+          const key = parts[0].trim();
+          const val = parts.slice(1).join(":").trim();
+          parsedSSI[key] = val;
+        }
+      });
+      
+      trade.mailboxSSI = parsedSSI;
+      trade.cptySSIAcknowledged = true;
+      if (trade.markModified) trade.markModified("mailboxSSI");
       await trade.save();
+      
+      const acks = [
+        "Thank you for providing the updated settlement instructions. We have verified the details and will proceed with settlement shortly.",
+        "Thank you for providing the corrected settlement instructions. We have updated our records and will proceed with settlement.",
+        "We have received your updated settlement details and will process the payment accordingly.",
+        "Thanks for the updated instructions. We will ensure the settlement is routed correctly."
+      ];
+      const ackMsg = acks[Math.floor(Math.random() * acks.length)];
+      
+      return {
+        action: "IMMEDIATE_ANSWER",
+        subject: "RE: Settlement Details",
+        body: ackMsg + "\n\nBest regards,\nCounterparty Settlements"
+      };
     }
     
-    return {
-      action: "IMMEDIATE_ANSWER",
-      subject: "RE: Settlement Details",
-      body: `Okay thanks for confirming and we are proceeding with these SSI.\n\nBest regards,\nCounterparty Settlements`
-    };
+    // 2. Otherwise, it's a natural language reply. Use LLM to classify intent.
+    const sellSystemPrompt = `You are a Counterparty Operations professional replying to a bank's Settlement desk regarding SELL Trade ${trade.tradeRef}.
+We previously sent them our standard settlement instructions and they just replied.
+Parse their reply to determine if they are CONFIRMING the instructions (they look good, proceed, confirmed) or REJECTING them (wrong account, incorrect, cannot confirm).
+Respond ONLY in this JSON format:
+{ "intent": "CONFIRM" | "REJECT" }`;
+
+    try {
+      const llmResult = await llmService.generateResponse(sellSystemPrompt, userMessage);
+      // We expect the llmResult to just have the intent if we parse it, but llmService returns { body: "..." }
+      // So let's parse the body
+      let intent = "CONFIRM"; // default fallback
+      try {
+        const parsed = JSON.parse(llmResult.body.replace(/\`\`\`json/g, "").replace(/\`\`\`/g, ""));
+        if (parsed.intent) intent = parsed.intent;
+      } catch(e) {
+        if (llmResult.body.includes("REJECT")) intent = "REJECT";
+      }
+      
+      if (intent === "CONFIRM") {
+        trade.cptySSIAcknowledged = true;
+        // Also set this for legacy compatibility
+        if (trade.truths && trade.truths.settlement) {
+          trade.truths.settlement.cptyProvidedCorrectSSI = true;
+          if (trade.markModified) trade.markModified("truths.settlement");
+        }
+        await trade.save();
+        
+        const acks = [
+          "Thank you for confirming the settlement instructions. We will proceed with settlement processing accordingly.",
+          "We appreciate your confirmation. The settlement will be processed on the value date.",
+          "Thanks for confirming. We have marked the instructions as verified.",
+          "Thank you. We will proceed with the payment as instructed."
+        ];
+        return {
+          action: "IMMEDIATE_ANSWER",
+          subject: "RE: Settlement Details",
+          body: acks[Math.floor(Math.random() * acks.length)] + "\n\nKind regards,\nSettlement Operations"
+        };
+      } else {
+        // User REJECTED the SSI. Counterparty remains firm.
+        const pushbacks = [
+          "We have verified our settlement instructions and can confirm they are correct. Could you kindly advise the specific discrepancy identified?",
+          "Our records indicate the settlement instructions previously shared remain valid. Please let us know which field appears inconsistent.",
+          "We have reconfirmed the details internally and believe they are correct. Could you specify the discrepancy so we may investigate further?",
+          "According to our static data team, the instructions provided are accurate for this currency and entity. Please advise what discrepancy you are seeing."
+        ];
+        return {
+          action: "IMMEDIATE_ANSWER",
+          subject: "RE: Settlement Details",
+          body: pushbacks[Math.floor(Math.random() * pushbacks.length)] + "\n\nKind regards,\nSettlement Operations"
+        };
+      }
+      
+    } catch(err) {
+      console.error("[CPTY AI] SELL LLM failed, using offline fallback", err);
+      // Fallback
+      trade.cptySSIAcknowledged = true;
+      await trade.save();
+      return {
+        action: "IMMEDIATE_ANSWER",
+        subject: "RE: Settlement Details",
+        body: "Thank you for confirming the settlement instructions. We will proceed with settlement processing accordingly.\n\nKind regards,\nSettlement Operations"
+      };
+    }
   }
 
   // ── ATTEMPT 1: Gemini LLM ──

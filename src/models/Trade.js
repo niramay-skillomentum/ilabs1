@@ -180,6 +180,12 @@ const TradeSchema = new mongoose.Schema({
   foResponseReceived: { type: Boolean, default: false },
   cptyResponseReceived: { type: Boolean, default: false },
 
+  // For SELL Bilateral trades, tracks if Counterparty has acknowledged the SSI
+  cptySSIAcknowledged: { type: Boolean, default: false },
+  
+  // Stores the user-submitted SSI via the Mailbox 'Send SSI' action
+  mailboxSSI: { type: Object, default: null },
+
   // Escalation tracking for multi-round logic
   cptyContactCount: { type: Number, default: 0 },
   foContactCount: { type: Number, default: 0 },

@@ -773,7 +773,12 @@ function WorkstationComponent() {
                 {desk === "SETTLEMENT" && (
                   <>
                     <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
-                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}>Approve Settlement</button>
+                    <button 
+                      className={`btn primary ${trade.direction === 'SELL' && trade.settlementType === 'BILATERAL' && !trade.cptySSIAcknowledged ? 'disabled' : ''}`}
+                      disabled={trade.direction === 'SELL' && trade.settlementType === 'BILATERAL' && !trade.cptySSIAcknowledged}
+                      title={trade.direction === 'SELL' && trade.settlementType === 'BILATERAL' && !trade.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''}
+                      onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
+                    >Approve Settlement</button>
                     <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                     <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
                     <button className="btn secondary" style={{backgroundColor:"#0f766e", color:"white", border:"none"}} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>

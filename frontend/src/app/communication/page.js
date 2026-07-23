@@ -11,6 +11,7 @@ import InboxList from "./components/InboxList";
 import MessageThread from "./components/MessageThread";
 import ComposeModal from "./components/ComposeModal";
 import ReplyModal from "./components/ReplyModal";
+import SendSSIModal from "./components/SendSSIModal";
 import { formatDate, formatDateFull, formatAmount, buildSubject, getSenderInfo, getRecipientLabel, getStatusBadge } from "./components/utils";
 
 function CommunicationComponent() {
@@ -35,6 +36,8 @@ function CommunicationComponent() {
   // Reply modal state
   const [replyModalOpen, setReplyModalOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
+
+  const [sendSSIModalOpen, setSendSSIModalOpen] = useState(false);
 
   // Compose modal state
   const [composeModalOpen, setComposeModalOpen] = useState(false);
@@ -432,6 +435,11 @@ function CommunicationComponent() {
     setReplyModalOpen(true);
   };
 
+  const openSendSSIModal = () => {
+    if (!selectedTradeRef || !currentTrade) return toast.error("Select an email first");
+    setSendSSIModalOpen(true);
+  };
+
   const sendReply = () => {
     if (!replyBody.trim()) return toast.error("Email content cannot be empty");
     if (!selectedTradeRef) return toast.error("No trade selected");
@@ -617,12 +625,33 @@ function CommunicationComponent() {
 
         <MessageThread
           selectedTradeRef={selectedTradeRef} currentTrade={currentTrade} buildSubject={buildSubject}
-          currentMessages={currentMessages} openReplyModal={openReplyModal} resolveState={resolveState}
+          currentMessages={currentMessages} openReplyModal={openReplyModal} openSendSSIModal={openSendSSIModal} resolveState={resolveState}
           resolveConversation={resolveConversation} getSenderInfo={getSenderInfo} userId={userId}
           desk={desk} channel={channel} getRecipientLabel={getRecipientLabel} formatDateFull={formatDateFull}
           isResolving={isResolving} readOnly={channel === "SYSTEM"}
         />
       </div>
+
+      <SendSSIModal 
+        isOpen={sendSSIModalOpen} setIsOpen={setSendSSIModalOpen} currentTrade={currentTrade}
+        userId={userId} desk={desk} channel={channel} sendReply={(body) => {
+          setReplyBody(body);
+          // Wait a tick for state to update then send
+          setTimeout(() => {
+            const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
+            setIsSendingReply(true);
+            fetch(endpoint, {
+              method: "POST",
+              headers: authHeaders(),
+              body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: body, desk })
+            }).then(() => {
+              setIsSendingReply(false);
+              setSendSSIModalOpen(false);
+              loadConversation(selectedTradeRef, channel, null, true);
+            });
+          }, 0);
+        }} isSendingReply={isSendingReply}
+      />
 
       <ReplyModal
         replyModalOpen={replyModalOpen} setReplyModalOpen={setReplyModalOpen} currentTrade={currentTrade}

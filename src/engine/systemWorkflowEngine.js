@@ -111,10 +111,33 @@ function validateTrade(trade) {
   const errors = [];
   
   if (trade.direction === "SELL") {
-    // For SELL trades, the bot checks if the counterparty provided the correct SSI.
-    // If the counterparty sent an incorrect SSI in their email and the user sent it for approval anyway,
-    // the bot will reject it.
-    if (trade.truths && trade.truths.settlement && trade.truths.settlement.cptyProvidedCorrectSSI === false) {
+    // For SELL trades, if Bilateral, they must have Counterparty Acknowledgement
+    if (trade.settlementType === "BILATERAL" && !trade.cptySSIAcknowledged) {
+      errors.push("The counterparty has not acknowledged the settlement instructions. Please await their confirmation before approving.");
+    }
+    
+    // If the user submitted a Mailbox SSI, it MUST match the Truth SSI (Entity SSI)
+    if (trade.mailboxSSI && trade.truths && trade.truths.settlement) {
+      const truth = trade.truths.settlement;
+      const mbox = trade.mailboxSSI;
+      
+      const fieldsToCheck = [
+        { t: "beneficiaryName", m: "Beneficiary Name" },
+        { t: "beneficiaryBank", m: "Beneficiary Bank" },
+        { t: "beneficiaryBIC", m: "Beneficiary BIC" },
+        { t: "accountNumber", m: "Account Number" },
+        { t: "currency", m: "Currency" }
+      ];
+      
+      for (const field of fieldsToCheck) {
+        const truthVal = (truth[field.t] || "").trim();
+        const mboxVal = (mbox[field.m] || "").trim();
+        if (truthVal !== mboxVal) {
+          errors.push(`SSI mismatch on ${field.t}: User provided '${mboxVal}', expected '${truthVal}'. The payment instruction could not be completed as the settlement details provided resulted in a payment rejection.`);
+        }
+      }
+    } else if (trade.truths && trade.truths.settlement && trade.truths.settlement.cptyProvidedCorrectSSI === false && !trade.mailboxSSI && trade.settlementType === "BILATERAL") {
+      // Legacy check: if they haven't sent a mailbox SSI yet, and the initial was wrong
       errors.push("The counterparty has not provided the correct SSI. Please liaise with them to get the correct SSI before approving.");
     }
     return errors;
