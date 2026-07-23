@@ -107,7 +107,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
        finalBody += `\n\n<div style="margin-top:12px; padding:8px 12px; border:1px solid #c8c8c8; border-radius:4px; display:inline-block; background:#f3f2f1; cursor:pointer;">📎 <b>TradeTicket_${reply.tradeRef}.pdf</b><br><span style="font-size:11px;color:#605e5c;">1.2 MB</span></div>`;
     }
 
-    conversationEngine.createMessage(
+    await conversationEngine.createMessage(
       reply.tradeRef,
       "COUNTERPARTY",
       finalBody,
@@ -136,7 +136,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
       }
 
       if (aiResponse.action === "HOLDING_MESSAGE") {
-        conversationEngine.createMessage(
+        await conversationEngine.createMessage(
           reply.tradeRef,
           "COUNTERPARTY",
           body,
@@ -162,7 +162,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
           emitNewEmail(reply.tradeRef, trade.assignedTo);
         }
 
-        conversationEngine.createMessage(
+        await conversationEngine.createMessage(
           reply.tradeRef,
           "COUNTERPARTY",
           body,
@@ -256,7 +256,7 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
        finalBody += `\n\n<div style="margin-top:12px; padding:8px 12px; border:1px solid #c8c8c8; border-radius:4px; display:inline-block; background:#f3f2f1; cursor:pointer;">📎 <b>FO_BookingData_${reply.tradeRef}.pdf</b><br><span style="font-size:11px;color:#605e5c;">3.4 MB</span></div>`;
     }
 
-    conversationEngine.createMessage(
+    await conversationEngine.createMessage(
       reply.tradeRef,
       "FO",
       finalBody,
@@ -301,7 +301,7 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
          body += `\n\n<div style="margin-top:12px; padding:8px 12px; border:1px solid #c8c8c8; border-radius:4px; display:inline-block; background:#f3f2f1; cursor:pointer;">📎 <b>FO_BookingData_${reply.tradeRef}.pdf</b><br><span style="font-size:11px;color:#605e5c;">3.4 MB</span></div>`;
       }
 
-      conversationEngine.createMessage(
+      await conversationEngine.createMessage(
         reply.tradeRef,
         "FO",
         body,

@@ -11,7 +11,7 @@ const { JWT_SECRET } = require("../middleware/auth");
 // ======================================
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // limit each IP to 15 requests per window
+  max: 1500, // limit each IP to 15 requests per window
   message: { error: "Too many requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false
