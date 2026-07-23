@@ -41,7 +41,9 @@ const ReconciliationConfigSchema = new mongoose.Schema({
       "ref5",       // Field20
       "ref6",       // 56A
       "ref7",       // Institution Name
-      "ref8"        // Bank Name
+      "ref8",       // Bank Name
+      "ref9",       // Field 72
+      "ref10"       // Field 70
     ]
   }],
 

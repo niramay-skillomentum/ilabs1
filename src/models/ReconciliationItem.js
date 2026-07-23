@@ -67,6 +67,9 @@ const ReconciliationItemSchema = new mongoose.Schema({
   itemRef5: { type: String, default: null },  // Product
   itemRef6: { type: String, default: null },  // Product Type
   itemRef7: { type: String, default: null },  // Counterparty
+  itemRef8: { type: String, default: null },  // Bank Name
+  itemRef9: { type: String, default: null },
+  itemRef10: { type: String, default: null },
 
   // ======================================
   // SWIFT REFERENCES (Statement-level data)
@@ -80,7 +83,9 @@ const ReconciliationItemSchema = new mongoose.Schema({
   ref5: { type: String, default: null },  // Field20 (Transaction Reference)
   ref6: { type: String, default: null },  // 56A (Intermediary)
   ref7: { type: String, default: null },  // Institution Name
-  ref8: { type: String, default: null }   // Bank Name
+  ref8: { type: String, default: null },  // Bank Name
+  ref9: { type: String, default: null },  // Field 72
+  ref10: { type: String, default: null }  // Field 70
 
 }, { timestamps: true });
 
