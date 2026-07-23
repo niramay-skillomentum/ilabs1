@@ -32,13 +32,13 @@ function mapFields(instruction) {
 
   // :20: Transaction Reference Number
   fields["20"] = {
-    value: truncate(`COV${instruction.tradeRef}`, 16),
+    value: truncate(instruction.transactionRef || `COV${instruction.tradeRef}`, 16),
     description: "Transaction Reference Number"
   };
 
   // :21: Related Reference (links to the MT103)
   fields["21"] = {
-    value: truncate(instruction.tradeRef, 16),
+    value: truncate(instruction.relatedRef || instruction.tradeRef, 16),
     description: "Related Reference"
   };
 

@@ -10,6 +10,8 @@
 //   SELL → RECEIVE: Counterparty = Ordering, Our Bank = Beneficiary
 // ======================================
 
+const crypto = require("crypto");
+
 /**
  * Build a canonical PaymentInstruction from trade + entity + SSI data.
  *
@@ -21,12 +23,16 @@
 function build(trade, ourBank, counterpartySSI) {
   const direction = resolveDirection(trade.direction);
 
+  const hashBase = crypto.createHash('md5').update(trade.tradeRef).digest('hex').toUpperCase();
+
   // Base payment economics (always from trade)
   const instruction = {
     // References
     tradeRef: trade.tradeRef,
-    settlementRef: trade.tradeRef,   // Settlement ref = trade ref in this system
-    relatedRef: trade.tradeRef,
+    settlementRef: hashBase.substring(5, 13),
+    relatedRef: hashBase.substring(5, 13),
+    remittanceRef: hashBase.substring(13, 21),
+    transactionRef: `${(trade.valueDate || "").replace(/-/g, '') || new Date().toISOString().split('T')[0].replace(/-/g, '')}REF${hashBase.substring(0, 5)}`,
 
     // Economics (always from trade — source of truth)
     amount: trade.amount,
