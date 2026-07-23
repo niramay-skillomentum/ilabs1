@@ -138,15 +138,16 @@ async function generateResponse(parsedIntent, tradeRef, userMessage) {
     // 2. Otherwise, it's a natural language reply. Use LLM to classify intent.
     const sellSystemPrompt = `You are a Counterparty Operations professional replying to a bank's Settlement desk regarding SELL Trade ${trade.tradeRef}.
 We previously sent them our standard settlement instructions and they just replied.
-Parse their reply to determine if they are CONFIRMING the instructions (they look good, proceed, confirmed) or REJECTING them (wrong account, incorrect, cannot confirm).
+Parse their reply to determine if they are ACCEPTING/AGREEING to our instructions or REJECTING/DISPUTING them.
+Note: Even if they use the word 'confirm' in their sentence (e.g. "details are incorrect can you pls confirm"), if they are stating the details are wrong, that is a REJECT.
+If they are apologizing and agreeing to proceed (e.g. "Apologies, we confirm now", "Please proceed", "We have verified"), that is an ACCEPT.
 Respond ONLY in this JSON format:
-{ "intent": "CONFIRM" | "REJECT" }`;
+{ "intent": "ACCEPT" | "REJECT" }`;
 
     try {
       const llmResult = await llmService.generateResponse(sellSystemPrompt, userMessage);
-      // We expect the llmResult to just have the intent if we parse it, but llmService returns { body: "..." }
-      // So let's parse the body
-      let intent = "CONFIRM"; // default fallback
+      
+      let intent = "ACCEPT"; // default fallback
       try {
         const parsed = JSON.parse(llmResult.body.replace(/\`\`\`json/g, "").replace(/\`\`\`/g, ""));
         if (parsed.intent) intent = parsed.intent;
@@ -154,7 +155,7 @@ Respond ONLY in this JSON format:
         if (llmResult.body.includes("REJECT")) intent = "REJECT";
       }
       
-      if (intent === "CONFIRM") {
+      if (intent === "ACCEPT") {
         trade.cptySSIAcknowledged = true;
         // Also set this for legacy compatibility
         if (trade.truths && trade.truths.settlement) {
@@ -176,28 +177,26 @@ Respond ONLY in this JSON format:
         };
       } else {
         // User REJECTED the SSI. Counterparty remains firm.
+        // DO NOT set trade.cptySSIAcknowledged = true, leaving it disabled in the UI.
         const pushbacks = [
-          "We have verified our settlement instructions and can confirm they are correct. Could you kindly advise the specific discrepancy identified?",
-          "Our records indicate the settlement instructions previously shared remain valid. Please let us know which field appears inconsistent.",
-          "We have reconfirmed the details internally and believe they are correct. Could you specify the discrepancy so we may investigate further?",
-          "According to our static data team, the instructions provided are accurate for this currency and entity. Please advise what discrepancy you are seeing."
+          "We have verified our settlement instructions and can confirm they are correct.\n\nCould you kindly advise the specific discrepancy identified?",
+          "Our records indicate the settlement instructions previously shared remain valid.\n\nPlease let us know which field appears inconsistent.",
+          "We have reconfirmed the details internally and believe they are correct.\n\nCould you specify the discrepancy so we may investigate further?"
         ];
         return {
           action: "IMMEDIATE_ANSWER",
           subject: "RE: Settlement Details",
-          body: pushbacks[Math.floor(Math.random() * pushbacks.length)] + "\n\nKind regards,\nSettlement Operations"
+          body: pushbacks[Math.floor(Math.random() * pushbacks.length)] + "\n\nKind regards,\nCounterparty Settlements"
         };
       }
       
     } catch(err) {
       console.error("[CPTY AI] SELL LLM failed, using offline fallback", err);
-      // Fallback
-      trade.cptySSIAcknowledged = true;
-      await trade.save();
+      // Fallback - assume rejection just in case to be safe, but ask for clarification
       return {
         action: "IMMEDIATE_ANSWER",
         subject: "RE: Settlement Details",
-        body: "Thank you for confirming the settlement instructions. We will proceed with settlement processing accordingly.\n\nKind regards,\nSettlement Operations"
+        body: "We have verified our settlement instructions and can confirm they are correct.\n\nCould you kindly advise the specific discrepancy identified?\n\nKind regards,\nCounterparty Settlements"
       };
     }
   }
