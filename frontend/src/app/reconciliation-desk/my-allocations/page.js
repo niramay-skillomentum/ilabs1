@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { loadUserId, getToken, authHeaders } from "../../lib/auth";
+import { loadUserId, getToken, authHeaders } from "../../../lib/auth";
 import toast from "react-hot-toast";
 
 // ============ Helpers ============
