@@ -23,7 +23,7 @@ async function scheduleProactiveSellSSI(trade) {
     return;
   }
 
-  const { formatAmount } = require("../utils/formatters") || { formatAmount: (num) => Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
+  const formatAmount = (num) => Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   let emailBody = "";
   let subject = "";
