@@ -280,7 +280,10 @@ class QueueComposer {
         queue.map(t => ({
           updateOne: {
             filter: { tradeRef: t.tradeRef },
-            update: { $set: { assignedTo: userId, age: t.age } }
+            update: { 
+              $set: { assignedTo: userId, age: t.age },
+              $addToSet: { assignedHistory: userId }
+            }
           }
         })),
         { ordered: false }
