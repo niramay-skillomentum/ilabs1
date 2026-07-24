@@ -11,6 +11,7 @@
 // ======================================
 
 const crypto = require("crypto");
+const simulationClock = require("../clock");
 
 /**
  * Build a canonical PaymentInstruction from trade + entity + SSI data.
@@ -24,6 +25,7 @@ function build(trade, ourBank, counterpartySSI) {
   const direction = resolveDirection(trade.direction);
 
   const hashBase = crypto.createHash('md5').update(trade.tradeRef).digest('hex').toUpperCase();
+  const settledDate = simulationClock.getCurrentTime();
 
   // Base payment economics (always from trade)
   const instruction = {
@@ -32,12 +34,12 @@ function build(trade, ourBank, counterpartySSI) {
     settlementRef: hashBase.substring(5, 13),
     relatedRef: hashBase.substring(5, 13),
     remittanceRef: hashBase.substring(13, 21),
-    transactionRef: `${(trade.valueDate || "").replace(/-/g, '') || new Date().toISOString().split('T')[0].replace(/-/g, '')}REF${hashBase.substring(0, 5)}`,
+    transactionRef: `${settledDate.getFullYear()}${String(settledDate.getMonth() + 1).padStart(2, '0')}${String(settledDate.getDate()).padStart(2, '0')}REF${hashBase.substring(0, 5)}`,
 
     // Economics (always from trade — source of truth)
     amount: trade.amount,
     currency: trade.currency,
-    valueDate: trade.valueDate,
+    valueDate: settledDate,
 
     // Payment direction
     paymentDirection: direction,

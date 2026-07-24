@@ -12,7 +12,10 @@ async function getSSIRecord(trade) {
   if (!trade || !trade.truths || !trade.truths.settlement || !trade.truths.settlement.ssiRefId) {
     return null;
   }
-  
+  if (trade.truths.settlement.ssiRefId === "ENTITY-SSI") {
+    return null;
+  }
+
   try {
     return await ssiRepository.findByRefId(trade.truths.settlement.ssiRefId);
   } catch (err) {

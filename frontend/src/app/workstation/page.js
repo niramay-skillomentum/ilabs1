@@ -743,7 +743,7 @@ function WorkstationComponent() {
 
         <div className="action-bar">
           <div>
-            {selectedTrade?.settlementTypeType === "ELECTRONIC" ? (
+            {selectedTrade?.settlementType === "ELECTRONIC" ? (
               <div style={{color: '#dc2626', fontWeight: 600, fontSize: '13px', marginLeft: '12px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px'}}>
                 ⚠️ Actions for Electronic trades must be performed in the STCC Electronic Settlement dashboard.
               </div>
