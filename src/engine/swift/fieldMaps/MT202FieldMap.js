@@ -20,7 +20,7 @@ function mapFields(instruction) {
 
   // :20: Transaction Reference Number
   fields["20"] = {
-    value: truncate(instruction.tradeRef, 16),
+    value: truncate(instruction.transactionRef || instruction.tradeRef, 16),
     description: "Transaction Reference Number"
   };
 

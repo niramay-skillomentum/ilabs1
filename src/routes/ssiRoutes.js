@@ -35,7 +35,7 @@ router.get("/search", authenticateToken, async (req, res) => {
 // This is the primary search used by the SSI Database page.
 router.get("/search-codes", authenticateToken, async (req, res) => {
   const { alertCode, acronymCode } = req.query;
-  
+
   if (!alertCode || !acronymCode) {
     return res.status(400).json({ success: false, error: "Both Alert Code and Acronym Code are required" });
   }
@@ -50,9 +50,9 @@ router.get("/search-codes", authenticateToken, async (req, res) => {
     console.error("[SSI Search-Codes] Error:", err.message);
   }
 
-  return res.status(404).json({ 
-    success: false, 
-    error: "No SSI found matching both codes. Please verify the Alert Code and Acronym Code from the counterparty's confirmation." 
+  return res.status(404).json({
+    success: false,
+    error: "No SSI found matching both codes. Please verify the Alert Code and Acronym Code from the counterparty's confirmation."
   });
 });
 
@@ -75,7 +75,7 @@ router.get("/reference/:refId", authenticateToken, async (req, res) => {
 // Used by the settlement break dropdown so the user can select an SSI ID.
 router.get("/group", authenticateToken, async (req, res) => {
   const { groupName, currency } = req.query;
-  
+
   if (!groupName) {
     return res.status(400).json({ success: false, error: "groupName is required" });
   }
@@ -103,17 +103,18 @@ router.get("/entity", authenticateToken, async (req, res) => {
     if (!entity) {
       return res.status(404).json({ success: false, error: "Entity not found for this currency" });
     }
-    
+
     // Map the Entity to an SSI-like structure for the frontend
     const ssi = {
       beneficiaryName: entity.accountName || entity.entityName,
+      beneficiaryBank: entity.accountWithInstitution,
       accountNumber: entity.accountNumber,
       beneficiaryBIC: entity.bic,
       currency: entity.currency,
       settlementMethod: "SWIFT",
       isEntity: true // Flag to indicate this is our own SSI
     };
-    
+
     return res.json({ success: true, ssi });
   } catch (err) {
     console.error("[SSI Entity Lookup] Error:", err.message);

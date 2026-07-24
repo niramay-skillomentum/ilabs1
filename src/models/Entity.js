@@ -23,6 +23,7 @@ const EntitySchema = new mongoose.Schema({
   bic: { type: String },
   accountName: { type: String },
   accountNumber: { type: String },
+  accountWithInstitution: { type: String },
 
   // Derived region based on entity location
   region: { type: String, index: true },
