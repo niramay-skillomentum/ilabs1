@@ -401,6 +401,21 @@ function generateXmlAudit(trade) {
 // TRADE GENERATION
 // ============================
 
+function deriveRegionFromEntity(entityName) {
+  if (!entityName) return pick(REGIONS);
+  const name = String(entityName).toUpperCase();
+  if (name.includes("TOKYO") || name.includes("SINGAPORE") || name.includes("HONG KONG") || name.includes("APAC")) {
+    return "APAC";
+  }
+  if (name.includes("NEW YORK") || name.includes("CHICAGO") || name.includes("AMER")) {
+    return "AMER";
+  }
+  if (name.includes("LONDON") || name.includes("FRANKFURT") || name.includes("PARIS") || name.includes("EMEA")) {
+    return "EMEA";
+  }
+  return pick(REGIONS);
+}
+
 /**
  * Generate a single realistic trade object with desk-specific truths.
  * @param {string} desk - Target desk (MO, CONFIRMATION, SETTLEMENT)
@@ -444,10 +459,10 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let entity, foRegion;
   if (ssiPairData && ssiPairData.entityName) {
     entity = ssiPairData.entityName;
-    foRegion = ssiPairData.entityRegion || pick(REGIONS);
+    foRegion = ssiPairData.entityRegion || deriveRegionFromEntity(entity);
   } else {
     entity = pick(ENTITIES);
-    foRegion = pick(REGIONS);
+    foRegion = deriveRegionFromEntity(entity);
   }
 
   // ── CURRENCY & COUNTERPARTY ──

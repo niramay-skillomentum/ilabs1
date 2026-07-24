@@ -452,7 +452,7 @@ function WorkstationComponent() {
   const downloadCSV = () => {
     if (!queue || queue.length === 0) return toast.error("No data to export");
     const baseHeaders = [
-      "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "CP Group", "Counterparty", "Entity", "FO Region",
+      "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "CP Group", "Counterparty", "Entity", "Region",
       "Product", "Product Type", "Trade Type", "Underlyer"
     ];
 
@@ -718,7 +718,7 @@ function WorkstationComponent() {
             <thead>
               <tr>
                 <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Desk</th><th className="num">Age</th>
-                <th>Trade Date</th><th>Value Date</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>FO Region</th>
+                <th>Trade Date</th><th>Value Date</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>Region</th>
                 <th>Product</th><th>Product Type</th><th>Trade Type</th><th>Underlyer</th>
                 <th>Settlement Mode</th>
                 {desk === "SETTLEMENT" && <th>SSI Details</th>}
