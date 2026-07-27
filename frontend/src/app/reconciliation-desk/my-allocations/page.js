@@ -326,6 +326,7 @@ export default function ReconciliationDeskPage() {
   // Selection for user-driven matching: at most one LEDGER + one STATEMENT.
   const [selectedLedger, setSelectedLedger] = useState(null);      // itemId
   const [selectedStatement, setSelectedStatement] = useState(null); // itemId
+  const [tradeIdInput, setTradeIdInput] = useState("");
 
   // ============ Auth ============
   useEffect(() => {
@@ -397,6 +398,7 @@ export default function ReconciliationDeskPage() {
   const clearSelection = () => {
     setSelectedLedger(null);
     setSelectedStatement(null);
+    setTradeIdInput("");
   };
 
   // ============ User-driven Match ============
@@ -432,6 +434,35 @@ export default function ReconciliationDeskPage() {
       toast.error("Items cannot be matched.");
     } finally {
       setIsMatching(false);
+    }
+  };
+
+  // ============ Apply Trade ID ============
+  const [isApplying, setIsApplying] = useState(false);
+  const canApplyTradeId = !selectedLedger && selectedStatement && tradeIdInput.trim() !== "" && !isApplying;
+
+  const handleApplyTradeId = async () => {
+    if (!canApplyTradeId) return;
+    setIsApplying(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/apply-trade-id`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ statementItemId: selectedStatement, tradeRef: tradeIdInput.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Trade ID applied successfully.");
+        // Update local state for the statement
+        setItems(prev => prev.map(it => it.itemId === selectedStatement ? { ...it, ...data.item } : it));
+        setTradeIdInput("");
+      } else {
+        toast.error(data.message || "Failed to apply Trade ID.");
+      }
+    } catch (err) {
+      toast.error("Failed to apply Trade ID.");
+    } finally {
+      setIsApplying(false);
     }
   };
 
@@ -507,12 +538,29 @@ export default function ReconciliationDeskPage() {
         <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
           {isMatching ? "⏳ Matching..." : "🔗 Match"}
         </button>
+
+        {/* Apply Trade ID controls */}
+        {!selectedLedger && selectedStatement && (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "10px", paddingLeft: "10px", borderLeft: "1px solid rgba(255,255,255,0.2)" }}>
+            <input 
+              type="text" 
+              placeholder="Trade ID..." 
+              style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", width: "120px" }}
+              value={tradeIdInput}
+              onChange={(e) => setTradeIdInput(e.target.value)}
+            />
+            <button className="btn btn-primary" onClick={handleApplyTradeId} disabled={!canApplyTradeId}>
+              {isApplying ? "⏳ Applying..." : "✓ Apply"}
+            </button>
+          </div>
+        )}
+
         {(selectedLedger || selectedStatement) && (
-          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={clearSelection}>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px", marginLeft: "10px" }} onClick={clearSelection}>
             ✕ Clear Selection
           </button>
         )}
-        <span className="tray-hint">Select one Ledger row and one Statement row, then click Match.</span>
+        <span className="tray-hint" style={{ marginLeft: "10px" }}>Select one Ledger row and one Statement row to Match, or one Statement to Apply Trade ID.</span>
       </div>
 
       {/* Stats Bar */}

@@ -33,7 +33,8 @@ router.get("/items", authenticateToken, async (req, res) => {
       reconDesk: req.query.reconDesk || null,
       currency: req.query.currency || null,
       tradeRef: req.query.tradeRef || null,
-      matchId: req.query.matchId || null
+      matchId: req.query.matchId || null,
+      assignedTo: req.query.assignedTo === 'null' ? null : (req.query.assignedTo || undefined)
     };
 
     // Remove null filters
@@ -133,9 +134,75 @@ router.get("/my-allocation", authenticateToken, async (req, res) => {
 });
 
 // ======================================
+// POST /assign-to-me — Manually assign items to user's allocation
+// ======================================
+router.post("/assign-to-me", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.userId || "SYSTEM";
+    const { itemIds } = req.body || {};
+    
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ success: false, message: "No items provided." });
+    }
+
+    const ReconciliationItem = require("../models/ReconciliationItem");
+    const result = await ReconciliationItem.updateMany(
+      { itemId: { $in: itemIds } },
+      { $set: { assignedTo: userId } }
+    );
+
+    return res.json({ success: true, modifiedCount: result.modifiedCount });
+  } catch (err) {
+    console.error("[Reconciliation Route] POST /assign-to-me error:", err);
+    res.status(500).json({ success: false, message: "Failed to assign items." });
+  }
+});
+
+// ======================================
+// POST /apply-trade-id — Apply a Trade ID to a Statement
+// ======================================
+router.post("/apply-trade-id", authenticateToken, async (req, res) => {
+  try {
+    const { statementItemId, tradeRef } = req.body || {};
+    
+    if (!statementItemId || !tradeRef) {
+      return res.status(400).json({ success: false, message: "Statement ID and Trade Reference are required." });
+    }
+
+    const Trade = require("../models/Trade");
+    const ReconciliationItem = require("../models/ReconciliationItem");
+
+    const trade = await Trade.findOne({ tradeRef }).lean();
+    if (!trade) {
+      return res.status(404).json({ success: false, message: "Trade not found in database." });
+    }
+
+    const statement = await ReconciliationItem.findOne({ itemId: statementItemId, source: "STATEMENT" });
+    if (!statement) {
+      return res.status(404).json({ success: false, message: "Statement item not found." });
+    }
+
+    statement.itemRef1 = trade.tradeRef || null;
+    statement.itemRef2 = trade.underlyer || null;
+    statement.itemRef3 = trade.entity || null;
+    statement.itemRef4 = trade.foRegion || null;
+    statement.itemRef5 = trade.product || null;
+    statement.itemRef6 = trade.productType || null;
+    statement.itemRef7 = trade.counterpartyGroup || trade.counterparty || null;
+
+    await statement.save();
+
+    return res.json({ success: true, item: statement });
+  } catch (err) {
+    console.error("[Reconciliation Route] POST /apply-trade-id error:", err);
+    res.status(500).json({ success: false, message: "Failed to apply trade ID." });
+  }
+});
+
+// ======================================
 // POST /manual-match — User-driven Ledger ↔ Statement match
 // Body: { ledgerItemId, statementItemId } (order-independent)
-// Returns only a success/failure verdict — never the validation reason.
+// Returns specific validation reasons for UI feedback on failure.
 // ======================================
 router.post("/manual-match", authenticateToken, async (req, res) => {
   try {
@@ -146,7 +213,7 @@ router.post("/manual-match", authenticateToken, async (req, res) => {
 
     const result = await matchingEngine.manualMatch(ledgerItemId, statementItemId);
     // Business rejection returns HTTP 200 with success:false so the UI can
-    // show a neutral toast without treating it as a server error.
+    // show a specific toast without treating it as a server error.
     return res.json(result);
   } catch (err) {
     console.error("[Reconciliation Route] POST /manual-match error:", err);

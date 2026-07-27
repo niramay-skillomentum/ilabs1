@@ -153,6 +153,7 @@ async function getItems(filters = {}, options = {}) {
   if (filters.currency) query.currency = filters.currency;
   if (filters.tradeRef) query.itemRef1 = filters.tradeRef;
   if (filters.matchId) query.matchId = filters.matchId;
+  if (filters.assignedTo !== undefined) query.assignedTo = filters.assignedTo;
   return repo.findByFilters(query, options);
 }
 

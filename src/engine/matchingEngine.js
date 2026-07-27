@@ -53,9 +53,9 @@ async function manualMatch(itemIdA, itemIdB) {
   // Ask the hidden validation service for a verdict.
   const verdict = validationService.validatePair(a, b);
   if (!verdict.valid) {
-    // Reason is logged internally but NEVER returned to the user.
+    // Reason is logged internally and returned to the UI for clear messaging.
     console.log(`[MatchingService] Manual match rejected (${a.itemId} / ${b.itemId}): ${verdict.reason}`);
-    return fail("Items cannot be matched.");
+    return fail(verdict.reason);
   }
 
   // Resolve which is ledger / statement for the ordered update.

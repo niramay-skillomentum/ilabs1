@@ -323,9 +323,9 @@ export default function ReconciliationDeskPage() {
   const [amountTo, setAmountTo] = useState("");
   const [appliedFilters, setAppliedFilters] = useState({});
 
-  // Selection for user-driven matching: at most one LEDGER + one STATEMENT.
-  const [selectedLedger, setSelectedLedger] = useState(null);      // itemId
-  const [selectedStatement, setSelectedStatement] = useState(null); // itemId
+  // Selection for user-driven matching and moving.
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [tradeIdInput, setTradeIdInput] = useState("");
 
   // ============ Auth ============
   useEffect(() => {
@@ -361,7 +361,7 @@ export default function ReconciliationDeskPage() {
     setIsLoading(true);
     setLoadingLabel("Preparing Reconciliation Desk...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/items?limit=10000`, {
+      const res = await fetch(`${API}/api/reconciliation/items?limit=10000&assignedTo=null`, {
         method: "GET",
         headers: authHeaders()
       });
@@ -387,20 +387,24 @@ export default function ReconciliationDeskPage() {
   // ============ Selection ============
   const toggleSelect = (item) => {
     if (item.status === "Matched") return; // matched rows are locked
-    if (item.source === "LEDGER") {
-      setSelectedLedger(prev => prev === item.itemId ? null : item.itemId);
-    } else {
-      setSelectedStatement(prev => prev === item.itemId ? null : item.itemId);
-    }
+    setSelectedItemIds(prev => 
+      prev.includes(item.itemId) ? prev.filter(id => id !== item.itemId) : [...prev, item.itemId]
+    );
   };
 
   const clearSelection = () => {
-    setSelectedLedger(null);
-    setSelectedStatement(null);
+    setSelectedItemIds([]);
+    setTradeIdInput("");
   };
 
+  // Derived selected items for matching
+  const selectedLedgers = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "LEDGER");
+  const selectedStatements = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "STATEMENT");
+  const selectedLedger = selectedLedgers.length === 1 ? selectedLedgers[0].itemId : null;
+  const selectedStatement = selectedStatements.length === 1 ? selectedStatements[0].itemId : null;
+
   // ============ User-driven Match ============
-  const canMatch = selectedLedger && selectedStatement && !isMatching;
+  const canMatch = selectedItemIds.length === 2 && selectedLedger && selectedStatement && !isMatching;
 
   const handleMatch = async () => {
     if (!canMatch) return;
@@ -432,6 +436,67 @@ export default function ReconciliationDeskPage() {
       toast.error("Items cannot be matched.");
     } finally {
       setIsMatching(false);
+    }
+  };
+
+  // ============ User-driven Move ============
+  const [isMoving, setIsMoving] = useState(false);
+  const canMove = selectedItemIds.length > 0 && !isMoving;
+
+  const handleMove = async () => {
+    if (!canMove) return;
+    setIsMoving(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/assign-to-me`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: selectedItemIds })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Moved ${data.modifiedCount} item(s) to your allocation.`);
+        // Remove moved items from the local state
+        setItems(prev => prev.filter(it => !selectedItemIds.includes(it.itemId)));
+        clearSelection();
+        fetchStats();
+        // Open the My Allocations page in a new window
+        window.open('/reconciliation-desk/my-allocations', '_blank');
+      } else {
+        toast.error(data.message || "Failed to move items.");
+      }
+    } catch (err) {
+      toast.error("Failed to move items.");
+    } finally {
+      setIsMoving(false);
+    }
+  };
+
+  // ============ Apply Trade ID ============
+  const [isApplying, setIsApplying] = useState(false);
+  const canApplyTradeId = selectedItemIds.length === 1 && selectedStatements.length === 1 && tradeIdInput.trim() !== "" && !isApplying;
+
+  const handleApplyTradeId = async () => {
+    if (!canApplyTradeId) return;
+    setIsApplying(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/apply-trade-id`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ statementItemId: selectedStatement, tradeRef: tradeIdInput.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Trade ID applied successfully.");
+        // Update local state for the statement
+        setItems(prev => prev.map(it => it.itemId === selectedStatement ? { ...it, ...data.item } : it));
+        setTradeIdInput("");
+      } else {
+        toast.error(data.message || "Failed to apply Trade ID.");
+      }
+    } catch (err) {
+      toast.error("Failed to apply Trade ID.");
+    } finally {
+      setIsApplying(false);
     }
   };
 
@@ -501,9 +566,9 @@ export default function ReconciliationDeskPage() {
         </div>
       </div>
 
-      {/* Match Tray — user selects one Ledger + one Statement, then matches */}
+      {/* Match Tray — user selects one Ledger + one Statement, then matches, or multiple to move */}
       <div className="match-tray">
-        <span style={{ fontSize: 13, fontWeight: 700 }}>Manual Match</span>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>Action Menu</span>
         <span className={`tray-chip ${selectedLedger ? "filled-ledger" : ""}`}>
           Ledger: {selectedLedger || "—"}
         </span>
@@ -513,12 +578,32 @@ export default function ReconciliationDeskPage() {
         <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
           {isMatching ? "⏳ Matching..." : "🔗 Match"}
         </button>
-        {(selectedLedger || selectedStatement) && (
-          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={clearSelection}>
-            ✕ Clear Selection
+        <button className="btn btn-primary" onClick={handleMove} disabled={!canMove} style={{ marginLeft: "10px" }}>
+          {isMoving ? "⏳ Moving..." : "📥 Move to my allocation"}
+        </button>
+        
+        {/* Apply Trade ID controls */}
+        {selectedItemIds.length === 1 && selectedStatements.length === 1 && (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "10px", paddingLeft: "10px", borderLeft: "1px solid rgba(255,255,255,0.2)" }}>
+            <input 
+              type="text" 
+              placeholder="Trade ID..." 
+              style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", width: "120px" }}
+              value={tradeIdInput}
+              onChange={(e) => setTradeIdInput(e.target.value)}
+            />
+            <button className="btn btn-primary" onClick={handleApplyTradeId} disabled={!canApplyTradeId}>
+              {isApplying ? "⏳ Applying..." : "✓ Apply"}
+            </button>
+          </div>
+        )}
+
+        {selectedItemIds.length > 0 && (
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px", marginLeft: "10px" }} onClick={clearSelection}>
+            ✕ Clear Selection ({selectedItemIds.length})
           </button>
         )}
-        <span className="tray-hint">Select one Ledger row and one Statement row, then click Match.</span>
+        <span className="tray-hint" style={{ marginLeft: "10px" }}>Select items to move, or one Ledger + Statement to match.</span>
       </div>
 
       {/* Stats Bar */}
@@ -688,7 +773,7 @@ export default function ReconciliationDeskPage() {
               <tbody>
                 {filteredItems.map((item) => {
                   const isMatched = item.status === "Matched";
-                  const isSelected = item.itemId === selectedLedger || item.itemId === selectedStatement;
+                  const isSelected = selectedItemIds.includes(item.itemId);
                   return (
                   <tr
                     key={item._id || item.itemId}
