@@ -361,7 +361,7 @@ export default function ReconciliationDeskPage() {
     setIsLoading(true);
     setLoadingLabel("Preparing Reconciliation Desk...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/items?limit=10000&assignedTo=null`, {
+      const res = await fetch(`${API}/api/reconciliation/items?limit=10000`, {
         method: "GET",
         headers: authHeaders()
       });
@@ -386,7 +386,6 @@ export default function ReconciliationDeskPage() {
 
   // ============ Selection ============
   const toggleSelect = (item) => {
-    if (item.status === "Matched") return; // matched rows are locked
     setSelectedItemIds(prev => 
       prev.includes(item.itemId) ? prev.filter(id => id !== item.itemId) : [...prev, item.itemId]
     );
@@ -402,9 +401,10 @@ export default function ReconciliationDeskPage() {
   const selectedStatements = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "STATEMENT");
   const selectedLedger = selectedLedgers.length === 1 ? selectedLedgers[0].itemId : null;
   const selectedStatement = selectedStatements.length === 1 ? selectedStatements[0].itemId : null;
+  const selectedMatchedItems = items.filter(i => selectedItemIds.includes(i.itemId) && i.status === "Matched");
 
   // ============ User-driven Match ============
-  const canMatch = selectedItemIds.length === 2 && selectedLedger && selectedStatement && !isMatching;
+  const canMatch = selectedItemIds.length === 2 && selectedLedger && selectedStatement && selectedMatchedItems.length === 0 && !isMatching;
 
   const handleMatch = async () => {
     if (!canMatch) return;
@@ -439,35 +439,35 @@ export default function ReconciliationDeskPage() {
     }
   };
 
-  // ============ User-driven Move ============
-  const [isMoving, setIsMoving] = useState(false);
-  const canMove = selectedItemIds.length > 0 && !isMoving;
+  // ============ User-driven Unmatch ============
+  const [isUnmatching, setIsUnmatching] = useState(false);
+  const uniqueMatchIds = [...new Set(selectedMatchedItems.map(i => i.matchId))];
+  const canUnmatch = selectedItemIds.length > 0 && selectedItemIds.length === selectedMatchedItems.length && uniqueMatchIds.length === 1 && !isUnmatching;
+  const matchIdToUnmatch = canUnmatch ? uniqueMatchIds[0] : null;
 
-  const handleMove = async () => {
-    if (!canMove) return;
-    setIsMoving(true);
+  const handleUnmatch = async () => {
+    if (!canUnmatch || !matchIdToUnmatch) return;
+    setIsUnmatching(true);
     try {
-      const res = await fetch(`${API}/api/reconciliation/assign-to-me`, {
+      const res = await fetch(`${API}/api/reconciliation/unmatch`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds: selectedItemIds })
+        body: JSON.stringify({ matchId: matchIdToUnmatch })
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(`Moved ${data.modifiedCount} item(s) to your allocation.`);
-        // Remove moved items from the local state
-        setItems(prev => prev.filter(it => !selectedItemIds.includes(it.itemId)));
+        toast.success(data.message || `Match ${matchIdToUnmatch} reversed successfully.`);
+        // Update local state: clear matchId and set status to Outstanding for all items with this matchId
+        setItems(prev => prev.map(it => it.matchId === matchIdToUnmatch ? { ...it, status: "Outstanding", matchId: null } : it));
         clearSelection();
         fetchStats();
-        // Open the My Allocations page in a new window
-        window.open('/reconciliation-desk/my-allocations', '_blank');
       } else {
-        toast.error(data.message || "Failed to move items.");
+        toast.error(data.message || "Failed to reverse match.");
       }
     } catch (err) {
-      toast.error("Failed to move items.");
+      toast.error("Failed to reverse match.");
     } finally {
-      setIsMoving(false);
+      setIsUnmatching(false);
     }
   };
 
@@ -557,9 +557,6 @@ export default function ReconciliationDeskPage() {
           <button className="btn btn-secondary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px", background: "#1E3A5F", color: "white", borderColor: "#1E3A5F" }}>
             GCMS
           </button>
-          <button className="btn btn-secondary" onClick={() => router.push("/reconciliation-desk/my-allocations")} style={{ marginRight: "10px" }}>
-            My Allocations
-          </button>
           <button className="btn btn-back" onClick={() => router.push("/dashboard")}>
               ← Dashboard
           </button>
@@ -578,9 +575,11 @@ export default function ReconciliationDeskPage() {
         <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
           {isMatching ? "⏳ Matching..." : "🔗 Match"}
         </button>
-        <button className="btn btn-primary" onClick={handleMove} disabled={!canMove} style={{ marginLeft: "10px" }}>
-          {isMoving ? "⏳ Moving..." : "📥 Move to my allocation"}
-        </button>
+        {canUnmatch && (
+          <button className="btn btn-secondary" onClick={handleUnmatch} disabled={!canUnmatch} style={{ marginLeft: "10px", borderColor: "#fca5a5", color: "#b91c1c" }}>
+            {isUnmatching ? "⏳ Unmatching..." : "🔓 Unmatch"}
+          </button>
+        )}
         
         {/* Apply Trade ID controls */}
         {selectedItemIds.length === 1 && selectedStatements.length === 1 && (
@@ -603,7 +602,7 @@ export default function ReconciliationDeskPage() {
             ✕ Clear Selection ({selectedItemIds.length})
           </button>
         )}
-        <span className="tray-hint" style={{ marginLeft: "10px" }}>Select items to move, or one Ledger + Statement to match.</span>
+        <span className="tray-hint" style={{ marginLeft: "10px" }}>Select one Ledger + Statement to match.</span>
       </div>
 
       {/* Stats Bar */}
@@ -784,7 +783,6 @@ export default function ReconciliationDeskPage() {
                       <input
                         type="checkbox"
                         className="sel-checkbox"
-                        disabled={isMatched}
                         checked={isSelected}
                         onChange={() => toggleSelect(item)}
                       />
