@@ -1,7 +1,7 @@
 export default function InboxList({
   searchQuery, setSearchQuery, folderTitle, isLoading, currentFolder,
   filteredInbox, userId, formatDate, getStatusBadge, selectedTradeRef,
-  channel, loadConversation
+  channel, loadConversation, openNewCompose
 }) {
   return (
     <div className="email-list-panel">
@@ -14,6 +14,11 @@ export default function InboxList({
       </div>
       <div className="email-list-toolbar">
         <span className="toolbar-title">{folderTitle()}</span>
+        {channel !== "SYSTEM" && (
+          <button className="btn-compose" onClick={openNewCompose}>
+            ✏️ New Message
+          </button>
+        )}
       </div>
       <div className="email-list">
         {isLoading ? (

@@ -157,7 +157,6 @@ async function importEntityData(importBatch) {
       currency,
       address,
       bic: bic || null,
-      accountName: accountName || null,
       accountNumber: accountNumber || null,
       accountWithInstitution: accountWithInstitution || null,
       region: deriveRegion(entityName, address),
@@ -230,7 +229,7 @@ async function importSSIReference(importBatch) {
 
   const workbook = XLSX.readFile(SSI_FILE);
   const sheetName = "Final Table";
-  
+
   if (!workbook.SheetNames.includes(sheetName)) {
     console.error(`  ❌ Sheet "${sheetName}" not found. Available: ${workbook.SheetNames.join(", ")}`);
     return;
@@ -592,7 +591,7 @@ async function main() {
   console.log(`  SSI References:  ${stats.ssi.inserted} records`);
   console.log(`  Securities:      ${stats.securities.inserted} records`);
   console.log(`  Counterparties:  ${stats.counterparties.inserted} records`);
-  
+
   const totalErrors = stats.ssi.errors.length + stats.securities.errors.length + stats.counterparties.errors.length + stats.entities.errors.length;
   if (totalErrors > 0) {
     console.log(`\n  ⚠️ ${totalErrors} error(s) encountered during import. Review logs above.`);

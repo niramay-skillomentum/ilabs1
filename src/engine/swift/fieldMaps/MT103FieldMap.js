@@ -19,7 +19,7 @@ function mapFields(instruction) {
 
   // :20: Transaction Reference Number
   fields["20"] = {
-    value: instruction.transactionRef,
+    value: truncate(instruction.transactionRef || instruction.tradeRef, 16),
     description: "Transaction Reference Number"
   };
 
@@ -76,7 +76,7 @@ function mapFields(instruction) {
 
   // :70: Remittance Information
   fields["70"] = {
-    value: instruction.remittanceRef,
+    value: `/RFB/${instruction.remittanceRef || instruction.tradeRef}`,
     description: "Remittance Information"
   };
 

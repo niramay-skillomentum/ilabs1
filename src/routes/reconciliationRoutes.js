@@ -21,6 +21,7 @@ const reconService = require("../engine/reconciliationService");
 const matchingEngine = require("../engine/matchingEngine");
 const allocationService = require("../engine/allocationService");
 const ReconciliationConfig = require("../models/ReconciliationConfig");
+const { getIo } = require("../engine/socketEngine");
 
 // ======================================
 // GET /items — List reconciliation items with filtering
@@ -33,7 +34,8 @@ router.get("/items", authenticateToken, async (req, res) => {
       reconDesk: req.query.reconDesk || null,
       currency: req.query.currency || null,
       tradeRef: req.query.tradeRef || null,
-      matchId: req.query.matchId || null
+      matchId: req.query.matchId || null,
+      assignedTo: req.query.assignedTo === 'null' ? null : (req.query.assignedTo || undefined)
     };
 
     // Remove null filters
@@ -119,23 +121,52 @@ router.get("/allocation", authenticateToken, async (req, res) => {
 });
 
 // ======================================
-// GET /my-allocation — Get explicit assigned un-matched items for user
+// POST /apply-trade-id — Apply a Trade ID to a Statement
 // ======================================
-router.get("/my-allocation", authenticateToken, async (req, res) => {
+router.post("/apply-trade-id", authenticateToken, async (req, res) => {
   try {
-    const userId = req.user?.userId || "SYSTEM";
-    const result = await allocationService.allocateUserItems(userId);
-    return res.json({ success: true, ...result });
+    const { statementItemId, tradeRef } = req.body || {};
+    
+    if (!statementItemId || !tradeRef) {
+      return res.status(400).json({ success: false, message: "Statement ID and Trade Reference are required." });
+    }
+
+    const Trade = require("../models/Trade");
+    const ReconciliationItem = require("../models/ReconciliationItem");
+
+    const trade = await Trade.findOne({ tradeRef }).lean();
+    if (!trade) {
+      return res.status(404).json({ success: false, message: "Trade not found in database." });
+    }
+
+    const statement = await ReconciliationItem.findOne({ itemId: statementItemId, source: "STATEMENT" });
+    if (!statement) {
+      return res.status(404).json({ success: false, message: "Statement item not found." });
+    }
+
+    statement.itemRef1 = trade.tradeRef || null;
+    statement.itemRef2 = trade.underlyer || null;
+    statement.itemRef3 = trade.entity || null;
+    statement.itemRef4 = trade.foRegion || null;
+    statement.itemRef5 = trade.product || null;
+    statement.itemRef6 = trade.productType || null;
+    statement.itemRef7 = trade.counterpartyGroup || trade.counterparty || null;
+
+    await statement.save();
+    
+    try { getIo().emit("recon_desk_update"); } catch(e) { console.error("Socket emit error:", e); }
+
+    return res.json({ success: true, item: statement });
   } catch (err) {
-    console.error("[Reconciliation Route] GET /my-allocation error:", err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[Reconciliation Route] POST /apply-trade-id error:", err);
+    res.status(500).json({ success: false, message: "Failed to apply trade ID." });
   }
 });
 
 // ======================================
 // POST /manual-match — User-driven Ledger ↔ Statement match
 // Body: { ledgerItemId, statementItemId } (order-independent)
-// Returns only a success/failure verdict — never the validation reason.
+// Returns specific validation reasons for UI feedback on failure.
 // ======================================
 router.post("/manual-match", authenticateToken, async (req, res) => {
   try {
@@ -146,11 +177,34 @@ router.post("/manual-match", authenticateToken, async (req, res) => {
 
     const result = await matchingEngine.manualMatch(ledgerItemId, statementItemId);
     // Business rejection returns HTTP 200 with success:false so the UI can
-    // show a neutral toast without treating it as a server error.
+    // show a specific toast without treating it as a server error.
     return res.json(result);
   } catch (err) {
     console.error("[Reconciliation Route] POST /manual-match error:", err);
     res.status(500).json({ success: false, message: "Items cannot be matched." });
+  }
+});
+
+// ======================================
+// POST /unmatch — Reverse a user-driven match
+// Body: { matchId }
+// ======================================
+router.post("/unmatch", authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.body || {};
+    if (!matchId) {
+      return res.status(400).json({ success: false, message: "Match ID is required." });
+    }
+
+    const result = await matchingEngine.unmatch(matchId);
+    if (result.success) {
+      return res.json({ success: true, message: `Match ${matchId} reversed successfully.`, cleared: result.cleared });
+    } else {
+      return res.status(400).json({ success: false, message: "Failed to reverse match. It may have already been cleared." });
+    }
+  } catch (err) {
+    console.error("[Reconciliation Route] POST /unmatch error:", err);
+    res.status(500).json({ success: false, message: "Server error during unmatch." });
   }
 });
 

@@ -278,8 +278,13 @@ router.get("/personal", authenticateToken, async (req, res) => {
   try {
     const Conversation = require("../models/Conversation");
     
-    // Also fetch conversations for trades currently assigned to this user
-    const assignedTrades = await Trade.find({ assignedTo: userId }).select("tradeRef").lean();
+    // Also fetch conversations for trades currently or historically assigned to this user
+    const assignedTrades = await Trade.find({ 
+      $or: [
+        { assignedTo: userId },
+        { assignedHistory: userId }
+      ]
+    }).select("tradeRef").lean();
     const assignedTradeRefs = assignedTrades.map(t => t.tradeRef);
 
     const conversations = await Conversation.find({

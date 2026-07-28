@@ -101,6 +101,15 @@ router.post("/action", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Await FO response before validating" });
     }
 
+    if (
+      action === "SETTLEMENT_APPROVE" &&
+      sessionTrade.direction === "SELL" &&
+      sessionTrade.settlementType === "BILATERAL" &&
+      !sessionTrade.cptySSIAcknowledged
+    ) {
+      return res.status(400).json({ error: "Cannot approve. Counterparty has not acknowledged the SSI." });
+    }
+
     let nextStatus;
     let nextDesk;
 

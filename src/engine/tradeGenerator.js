@@ -401,6 +401,21 @@ function generateXmlAudit(trade) {
 // TRADE GENERATION
 // ============================
 
+function deriveRegionFromEntity(entityName) {
+  if (!entityName) return pick(REGIONS);
+  const name = String(entityName).toUpperCase();
+  if (name.includes("TOKYO") || name.includes("SINGAPORE") || name.includes("HONG KONG") || name.includes("APAC")) {
+    return "APAC";
+  }
+  if (name.includes("NEW YORK") || name.includes("CHICAGO") || name.includes("AMER")) {
+    return "AMER";
+  }
+  if (name.includes("LONDON") || name.includes("FRANKFURT") || name.includes("PARIS") || name.includes("EMEA")) {
+    return "EMEA";
+  }
+  return pick(REGIONS);
+}
+
 /**
  * Generate a single realistic trade object with desk-specific truths.
  * @param {string} desk - Target desk (MO, CONFIRMATION, SETTLEMENT)
@@ -444,10 +459,10 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let entity, foRegion;
   if (ssiPairData && ssiPairData.entityName) {
     entity = ssiPairData.entityName;
-    foRegion = ssiPairData.entityRegion || pick(REGIONS);
+    foRegion = ssiPairData.entityRegion || deriveRegionFromEntity(entity);
   } else {
     entity = pick(ENTITIES);
-    foRegion = pick(REGIONS);
+    foRegion = deriveRegionFromEntity(entity);
   }
 
   // ── CURRENCY & COUNTERPARTY ──
@@ -569,30 +584,62 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
   let presentedSSIRefId = null;
 
   if (ssiPairData) {
-    // ── REFERENCE DATA PATH (MongoDB-backed) ──
+    // 🚀 REFERENCE DATA PATH (MongoDB-backed) 🚀
     truthSSIRefId = ssiPairData.truthSSIRefId;
     presentedSSIRefId = ssiPairData.presentedSSIRefId;
 
-    truthSettlement = {
-      ...ssiPairData.truthSSI,
-      ssiRefId: ssiPairData.truthSSIRefId,
-      amount: universalTruth.amount,
-      valueDate: universalTruth.valueDate,
-      currency: universalTruth.currency,
-      counterparty: universalTruth.counterparty,
-      paymentReference: sPaymentReference,
-      settlementDate: sSettlementDate,
-      settlementType: ssiPairData.settlementType || derivedSettlementType
-    };
+    if (direction === "SELL") {
+      const allEntities = options.allEntities || [];
+      const entityObj = allEntities.find(e => e.entityName === entity && e.currency === currency);
+      
+      truthSettlement = {
+        ssiRefId: "ENTITY-SSI",
+        beneficiaryName: entityObj ? (entityObj.accountName || entityObj.entityName) : entity,
+        beneficiaryBank: entityObj ? entityObj.accountWithInstitution : "Fallback Bank",
+        beneficiaryBIC: entityObj ? entityObj.bic : "FLLBK00",
+        accountNumber: entityObj ? entityObj.accountNumber : "00000000",
+        accountType: "Nostro",
+        settlementMethod: "SWIFT",
+        correspondentBank: "Fallback Bank",
+        amount: universalTruth.amount,
+        valueDate: universalTruth.valueDate,
+        currency: universalTruth.currency,
+        counterparty: universalTruth.counterparty,
+        paymentReference: sPaymentReference,
+        settlementDate: sSettlementDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
+      
+      presentedSettlement = {
+        ...ssiPairData.presentedSSI,
+        ssiRefId: ssiPairData.presentedSSIRefId,
+        currency: universalTruth.currency,
+        paymentReference: sPaymentReference,
+        settlementDate: bookingValueDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
+    } else {
+      truthSettlement = {
+        ...ssiPairData.truthSSI,
+        ssiRefId: ssiPairData.truthSSIRefId,
+        amount: universalTruth.amount,
+        valueDate: universalTruth.valueDate,
+        currency: universalTruth.currency,
+        counterparty: universalTruth.counterparty,
+        paymentReference: sPaymentReference,
+        settlementDate: sSettlementDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
 
-    presentedSettlement = {
-      ...ssiPairData.presentedSSI,
-      ssiRefId: ssiPairData.presentedSSIRefId,
-      currency: universalTruth.currency,
-      paymentReference: sPaymentReference,
-      settlementDate: bookingValueDate,
-      settlementType: ssiPairData.settlementType || derivedSettlementType
-    };
+      presentedSettlement = {
+        ...ssiPairData.presentedSSI,
+        ssiRefId: ssiPairData.presentedSSIRefId,
+        currency: universalTruth.currency,
+        paymentReference: sPaymentReference,
+        settlementDate: bookingValueDate,
+        settlementType: ssiPairData.settlementType || derivedSettlementType
+      };
+    }
 
     console.log(`[TradeGen] SSI from reference data: truth=${truthSSIRefId}, presented=${presentedSSIRefId}, break=${ssiPairData.breakScenario || 'NONE'}`);
   } else {
@@ -755,10 +802,11 @@ async function generateTrades(cleanCount, breakCount, desk, settlementInitialSta
 
   let ssiIndex = 0;
 
-  // ── Pre-fetch RECENT_AMOUNTS from MongoDB ──
+  // 🔍 Pre-fetch RECENT_AMOUNTS from MongoDB 🔍
   let recentAmountsDoc = await SystemConfig.findOne({ key: "RECENT_AMOUNTS" });
   let recentAmounts = recentAmountsDoc ? (recentAmountsDoc.value || []) : [];
-  const genOptions = { recentAmounts };
+  const allEntities = await ssiRepository.getAllEntities();
+  const genOptions = { recentAmounts, allEntities };
 
   // 1. Generate Clean Trades ──
   for (let i = 0; i < cleanCount; i++) {

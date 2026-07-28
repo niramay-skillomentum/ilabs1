@@ -24,7 +24,7 @@ function ThreadEmail({ msg, sender, toLabel, isLatest, snippet, formatDateFull }
 export default function MessageThread({
   selectedTradeRef, currentTrade, buildSubject, currentMessages,
   openReplyModal, resolveState, resolveConversation, getSenderInfo,
-  userId, desk, channel, getRecipientLabel, formatDateFull, isResolving, readOnly
+  userId, desk, channel, getRecipientLabel, formatDateFull, isResolving, readOnly, openSendSSIModal
 }) {
   if (!selectedTradeRef || !currentTrade) {
     return (
@@ -58,6 +58,9 @@ export default function MessageThread({
         ) : (
           <div className="email-actions-bar">
             <button className="btn-action primary" onClick={openReplyModal}>↩ Reply</button>
+            {currentTrade.direction === "SELL" && currentTrade.settlementType === "BILATERAL" && desk === "SETTLEMENT" && channel !== "FO" && (
+              <button className="btn-action" style={{backgroundColor:"#0078d4", color:"white"}} onClick={openSendSSIModal}>✉ Send SSI</button>
+            )}
             <button className="btn-action resolve" disabled={resolveState.disabled || isResolving}
               onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
               {isResolving ? "Resolving..." : resolveState.text}

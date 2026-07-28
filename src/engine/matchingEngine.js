@@ -23,6 +23,7 @@ const reconService = require("./reconciliationService");
 const validationService = require("./reconciliationValidationService");
 const ReconciliationConfig = require("../models/ReconciliationConfig");
 const { RECON_SOURCE, RECON_STATUS } = require("./reconciliationConstants");
+const { getIo } = require("./socketEngine");
 
 // ======================================
 // PRIMARY: MANUAL, USER-DRIVEN MATCH
@@ -53,9 +54,9 @@ async function manualMatch(itemIdA, itemIdB) {
   // Ask the hidden validation service for a verdict.
   const verdict = validationService.validatePair(a, b);
   if (!verdict.valid) {
-    // Reason is logged internally but NEVER returned to the user.
+    // Reason is logged internally and returned to the UI for clear messaging.
     console.log(`[MatchingService] Manual match rejected (${a.itemId} / ${b.itemId}): ${verdict.reason}`);
-    return fail("Items cannot be matched.");
+    return fail(verdict.reason);
   }
 
   // Resolve which is ledger / statement for the ordered update.
@@ -70,6 +71,8 @@ async function manualMatch(itemIdA, itemIdB) {
   if (modified < 2) {
     return fail("Items cannot be matched.");
   }
+
+  try { getIo().emit("recon_desk_update"); } catch(e) {}
 
   console.log(`[MatchingService] Manual match: ${ledger.itemId} ↔ ${statement.itemId} → ${matchId}`);
   return {
@@ -91,6 +94,11 @@ async function manualMatch(itemIdA, itemIdB) {
 async function unmatch(matchId) {
   if (!matchId) return { success: false, cleared: 0 };
   const cleared = await repo.clearMatch(matchId);
+  
+  if (cleared > 0) {
+    try { getIo().emit("recon_desk_update"); } catch(e) { console.error("Socket emit error:", e); }
+  }
+  
   return { success: cleared > 0, cleared };
 }
 

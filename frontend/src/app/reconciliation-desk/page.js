@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { loadUserId, getToken, authHeaders } from "../../lib/auth";
+import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 
 // ============ Helpers ============
@@ -323,9 +324,9 @@ export default function ReconciliationDeskPage() {
   const [amountTo, setAmountTo] = useState("");
   const [appliedFilters, setAppliedFilters] = useState({});
 
-  // Selection for user-driven matching: at most one LEDGER + one STATEMENT.
-  const [selectedLedger, setSelectedLedger] = useState(null);      // itemId
-  const [selectedStatement, setSelectedStatement] = useState(null); // itemId
+  // Selection for user-driven matching and moving.
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [tradeIdInput, setTradeIdInput] = useState("");
 
   // ============ Auth ============
   useEffect(() => {
@@ -342,7 +343,7 @@ export default function ReconciliationDeskPage() {
   const fetchStats = useCallback(async () => {
     if (!getToken()) return;
     try {
-      const res = await fetch(`${API}/api/reconciliation/stats`, { headers: authHeaders() });
+      const res = await fetch(`${API}/api/reconciliation/stats?t=${Date.now()}`, { headers: authHeaders() });
       const data = await res.json();
       if (data.success) setStats(data);
     } catch (err) {
@@ -361,7 +362,7 @@ export default function ReconciliationDeskPage() {
     setIsLoading(true);
     setLoadingLabel("Preparing Reconciliation Desk...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/items?limit=10000`, {
+      const res = await fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
         method: "GET",
         headers: authHeaders()
       });
@@ -384,23 +385,56 @@ export default function ReconciliationDeskPage() {
     if (userId) loadAllocation();
   }, [userId, loadAllocation]);
 
+  // ============ Socket Real-Time Sync ============
+  useEffect(() => {
+    if (!userId) return;
+    const token = getToken();
+    if (!token) return;
+
+    // Use explicit backend URL on localhost to bypass Next.js proxy 404s
+    const socketUrl = API || (window.location.hostname === "localhost" ? "http://localhost:3002" : undefined);
+    const socket = io(socketUrl, { auth: { token } });
+
+    socket.on("recon_desk_update", () => {
+      // Background sync without loading overlay
+      fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
+        method: "GET",
+        headers: authHeaders()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setItems(data.items || []);
+          fetchStats();
+        }
+      })
+      .catch(err => console.error("[ReconDesk] Background sync error:", err));
+    });
+
+    return () => socket.disconnect();
+  }, [userId, fetchStats]);
+
   // ============ Selection ============
   const toggleSelect = (item) => {
-    if (item.status === "Matched") return; // matched rows are locked
-    if (item.source === "LEDGER") {
-      setSelectedLedger(prev => prev === item.itemId ? null : item.itemId);
-    } else {
-      setSelectedStatement(prev => prev === item.itemId ? null : item.itemId);
-    }
+    setSelectedItemIds(prev => 
+      prev.includes(item.itemId) ? prev.filter(id => id !== item.itemId) : [...prev, item.itemId]
+    );
   };
 
   const clearSelection = () => {
-    setSelectedLedger(null);
-    setSelectedStatement(null);
+    setSelectedItemIds([]);
+    setTradeIdInput("");
   };
 
+  // Derived selected items for matching
+  const selectedLedgers = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "LEDGER");
+  const selectedStatements = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "STATEMENT");
+  const selectedLedger = selectedLedgers.length === 1 ? selectedLedgers[0].itemId : null;
+  const selectedStatement = selectedStatements.length === 1 ? selectedStatements[0].itemId : null;
+  const selectedMatchedItems = items.filter(i => selectedItemIds.includes(i.itemId) && i.status === "Matched");
+
   // ============ User-driven Match ============
-  const canMatch = selectedLedger && selectedStatement && !isMatching;
+  const canMatch = selectedItemIds.length === 2 && selectedLedger && selectedStatement && selectedMatchedItems.length === 0 && !isMatching;
 
   const handleMatch = async () => {
     if (!canMatch) return;
@@ -432,6 +466,67 @@ export default function ReconciliationDeskPage() {
       toast.error("Items cannot be matched.");
     } finally {
       setIsMatching(false);
+    }
+  };
+
+  // ============ User-driven Unmatch ============
+  const [isUnmatching, setIsUnmatching] = useState(false);
+  const uniqueMatchIds = [...new Set(selectedMatchedItems.map(i => i.matchId))];
+  const canUnmatch = selectedItemIds.length > 0 && selectedItemIds.length === selectedMatchedItems.length && uniqueMatchIds.length === 1 && !isUnmatching;
+  const matchIdToUnmatch = canUnmatch ? uniqueMatchIds[0] : null;
+
+  const handleUnmatch = async () => {
+    if (!canUnmatch || !matchIdToUnmatch) return;
+    setIsUnmatching(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/unmatch`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: matchIdToUnmatch })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || `Match ${matchIdToUnmatch} reversed successfully.`);
+        // Update local state: clear matchId and set status to Outstanding for all items with this matchId
+        setItems(prev => prev.map(it => it.matchId === matchIdToUnmatch ? { ...it, status: "Outstanding", matchId: null } : it));
+        clearSelection();
+        fetchStats();
+      } else {
+        toast.error(data.message || "Failed to reverse match.");
+      }
+    } catch (err) {
+      toast.error("Failed to reverse match.");
+    } finally {
+      setIsUnmatching(false);
+    }
+  };
+
+  // ============ Apply Trade ID ============
+  const [isApplying, setIsApplying] = useState(false);
+  const canApplyTradeId = selectedItemIds.length === 1 && selectedStatements.length === 1 && tradeIdInput.trim() !== "" && !isApplying;
+
+  const handleApplyTradeId = async () => {
+    if (!canApplyTradeId) return;
+    setIsApplying(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/apply-trade-id`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ statementItemId: selectedStatement, tradeRef: tradeIdInput.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Trade ID applied successfully.");
+        // Update local state for the statement
+        setItems(prev => prev.map(it => it.itemId === selectedStatement ? { ...it, ...data.item } : it));
+        setTradeIdInput("");
+      } else {
+        toast.error(data.message || "Failed to apply Trade ID.");
+      }
+    } catch (err) {
+      toast.error("Failed to apply Trade ID.");
+    } finally {
+      setIsApplying(false);
     }
   };
 
@@ -492,18 +587,15 @@ export default function ReconciliationDeskPage() {
           <button className="btn btn-secondary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px", background: "#1E3A5F", color: "white", borderColor: "#1E3A5F" }}>
             GCMS
           </button>
-          <button className="btn btn-secondary" onClick={() => router.push("/reconciliation-desk/my-allocations")} style={{ marginRight: "10px" }}>
-            My Allocations
-          </button>
           <button className="btn btn-back" onClick={() => router.push("/dashboard")}>
               ← Dashboard
           </button>
         </div>
       </div>
 
-      {/* Match Tray — user selects one Ledger + one Statement, then matches */}
+      {/* Match Tray — user selects one Ledger + one Statement, then matches, or multiple to move */}
       <div className="match-tray">
-        <span style={{ fontSize: 13, fontWeight: 700 }}>Manual Match</span>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>Action Menu</span>
         <span className={`tray-chip ${selectedLedger ? "filled-ledger" : ""}`}>
           Ledger: {selectedLedger || "—"}
         </span>
@@ -513,12 +605,34 @@ export default function ReconciliationDeskPage() {
         <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
           {isMatching ? "⏳ Matching..." : "🔗 Match"}
         </button>
-        {(selectedLedger || selectedStatement) && (
-          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={clearSelection}>
-            ✕ Clear Selection
+        {canUnmatch && (
+          <button className="btn btn-secondary" onClick={handleUnmatch} disabled={!canUnmatch} style={{ marginLeft: "10px", borderColor: "#fca5a5", color: "#b91c1c" }}>
+            {isUnmatching ? "⏳ Unmatching..." : "🔓 Unmatch"}
           </button>
         )}
-        <span className="tray-hint">Select one Ledger row and one Statement row, then click Match.</span>
+        
+        {/* Apply Trade ID controls */}
+        {selectedItemIds.length === 1 && selectedStatements.length === 1 && (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "10px", paddingLeft: "10px", borderLeft: "1px solid rgba(255,255,255,0.2)" }}>
+            <input 
+              type="text" 
+              placeholder="Trade ID..." 
+              style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", width: "120px" }}
+              value={tradeIdInput}
+              onChange={(e) => setTradeIdInput(e.target.value)}
+            />
+            <button className="btn btn-primary" onClick={handleApplyTradeId} disabled={!canApplyTradeId}>
+              {isApplying ? "⏳ Applying..." : "✓ Apply"}
+            </button>
+          </div>
+        )}
+
+        {selectedItemIds.length > 0 && (
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px", marginLeft: "10px" }} onClick={clearSelection}>
+            ✕ Clear Selection ({selectedItemIds.length})
+          </button>
+        )}
+        <span className="tray-hint" style={{ marginLeft: "10px" }}>Select one Ledger + Statement to match.</span>
       </div>
 
       {/* Stats Bar */}
@@ -690,7 +804,7 @@ export default function ReconciliationDeskPage() {
               <tbody>
                 {filteredItems.map((item) => {
                   const isMatched = item.status === "Matched";
-                  const isSelected = item.itemId === selectedLedger || item.itemId === selectedStatement;
+                  const isSelected = selectedItemIds.includes(item.itemId);
                   return (
                   <tr
                     key={item._id || item.itemId}
@@ -701,7 +815,6 @@ export default function ReconciliationDeskPage() {
                       <input
                         type="checkbox"
                         className="sel-checkbox"
-                        disabled={isMatched}
                         checked={isSelected}
                         onChange={() => toggleSelect(item)}
                       />

@@ -39,17 +39,17 @@ const AMOUNT_TOLERANCE = 0.01;
 function validatePair(ledgerItem, statementItem) {
   // ── Structural guards ──
   if (!ledgerItem || !statementItem) {
-    return deny("MISSING_ITEM");
+    return deny("Missing item for matching.");
   }
 
   if (ledgerItem.itemId === statementItem.itemId) {
-    return deny("SAME_ITEM");
+    return deny("Cannot match an item with itself.");
   }
 
   // Exactly one LEDGER and one STATEMENT (order-independent).
   const sources = [ledgerItem.source, statementItem.source].sort().join("|");
   if (sources !== [RECON_SOURCE.LEDGER, RECON_SOURCE.STATEMENT].sort().join("|")) {
-    return deny("SOURCE_COMBINATION");
+    return deny("Match must be between one Ledger and one Statement item.");
   }
 
   // Normalise which is which regardless of the order they were passed in.
@@ -58,29 +58,26 @@ function validatePair(ledgerItem, statementItem) {
 
   // Both must still be Outstanding.
   if (ledger.status !== RECON_STATUS.OUTSTANDING || statement.status !== RECON_STATUS.OUTSTANDING) {
-    return deny("NOT_OUTSTANDING");
+    return deny("Recon Status mismatch: Both items must be Outstanding.");
   }
 
   // ── Hidden business-identifier check ──
-  // Ledger.itemRef1 (tradeRef) must equal Statement.ref5 (SWIFT Field 20).
+  // Ledger.itemRef1 (tradeRef) must equal Statement's Trade ID (itemRef1 if applied manually, else ref5).
   const ledgerRef = normStr(ledger.itemRef1);
-  const statementRef = normStr(statement.ref5);
+  const statementRef = normStr(statement.itemRef1) || normStr(statement.ref5);
   if (!ledgerRef || !statementRef || ledgerRef !== statementRef) {
-    return deny("REFERENCE_MISMATCH");
+    return deny(`Trade ID mismatch: Ledger (${ledgerRef || "none"}) vs Statement (${statementRef || "none"}).`);
   }
 
   // ── Economic agreement ──
   if (!amountsMatch(ledger.amount, statement.amount)) {
-    return deny("AMOUNT_MISMATCH");
+    return deny(`Amount mismatch: Ledger (${ledger.amount}) vs Statement (${statement.amount}).`);
   }
   if (normStr(ledger.currency).toUpperCase() !== normStr(statement.currency).toUpperCase()) {
-    return deny("CURRENCY_MISMATCH");
-  }
-  if (!datesMatch(ledger.valueDate, statement.valueDate)) {
-    return deny("VALUE_DATE_MISMATCH");
+    return deny(`Currency mismatch: Ledger (${ledger.currency}) vs Statement (${statement.currency}).`);
   }
 
-  return { valid: true, reason: "MATCH" };
+  return { valid: true, reason: "Match successful." };
 }
 
 // ======================================

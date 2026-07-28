@@ -10,6 +10,9 @@
 //   SELL → RECEIVE: Counterparty = Ordering, Our Bank = Beneficiary
 // ======================================
 
+const crypto = require("crypto");
+const simulationClock = require("../clock");
+
 /**
  * Build a canonical PaymentInstruction from trade + entity + SSI data.
  *
@@ -21,20 +24,22 @@
 function build(trade, ourBank, counterpartySSI) {
   const direction = resolveDirection(trade.direction);
 
+  const hashBase = crypto.createHash('md5').update(trade.tradeRef).digest('hex').toUpperCase();
+  const settledDate = simulationClock.getCurrentTime();
+
   // Base payment economics (always from trade)
   const instruction = {
     // References
     tradeRef: trade.tradeRef,
-    settlementRef: trade.tradeRef,   // Settlement ref = trade ref in this system
-    relatedRef: trade.tradeRef,
-    transactionRef: generatePatternRef("TR", 8),
-    remittanceRef: generatePatternRef("RF", 6),
-    corrRef: generatePatternRef("CR", 10),
+    settlementRef: hashBase.substring(5, 13),
+    relatedRef: hashBase.substring(5, 13),
+    remittanceRef: hashBase.substring(13, 21),
+    transactionRef: `${settledDate.getFullYear()}${String(settledDate.getMonth() + 1).padStart(2, '0')}${String(settledDate.getDate()).padStart(2, '0')}REF${hashBase.substring(0, 5)}`,
 
     // Economics (always from trade — source of truth)
     amount: trade.amount,
     currency: trade.currency,
-    valueDate: trade.truths?.settlement?.settlementDate || trade.settlementDate || trade.valueDate,
+    valueDate: settledDate,
 
     // Payment direction
     paymentDirection: direction,
@@ -147,15 +152,6 @@ function resolveDirection(tradeDirection) {
   if (dir === "SELL" || dir === "RECEIVE") return "RECEIVE";
   // Default to PAY for safety
   return "PAY";
-}
-
-function generatePatternRef(prefix, totalLength) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = prefix;
-  while (result.length < totalLength) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
 }
 
 module.exports = {
