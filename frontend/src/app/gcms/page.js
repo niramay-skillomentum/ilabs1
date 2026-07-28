@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { loadFullName } from '../../lib/auth';
+import { loadFullName, authHeaders } from '../../lib/auth';
 
 export default function GCMSPage() {
   const router = useRouter();
@@ -17,13 +17,13 @@ export default function GCMSPage() {
     setUserName(loadFullName() || "SIM_OPS_01");
     async function loadData() {
       try {
-        const token = localStorage.getItem("token");
-        const res = await fetch("/api/swift/all", {
-          headers: { Authorization: `Bearer ${token}` }
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/swift/all`, {
+          headers: authHeaders()
         });
         const data = await res.json();
         if (data.success && data.messages) {
           const formatted = data.messages.map(msg => ({
+            _id: msg._id,
             id: msg.tradeRef,
             valueDate: msg.valueDate ? new Date(msg.valueDate).toISOString().split('T')[0] : "-",
             senderBic: msg.senderBIC || "-",
@@ -207,9 +207,9 @@ export default function GCMSPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {processedData.map(tx => (
+                  {processedData.map((tx, idx) => (
                     <tr 
-                      key={tx.id + tx.type} 
+                      key={tx._id || idx} 
                       className={activeRowId === tx.id ? 'selected' : ''}
                       onClick={() => setActiveRowId(tx.id)}
                     >
