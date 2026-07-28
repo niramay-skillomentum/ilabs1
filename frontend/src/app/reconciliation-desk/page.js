@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { loadUserId, getToken, authHeaders } from "../../lib/auth";
+import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 
 // ============ Helpers ============
@@ -342,7 +343,7 @@ export default function ReconciliationDeskPage() {
   const fetchStats = useCallback(async () => {
     if (!getToken()) return;
     try {
-      const res = await fetch(`${API}/api/reconciliation/stats`, { headers: authHeaders() });
+      const res = await fetch(`${API}/api/reconciliation/stats?t=${Date.now()}`, { headers: authHeaders() });
       const data = await res.json();
       if (data.success) setStats(data);
     } catch (err) {
@@ -361,7 +362,7 @@ export default function ReconciliationDeskPage() {
     setIsLoading(true);
     setLoadingLabel("Preparing Reconciliation Desk...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/items?limit=10000`, {
+      const res = await fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
         method: "GET",
         headers: authHeaders()
       });
@@ -383,6 +384,35 @@ export default function ReconciliationDeskPage() {
   useEffect(() => {
     if (userId) loadAllocation();
   }, [userId, loadAllocation]);
+
+  // ============ Socket Real-Time Sync ============
+  useEffect(() => {
+    if (!userId) return;
+    const token = getToken();
+    if (!token) return;
+
+    // Use explicit backend URL on localhost to bypass Next.js proxy 404s
+    const socketUrl = API || (window.location.hostname === "localhost" ? "http://localhost:3002" : undefined);
+    const socket = io(socketUrl, { auth: { token } });
+
+    socket.on("recon_desk_update", () => {
+      // Background sync without loading overlay
+      fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
+        method: "GET",
+        headers: authHeaders()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setItems(data.items || []);
+          fetchStats();
+        }
+      })
+      .catch(err => console.error("[ReconDesk] Background sync error:", err));
+    });
+
+    return () => socket.disconnect();
+  }, [userId, fetchStats]);
 
   // ============ Selection ============
   const toggleSelect = (item) => {

@@ -21,6 +21,7 @@ const reconService = require("../engine/reconciliationService");
 const matchingEngine = require("../engine/matchingEngine");
 const allocationService = require("../engine/allocationService");
 const ReconciliationConfig = require("../models/ReconciliationConfig");
+const { getIo } = require("../engine/socketEngine");
 
 // ======================================
 // GET /items — List reconciliation items with filtering
@@ -152,6 +153,8 @@ router.post("/apply-trade-id", authenticateToken, async (req, res) => {
     statement.itemRef7 = trade.counterpartyGroup || trade.counterparty || null;
 
     await statement.save();
+    
+    try { getIo().emit("recon_desk_update"); } catch(e) { console.error("Socket emit error:", e); }
 
     return res.json({ success: true, item: statement });
   } catch (err) {

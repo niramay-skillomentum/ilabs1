@@ -23,6 +23,7 @@ const reconService = require("./reconciliationService");
 const validationService = require("./reconciliationValidationService");
 const ReconciliationConfig = require("../models/ReconciliationConfig");
 const { RECON_SOURCE, RECON_STATUS } = require("./reconciliationConstants");
+const { getIo } = require("./socketEngine");
 
 // ======================================
 // PRIMARY: MANUAL, USER-DRIVEN MATCH
@@ -71,6 +72,8 @@ async function manualMatch(itemIdA, itemIdB) {
     return fail("Items cannot be matched.");
   }
 
+  try { getIo().emit("recon_desk_update"); } catch(e) {}
+
   console.log(`[MatchingService] Manual match: ${ledger.itemId} ↔ ${statement.itemId} → ${matchId}`);
   return {
     success: true,
@@ -91,6 +94,11 @@ async function manualMatch(itemIdA, itemIdB) {
 async function unmatch(matchId) {
   if (!matchId) return { success: false, cleared: 0 };
   const cleared = await repo.clearMatch(matchId);
+  
+  if (cleared > 0) {
+    try { getIo().emit("recon_desk_update"); } catch(e) { console.error("Socket emit error:", e); }
+  }
+  
   return { success: cleared > 0, cleared };
 }
 
