@@ -1,0 +1,1 @@
+const mongoose = require('mongoose'); mongoose.connect('mongodb://localhost:27017/ilabs1').then(async () => { const Trade = require('./src/models/Trade'); const counts = await Trade.aggregate([{ $group: { _id: '$currentStatus', count: { $sum: 1 } } }]); console.log('Trade statuses:', counts); process.exit(0); })

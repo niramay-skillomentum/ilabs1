@@ -1,0 +1,1 @@
+const mongoose = require('mongoose'); mongoose.connect('mongodb://localhost:27017/ilabs1').then(async () => { const Item = require('./src/models/ReconciliationItem'); const items = await Item.aggregate([{ $group: { _id: '$source', count: { $sum: 1 } } }]); console.log('Items:', items); process.exit(0); })
