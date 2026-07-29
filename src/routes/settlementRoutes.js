@@ -6,6 +6,8 @@ const { authenticateToken } = require("../middleware/auth");
 const scoringEngine = require("../engine/scoringEngine");
 const LifecycleEngine = require("../engine/lifecycle");
 const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
+const cutoffEngine = require("../engine/cutoff");
+const cutoffEnforcer = require("../engine/cutoffEnforcer");
 
 // ======================================
 // SETTLEMENT WORKFLOW ENGINE ROUTES
@@ -29,6 +31,13 @@ router.post("/amend", authenticateToken, async (req, res) => {
 
     if (!["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus)) {
       return res.status(400).json({ success: false, error: "Amendment can only be requested from a raised break or after a failed verification." });
+    }
+
+    // Cut-off enforcement
+    if (cutoffEngine.isCutOffBreached(trade.currency)) {
+      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
+      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
+      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Amendment not allowed.`, cutoffBreached: true });
     }
 
     // If user selected a specific SSI ID, amend settlement details from that SSI
@@ -97,6 +106,13 @@ router.post("/send-for-approval", authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: "Trade must be AMENDED before it can be sent for approval." });
     }
 
+    // Cut-off enforcement
+    if (cutoffEngine.isCutOffBreached(trade.currency)) {
+      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
+      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
+      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Approval not allowed.`, cutoffBreached: true });
+    }
+
     await systemWorkflowEngine.scheduleVerification(trade, userId, "SETTLEMENT");
     return res.json({ success: true, trade, currentStatus: trade.currentStatus });
   } catch (err) {
@@ -116,6 +132,13 @@ router.post("/settle", authenticateToken, async (req, res) => {
 
     if (trade.currentStatus !== "APPROVED") {
       return res.status(400).json({ success: false, error: "Trade must be APPROVED before settlement." });
+    }
+
+    // Cut-off enforcement
+    if (cutoffEngine.isCutOffBreached(trade.currency)) {
+      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
+      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
+      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Settlement not allowed.`, cutoffBreached: true });
     }
 
     const plain = trade.toObject();

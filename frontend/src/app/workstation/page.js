@@ -75,7 +75,15 @@ const allowed = {
   CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
   SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
   SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
-  SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
+  SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING", "SETTLEMENT_BREAK"] // SETTLEMENT_BREAK allowed for missed value date
+};
+
+// Currency cut-off table (EST) — mirrors backend cutoff.js
+const CURRENCY_CUTOFF_DISPLAY = {
+  JPY: "12:00 PM", HKD: "12:00 PM", AUD: "12:00 PM",
+  EUR: "2:00 PM", GBP: "2:00 PM", CHF: "2:00 PM", SEK: "2:00 PM",
+  CAD: "5:00 PM", MXN: "5:00 PM",
+  USD: "6:00 PM", ZAR: "6:00 PM"
 };
 
 // ============ SessionClock (F1) ============
@@ -102,10 +110,12 @@ const SessionClock = memo(function SessionClock({ sessionExpiry, sessionStart, o
       const secs = Math.floor((diff % (1000 * 60)) / 1000);
       setSessionTimerStr(`Session: ${hrs}h ${mins}m ${secs}s remaining`);
 
+      // Simulation speed: 3x (9 simulated hours in 3 real hours)
+      const SIM_SPEED = 3;
       const elapsedMs = new Date() - new Date(sessionStart);
       const currentSimTime = new Date();
       currentSimTime.setHours(9, 0, 0, 0);
-      currentSimTime.setTime(currentSimTime.getTime() + elapsedMs);
+      currentSimTime.setTime(currentSimTime.getTime() + elapsedMs * SIM_SPEED);
       const pad = (n) => String(n).padStart(2, "0");
       setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth() + 1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
 
@@ -217,6 +227,9 @@ function WorkstationComponent() {
   const [swiftActiveTab, setSwiftActiveTab] = useState(0);
   const [isLoadingSwift, setIsLoadingSwift] = useState(false);
 
+  // Cut-off tracking — currencies whose cut-offs have been breached
+  const [cutoffsReached, setCutoffsReached] = useState([]);
+
   const socketRef = useRef(null);
   const refreshTimerRef = useRef(null);
 
@@ -295,11 +308,18 @@ function WorkstationComponent() {
       if (payload && payload.tradeRef && payload.currentStatus) {
         setQueue(prev => prev.map(t =>
           t.tradeRef === payload.tradeRef
-            ? { ...t, currentStatus: payload.currentStatus }
+            ? { ...t, currentStatus: payload.currentStatus, cutoffMissedReason: payload.cutoffMissedReason || t.cutoffMissedReason }
             : t));
       } else {
         // Malformed/legacy event — fall back to a reconciling refresh.
         scheduleRefresh(dsk);
+      }
+    });
+
+    // Listen for clock_tick to track which currency cut-offs have been breached
+    socket.on("clock_tick", (payload) => {
+      if (payload && payload.cutoffsReached) {
+        setCutoffsReached(payload.cutoffsReached);
       }
     });
 
@@ -772,11 +792,20 @@ function WorkstationComponent() {
                 )}
                 {desk === "SETTLEMENT" && (
                   <>
-                    <button className="btn primary" onClick={startSettlementCptyFlow}>Mail CPTY</button>
                     <button
-                      className={`btn primary ${selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'disabled' : ''}`}
-                      disabled={selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged}
-                      title={selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''}
+                      className={`btn primary ${(cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge)) ? 'disabled' : ''}`}
+                      disabled={cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge)}
+                      title={cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)` : ''}
+                      onClick={startSettlementCptyFlow}
+                    >Mail CPTY</button>
+                    <button
+                      className={`btn primary ${(cutoffsReached.includes(selectedTrade?.currency) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)) ? 'disabled' : ''}`}
+                      disabled={cutoffsReached.includes(selectedTrade?.currency) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)}
+                      title={
+                        cutoffsReached.includes(selectedTrade?.currency)
+                          ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)`
+                          : (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : '')
+                      }
                       onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
                     >Approve Settlement</button>
                     <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>

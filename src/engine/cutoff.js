@@ -1,71 +1,151 @@
 const simulationClock = require("./clock")
 
-// G10 Currency Cut-Off Table (Operational Time ET)
+// ======================================
+// CURRENCY CUT-OFF TABLE (EST)
+// Region-based settlement cut-off times
+// ======================================
+
 const CURRENCY_CUTOFF = {
+  // Asian Region — 12:00 PM EST
+  JPY: "12:00",
+  HKD: "12:00",
+  AUD: "12:00",
+
+  // European Region — 2:00 PM EST
+  EUR: "14:00",
+  GBP: "14:00",
+  CHF: "14:00",
+  SEK: "14:00",
+
+  // CAD/MXN Region — 5:00 PM EST
+  CAD: "17:00",
+  MXN: "17:00",
+
+  // USD Region — 6:00 PM EST
   USD: "18:00",
-  EUR: "16:00",
-  GBP: "16:00",
-  JPY: "14:00",
-  CHF: "16:00",
-  CAD: "15:30",
-  AUD: "14:30",
-  NZD: "13:30",
-  SEK: "16:00",
-  NOK: "16:00"
+
+  // Africa Region — 6:00 PM EST
+  ZAR: "18:00"
+}
+
+// ======================================
+// CURRENCY → REGION MAP (for display)
+// ======================================
+
+const CURRENCY_REGION = {
+  JPY: "Asian Region",
+  HKD: "Asian Region",
+  AUD: "Asian Region",
+  EUR: "European Region",
+  GBP: "European Region",
+  CHF: "European Region",
+  SEK: "European Region",
+  CAD: "CAD/MXN Region",
+  MXN: "CAD/MXN Region",
+  USD: "USD Region",
+  ZAR: "Africa Region"
 }
 
 
 // ---------------------------------
-// Convert HH:MM → minutes
+// Convert HH:MM → minutes since midnight
 // ---------------------------------
 function timeToMinutes(timeStr) {
-
   const [h, m] = timeStr.split(":").map(Number)
-
   return h * 60 + m
-
 }
 
 
 // ---------------------------------
-// Get Cutoff Minutes (NEW)
+// Get Cutoff Minutes for a currency
 // ---------------------------------
 function getCutoffMinutes(currency) {
-
   if (!CURRENCY_CUTOFF[currency]) {
     throw new Error(`Unsupported currency ${currency}`)
   }
-
   return timeToMinutes(CURRENCY_CUTOFF[currency])
+}
 
+
+// ---------------------------------
+// Get human-readable cutoff time
+// e.g. "12:00 PM EST"
+// ---------------------------------
+function getCutoffTimeForCurrency(currency) {
+  if (!CURRENCY_CUTOFF[currency]) return null
+
+  const timeStr = CURRENCY_CUTOFF[currency]
+  const [h, m] = timeStr.split(":").map(Number)
+
+  const period = h >= 12 ? "PM" : "AM"
+  const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h)
+  const displayM = String(m).padStart(2, "0")
+
+  return `${displayH}:${displayM} ${period} EST`
+}
+
+
+// ---------------------------------
+// Get region for a currency
+// ---------------------------------
+function getRegionForCurrency(currency) {
+  return CURRENCY_REGION[currency] || "Unknown"
+}
+
+
+// ---------------------------------
+// Get minutes until cutoff
+// Returns negative if already breached
+// ---------------------------------
+function getMinutesUntilCutoff(currency) {
+  if (!CURRENCY_CUTOFF[currency]) return null
+
+  const simTime = simulationClock.getTime()
+  const currentMinutes = simTime.getHours() * 60 + simTime.getMinutes()
+  const cutoffMins = getCutoffMinutes(currency)
+
+  return cutoffMins - currentMinutes
 }
 
 
 // ---------------------------------
 // Check if Cutoff Breached
+// Uses simulation clock local time
 // ---------------------------------
 function isCutOffBreached(currency) {
-
-  const simulatedTimestamp = simulationClock.getFormattedTime()
-
-  const simulatedDate = new Date(simulatedTimestamp)
-
-  const simulatedTime =
-    simulatedDate.getUTCHours().toString().padStart(2, "0") +
-    ":" +
-    simulatedDate.getUTCMinutes().toString().padStart(2, "0")
-
   if (!CURRENCY_CUTOFF[currency]) {
-    throw new Error(`Unsupported currency ${currency}`)
+    // Unknown currencies are not restricted
+    return false
   }
 
-  const cutoffTime = CURRENCY_CUTOFF[currency]
+  const simTime = simulationClock.getTime()
+  const currentMinutes = simTime.getHours() * 60 + simTime.getMinutes()
+  const cutoffMins = getCutoffMinutes(currency)
 
-  const simMinutes = timeToMinutes(simulatedTime)
-  const cutoffMinutes = timeToMinutes(cutoffTime)
+  return currentMinutes > cutoffMins
+}
 
-  return simMinutes > cutoffMinutes
 
+// ---------------------------------
+// Get cutoff status for all currencies
+// Returns object with breached/remaining info
+// ---------------------------------
+function getAllCutoffStatuses() {
+  const statuses = {}
+
+  for (const [currency, timeStr] of Object.entries(CURRENCY_CUTOFF)) {
+    const breached = isCutOffBreached(currency)
+    const minutesLeft = getMinutesUntilCutoff(currency)
+
+    statuses[currency] = {
+      time: timeStr,
+      region: CURRENCY_REGION[currency],
+      breached,
+      minutesLeft: breached ? 0 : minutesLeft
+    }
+  }
+
+  return statuses
 }
 
 
@@ -75,5 +155,10 @@ function isCutOffBreached(currency) {
 module.exports = {
   isCutOffBreached,
   getCutoffMinutes,
-  CURRENCY_CUTOFF
+  getCutoffTimeForCurrency,
+  getRegionForCurrency,
+  getMinutesUntilCutoff,
+  getAllCutoffStatuses,
+  CURRENCY_CUTOFF,
+  CURRENCY_REGION
 }

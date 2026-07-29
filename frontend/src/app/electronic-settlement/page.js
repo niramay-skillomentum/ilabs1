@@ -61,6 +61,9 @@ function ElectronicSettlementComponent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
 
+  // Cut-off tracking
+  const [cutoffsReached, setCutoffsReached] = useState([]);
+
   const socketRef = useRef(null);
 
   // ============ Data Fetching ============
@@ -99,6 +102,12 @@ function ElectronicSettlementComponent() {
 
     socket.on("trade_update", () => {
       fetchTrades();
+    });
+
+    socket.on("clock_tick", (payload) => {
+      if (payload && payload.cutoffsReached) {
+        setCutoffsReached(payload.cutoffsReached);
+      }
     });
 
     return () => socket.disconnect();
@@ -362,15 +371,17 @@ function ElectronicSettlementComponent() {
               <>
                 <button
                   className="stcc-action-btn settle"
-                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling}
+                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling || cutoffsReached.includes(selectedTrade?.currency)}
                   onClick={handleSettle}
+                  title={cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency}` : ''}
                 >
                   {isSettling ? "Settling..." : "⬆ Settle"}
                 </button>
                 <button
                   className="stcc-action-btn"
-                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED"}
+                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED" || cutoffsReached.includes(selectedTrade?.currency)}
                   onClick={handleOpenComparison}
+                  title={cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency}` : ''}
                 >
                   ✎ Edit / Compare
                 </button>

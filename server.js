@@ -12,6 +12,7 @@ const communicationEngine = require("./src/engine/communicationEngine");
 const conversationEngine = require("./src/engine/conversationEngine");
 const foInternalChannel = require("./src/engine/foInternalChannel");
 const systemWorkflowEngine = require("./src/engine/systemWorkflowEngine");
+const cutoffEnforcer = require("./src/engine/cutoffEnforcer");
 const { startAgenda } = require("./src/engine/agendaJobs");
 const { initSocket } = require("./src/engine/socketEngine");
 
@@ -100,6 +101,9 @@ function startBackgroundProcessors() {
 
   // SYSTEM WORKFLOW PROCESSOR (amendment + verification/approval bot)
   guardedInterval("system-workflow", () => systemWorkflowEngine.processJobs(), POLL_MS);
+
+  // CUTOFF ENFORCER (auto-transitions trades past cut-off to SETTLEMENT_BREAK)
+  guardedInterval("cutoff-enforcer", () => cutoffEnforcer.checkAndEnforceCutoffs(), POLL_MS);
 
   console.log(`⚙️  Background processors started (role=${process.env.ROLE || "all"}, interval=${POLL_MS}ms)`);
 }
