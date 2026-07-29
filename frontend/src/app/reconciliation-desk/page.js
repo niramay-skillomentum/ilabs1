@@ -6,126 +6,313 @@ import { loadUserId, getToken, authHeaders } from "../../lib/auth";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
 
+// ============ Helpers ============
+const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "";
+const formatAmount = (n) => n != null ? Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+
 const API = process.env.NEXT_PUBLIC_API_URL || "";
 
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "";
-const formatAmount = (n) => n != null ? Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
-
+// ============ Styles ============
 const RECON_STYLE = `
-  body { font-family: Tahoma, "Segoe UI", sans-serif; background: #ECE9D8; margin: 0; color: #000; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: #f0f4f8; margin: 0; color: #1e293b; }
 
-  /* Toolbar */
-  .xp-toolbar {
-    background: #ECE9D8;
-    border-bottom: 1px solid #ACA899;
-    padding: 4px;
+  .topbar {
+    padding: 16px 30px;
+    background: linear-gradient(135deg, #0B2027 0%, #0A4D68 50%, #088395 100%);
+    color: white;
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 2px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   }
-  .xp-btn {
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-family: Tahoma, sans-serif;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #000;
-  }
-  .xp-btn:hover { border: 1px solid #316AC5; background: #C1D2EE; }
-  .xp-btn:active { background: #98B5E2; }
-  .xp-btn:disabled { color: #ACA899; cursor: default; border: 1px solid transparent; background: transparent; }
-  .xp-separator { width: 1px; height: 18px; background: #ACA899; margin: 0 4px; }
+  .topbar-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .topbar-subtitle { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+  .topbar-actions { display: flex; gap: 10px; align-items: center; }
 
-  .filter-bar {
-    background: #F5F4F0;
-    border-bottom: 1px solid #ACA899;
-    padding: 4px 8px;
+  .stats-bar {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
+    gap: 12px;
+    padding: 16px 30px;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
     flex-wrap: wrap;
   }
-  .filter-bar input, .filter-bar select { font-size: 11px; font-family: Tahoma; padding: 1px 2px; border: 1px solid #7F9DB9; }
-
-  /* Table */
-  .grid-container {
-    height: calc(100vh - 85px);
-    overflow: auto;
-    background: #fff;
-    position: relative;
+  .stat-card {
+    padding: 12px 20px;
+    border-radius: 10px;
+    min-width: 120px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
   }
-  table { border-collapse: collapse; width: 100%; font-size: 11px; table-layout: fixed; min-width: 2500px; }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .stat-value { font-size: 24px; font-weight: 700; font-family: 'Consolas', monospace; }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; opacity: 0.7; }
+
+  .stat-total { background: linear-gradient(135deg, #f0f4ff, #e0e7ff); border-color: #c7d2fe; }
+  .stat-total .stat-value { color: #3730a3; }
+  .stat-matched { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-color: #a7f3d0; }
+  .stat-matched .stat-value { color: #065f46; }
+  .stat-outstanding { background: linear-gradient(135deg, #fefce8, #fef3c7); border-color: #fde68a; }
+  .stat-outstanding .stat-value { color: #92400e; }
+  .stat-rate { background: linear-gradient(135deg, #f0f9ff, #dbeafe); border-color: #93c5fd; }
+  .stat-rate .stat-value { color: #1e40af; }
+  .stat-ledger { background: linear-gradient(135deg, #faf5ff, #ede9fe); border-color: #c4b5fd; }
+  .stat-ledger .stat-value { color: #5b21b6; }
+  .stat-statement { background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border-color: #99f6e4; }
+  .stat-statement .stat-value { color: #115e59; }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    padding: 12px 30px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-label { font-size: 12px; font-weight: 600; color: #64748b; margin-right: 4px; }
+  .filter-btn {
+    padding: 5px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    background: white;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .filter-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+  .filter-btn.active { background: #0f172a; color: white; border-color: #0f172a; }
+  .filter-input {
+    padding: 5px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 12px;
+    background: white;
+    width: 120px;
+  }
+  .filter-input:focus { outline: none; border-color: #3b82f6; }
+  .filter-select {
+    padding: 5px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 12px;
+    background: white;
+    cursor: pointer;
+  }
+
+  .container { width: 97%; max-width: 1800px; margin: 16px auto; }
+
+  .table-container {
+    max-height: calc(100vh - 310px);
+    overflow: auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+    border: 1px solid #e2e8f0;
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 2400px; font-size: 11.5px; }
   th {
     position: sticky;
     top: 0;
-    background: #ECE9D8;
-    color: #000;
-    padding: 1px 4px;
-    font-weight: normal;
+    background: #0f172a;
+    color: #f1f5f9;
+    padding: 8px 10px;
+    font-weight: 600;
     text-align: left;
-    border-right: 1px solid #ACA899;
-    border-bottom: 1px solid #ACA899;
-    border-top: 1px solid #fff;
-    border-left: 1px solid #fff;
+    border-bottom: 2px solid #1e293b;
+    border-right: 1px solid #334155;
     z-index: 10;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    height: 20px;
-    box-sizing: border-box;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
   td {
-    padding: 1px 4px;
-    border-right: 1px solid #d4d0c8;
-    border-bottom: 1px solid #d4d0c8;
+    padding: 5px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #f1f5f9;
+    color: #334155;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    height: 18px;
-    box-sizing: border-box;
-    cursor: default;
+    font-size: 11.5px;
   }
-  
-  tr.selected td { background-color: #ffe8cc !important; }
-  .faded { opacity: 0.3; }
+  tbody tr:nth-child(even) td { background-color: #f8fafc; }
+  tbody tr:hover td { background-color: #e0f2fe; cursor: pointer; }
+  .num { text-align: right; font-family: 'Consolas', 'Courier New', monospace; }
+
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-outstanding { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .status-matched { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+
+  .source-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .source-ledger { background: #ede9fe; color: #5b21b6; }
+  .source-statement { background: #ccfbf1; color: #115e59; }
+
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.12); }
+  .btn:active { transform: translateY(0); }
+  .btn-primary { background: linear-gradient(135deg, #0B2027, #0A4D68); color: white; }
+  .btn-primary:hover { background: linear-gradient(135deg, #0A4D68, #088395); }
+  .btn-secondary { background: #e2e8f0; color: #1e293b; }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-back { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.2); font-size: 12px; padding: 6px 14px; }
+  .btn-back:hover { background: rgba(255,255,255,0.25); }
+  .btn-match {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    font-size: 13px;
+    padding: 8px 20px;
+  }
+  .btn-match:hover { background: linear-gradient(135deg, #047857, #059669); }
+  .btn-match:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .desk-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .desk-apac { background: #dbeafe; color: #1e40af; }
+  .desk-emea { background: #fce7f3; color: #9d174d; }
+  .desk-amer { background: #fef3c7; color: #92400e; }
+  .desk-global { background: #e2e8f0; color: #475569; }
+
+  .ref-cell { color: #64748b; font-family: 'Consolas', monospace; font-size: 10.5px; }
+
+  /* Selection */
+  .sel-cell { text-align: center; width: 34px; }
+  tr.row-selected td { background-color: #dbeafe !important; }
+  tr.row-selected:hover td { background-color: #bfdbfe !important; }
+  .sel-checkbox { width: 15px; height: 15px; cursor: pointer; accent-color: #0A4D68; }
+
+  .match-tray {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 30px;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-bottom: 1px solid #1e293b;
+    flex-wrap: wrap;
+  }
+  .tray-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Consolas', monospace;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .tray-chip.filled-ledger { background: rgba(139,92,246,0.25); border-color: #8b5cf6; }
+  .tray-chip.filled-statement { background: rgba(20,184,166,0.25); border-color: #14b8a6; }
+  .tray-hint { font-size: 12px; opacity: 0.65; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+  }
+  .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: #64748b; }
+  .empty-state p { font-size: 14px; }
 
   .loading-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255,255,255,0.7);
-    display: flex; align-items: center; justify-content: center;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 999;
-    font-size: 12px;
   }
+  .loading-spinner {
+    width: 40px; height: 40px;
+    border: 4px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Detail Panel */
+  .detail-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+  }
+  .detail-panel {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 480px;
+    background: white;
+    box-shadow: -8px 0 30px rgba(0,0,0,0.15);
+    z-index: 999;
+    overflow-y: auto;
+    animation: slideIn 0.2s ease-out;
+  }
+  @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  .detail-header {
+    padding: 20px;
+    background: linear-gradient(135deg, #0B2027, #0A4D68);
+    color: white;
+  }
+  .detail-header h3 { margin: 0 0 4px 0; font-size: 18px; }
+  .detail-header p { margin: 0; opacity: 0.7; font-size: 12px; }
+  .detail-section { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+  .detail-section h4 { margin: 0 0 10px 0; font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .detail-key { color: #64748b; }
+  .detail-value { font-weight: 500; color: #0f172a; font-family: 'Consolas', monospace; }
 `;
 
-function getRowColor(item) {
-  const type = String(item.itemType || "").toUpperCase();
-  if (type.includes("LEDGER") && type.includes("DEBIT")) return "#0058d6";
-  if (type.includes("LEDGER") && type.includes("CREDIT")) return "#222222";
-  if (type.includes("STATEMENT") && type.includes("DEBIT")) return "#d32f2f";
-  if (type.includes("STATEMENT") && type.includes("CREDIT")) return "#6a1b9a";
-  if (type === "LD") return "#0058d6";
-  if (type === "LC") return "#222222";
-  if (type === "SD") return "#d32f2f";
-  if (type === "SC") return "#6a1b9a";
-  return "#000000";
-}
-
+// ============ Component ============
 export default function ReconciliationDeskPage() {
   const router = useRouter();
   const [userId, setUserId] = useState(null);
   const [items, setItems] = useState([]);
+  const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingLabel, setLoadingLabel] = useState("Preparing Reconciliation Desk...");
   const [isMatching, setIsMatching] = useState(false);
 
-  const [statusFilter, setStatusFilter] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
+  // Filters
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [sourceFilter, setSourceFilter] = useState(null);
   const [deskFilter, setDeskFilter] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [tradeRefFilter, setTradeRefFilter] = useState("");
@@ -137,60 +324,223 @@ export default function ReconciliationDeskPage() {
   const [amountTo, setAmountTo] = useState("");
   const [appliedFilters, setAppliedFilters] = useState({});
 
+  // Selection for user-driven matching and moving.
   const [selectedItemIds, setSelectedItemIds] = useState([]);
-  const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
-  
-  const [relationshipMatchId, setRelationshipMatchId] = useState(null);
-  const [showApplyModal, setShowApplyModal] = useState(false);
   const [tradeIdInput, setTradeIdInput] = useState("");
-  const [isApplying, setIsApplying] = useState(false);
 
+  // ============ Auth ============
   useEffect(() => {
     const uid = loadUserId();
     if (!uid || !getToken()) {
-      toast.error("Session expired.");
+      toast.error("Session expired. Login again.");
       router.push("/");
     } else {
       setUserId(uid);
     }
   }, [router]);
 
-  const loadAllocation = useCallback(async () => {
+  // ============ Stats ============
+  const fetchStats = useCallback(async () => {
     if (!getToken()) return;
-    setIsLoading(true);
-    setLoadingLabel("Loading...");
     try {
-      const res = await fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
-        method: "GET", headers: authHeaders()
-      });
+      const res = await fetch(`${API}/api/reconciliation/stats?t=${Date.now()}`, { headers: authHeaders() });
       const data = await res.json();
-      if (data.success) setItems(data.items || []);
+      if (data.success) setStats(data);
     } catch (err) {
-      toast.error("Failed to load desk.");
-    } finally {
-      setIsLoading(false);
+      console.error("[ReconDesk] Stats error:", err);
     }
   }, []);
 
-  useEffect(() => { if (userId) loadAllocation(); }, [userId, loadAllocation]);
+  // ============ Allocation entry ============
+  // On entry we ensure an allocation exists (20 settled trades → 40 rows).
+  // This is idempotent server-side: an existing allocation is returned as-is;
+  // otherwise the backend auto-generates the shortfall through the full
+  // lifecycle. Filtering is applied client-side over the allocated rows so
+  // Ledger/Statement rows always stay together as one mixed set.
+  const loadAllocation = useCallback(async () => {
+    if (!getToken()) return;
+    setIsLoading(true);
+    setLoadingLabel("Preparing Reconciliation Desk...");
+    try {
+      const res = await fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
+        method: "GET",
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setItems(data.items || []);
+      } else {
+        toast.error(data.error || "Failed to load reconciliation desk.");
+      }
+    } catch (err) {
+      console.error("[ReconDesk] Load error:", err);
+      toast.error("Failed to load reconciliation desk.");
+    } finally {
+      setIsLoading(false);
+      fetchStats();
+    }
+  }, [fetchStats]);
 
+  useEffect(() => {
+    if (userId) loadAllocation();
+  }, [userId, loadAllocation]);
+
+  // ============ Socket Real-Time Sync ============
   useEffect(() => {
     if (!userId) return;
     const token = getToken();
     if (!token) return;
+
+    // Use explicit backend URL on localhost to bypass Next.js proxy 404s
     const socketUrl = API || (window.location.hostname === "localhost" ? "http://localhost:3002" : undefined);
     const socket = io(socketUrl, { auth: { token } });
-    socket.on("recon_desk_update", () => {
-      fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
-        method: "GET", headers: authHeaders()
-      }).then(res => res.json()).then(data => {
-        if (data.success) setItems(data.items || []);
-      });
-    });
-    return () => socket.disconnect();
-  }, [userId]);
 
-  let filteredItems = items.filter(i => {
+    socket.on("recon_desk_update", () => {
+      // Background sync without loading overlay
+      fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
+        method: "GET",
+        headers: authHeaders()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setItems(data.items || []);
+          fetchStats();
+        }
+      })
+      .catch(err => console.error("[ReconDesk] Background sync error:", err));
+    });
+
+    return () => socket.disconnect();
+  }, [userId, fetchStats]);
+
+  // ============ Selection ============
+  const toggleSelect = (item) => {
+    setSelectedItemIds(prev => 
+      prev.includes(item.itemId) ? prev.filter(id => id !== item.itemId) : [...prev, item.itemId]
+    );
+  };
+
+  const clearSelection = () => {
+    setSelectedItemIds([]);
+    setTradeIdInput("");
+  };
+
+  // Derived selected items for matching
+  const selectedLedgers = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "LEDGER");
+  const selectedStatements = items.filter(i => selectedItemIds.includes(i.itemId) && i.source === "STATEMENT");
+  const selectedLedger = selectedLedgers.length === 1 ? selectedLedgers[0].itemId : null;
+  const selectedStatement = selectedStatements.length === 1 ? selectedStatements[0].itemId : null;
+  const selectedMatchedItems = items.filter(i => selectedItemIds.includes(i.itemId) && i.status === "Matched");
+
+  // ============ User-driven Match ============
+  const canMatch = selectedItemIds.length === 2 && selectedLedger && selectedStatement && selectedMatchedItems.length === 0 && !isMatching;
+
+  const handleMatch = async () => {
+    if (!canMatch) return;
+    setIsMatching(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/manual-match`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ ledgerItemId: selectedLedger, statementItemId: selectedStatement })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(`Match successful — ${data.matchId}`);
+        // Update both rows locally to Matched with the new matchId.
+        setItems(prev => prev.map(it => {
+          if (it.itemId === data.ledgerItemId || it.itemId === data.statementItemId) {
+            return { ...it, status: "Matched", matchId: data.matchId };
+          }
+          return it;
+        }));
+        clearSelection();
+        fetchStats();
+      } else {
+        // Neutral message — the backend never reveals WHY.
+        toast.error(data.message || "Items cannot be matched.");
+      }
+    } catch (err) {
+      toast.error("Items cannot be matched.");
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
+  // ============ User-driven Unmatch ============
+  const [isUnmatching, setIsUnmatching] = useState(false);
+  const uniqueMatchIds = [...new Set(selectedMatchedItems.map(i => i.matchId))];
+  const canUnmatch = selectedItemIds.length > 0 && selectedItemIds.length === selectedMatchedItems.length && uniqueMatchIds.length === 1 && !isUnmatching;
+  const matchIdToUnmatch = canUnmatch ? uniqueMatchIds[0] : null;
+
+  const handleUnmatch = async () => {
+    if (!canUnmatch || !matchIdToUnmatch) return;
+    setIsUnmatching(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/unmatch`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: matchIdToUnmatch })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || `Match ${matchIdToUnmatch} reversed successfully.`);
+        // Update local state: clear matchId and set status to Outstanding for all items with this matchId
+        setItems(prev => prev.map(it => it.matchId === matchIdToUnmatch ? { ...it, status: "Outstanding", matchId: null } : it));
+        clearSelection();
+        fetchStats();
+      } else {
+        toast.error(data.message || "Failed to reverse match.");
+      }
+    } catch (err) {
+      toast.error("Failed to reverse match.");
+    } finally {
+      setIsUnmatching(false);
+    }
+  };
+
+  // ============ Apply Trade ID ============
+  const [isApplying, setIsApplying] = useState(false);
+  const canApplyTradeId = selectedItemIds.length === 1 && selectedStatements.length === 1 && tradeIdInput.trim() !== "" && !isApplying;
+
+  const handleApplyTradeId = async () => {
+    if (!canApplyTradeId) return;
+    setIsApplying(true);
+    try {
+      const res = await fetch(`${API}/api/reconciliation/apply-trade-id`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ statementItemId: selectedStatement, tradeRef: tradeIdInput.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Trade ID applied successfully.");
+        // Update local state for the statement
+        setItems(prev => prev.map(it => it.itemId === selectedStatement ? { ...it, ...data.item } : it));
+        setTradeIdInput("");
+      } else {
+        toast.error(data.message || "Failed to apply Trade ID.");
+      }
+    } catch (err) {
+      toast.error("Failed to apply Trade ID.");
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  // ============ Desk Badge ============
+  const deskClass = (desk) => {
+    if (!desk) return "desk-global";
+    if (desk.startsWith("APAC")) return "desk-apac";
+    if (desk.startsWith("EMEA")) return "desk-emea";
+    if (desk.startsWith("AMER")) return "desk-amer";
+    return "desk-global";
+  };
+
+  // ============ Client-side filtering (over the allocated set) ============
+  const filteredItems = items.filter(i => {
     if (appliedFilters.status && i.status !== appliedFilters.status) return false;
     if (appliedFilters.source && i.source !== appliedFilters.source) return false;
     if (appliedFilters.desk && i.reconDesk !== appliedFilters.desk) return false;
@@ -205,339 +555,318 @@ export default function ReconciliationDeskPage() {
     return true;
   });
 
-  // Sort logically so matches stack exactly together
-  filteredItems.sort((a, b) => {
-    if (a.matchId && b.matchId && a.matchId === b.matchId) {
-      return (a.source || "").localeCompare(b.source || "");
-    }
-    if (a.matchId && b.matchId) return a.matchId.localeCompare(b.matchId);
-    if (a.matchId) return -1;
-    if (b.matchId) return 1;
-    return 0;
-  });
-
-  const toggleSelect = (item, index, e) => {
-    if (relationshipMatchId) setRelationshipMatchId(null);
-    setSelectedItemIds(prev => {
-      if (e && e.shiftKey && lastSelectedIndex !== null) {
-        const start = Math.min(lastSelectedIndex, index);
-        const end = Math.max(lastSelectedIndex, index);
-        const newSelection = [...prev];
-        for (let i = start; i <= end; i++) {
-          const id = filteredItems[i].itemId;
-          if (!newSelection.includes(id)) newSelection.push(id);
-        }
-        return newSelection;
-      }
-      // Automatically toggle on every click for easy multi-selection
-      return prev.includes(item.itemId) ? prev.filter(id => id !== item.itemId) : [...prev, item.itemId];
-    });
-    setLastSelectedIndex(index);
-  };
-
-
-  const selectedLedgers = filteredItems.filter(i => selectedItemIds.includes(i.itemId) && i.source === "LEDGER");
-  const selectedStatements = filteredItems.filter(i => selectedItemIds.includes(i.itemId) && i.source === "STATEMENT");
-  const selectedMatchedItems = filteredItems.filter(i => selectedItemIds.includes(i.itemId) && i.status === "Matched");
-  
-  const canMatch = selectedItemIds.length === 2 && selectedLedgers.length === 1 && selectedStatements.length === 1 && selectedMatchedItems.length === 0 && !isMatching;
-  
-  const handleMatch = async () => {
-    if (!canMatch) return;
-    setIsMatching(true);
-    try {
-      const res = await fetch(`${API}/api/reconciliation/manual-match`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ ledgerItemId: selectedLedgers[0].itemId, statementItemId: selectedStatements[0].itemId })
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Match successful");
-        setItems(prev => prev.map(it => {
-          if (it.itemId === data.ledgerItemId || it.itemId === data.statementItemId) {
-            return { ...it, status: "Matched", matchId: data.matchId };
-          }
-          return it;
-        }));
-        setSelectedItemIds([]);
-        setLastSelectedIndex(null);
-      } else {
-        toast.error(data.message || "Items cannot be matched.");
-      }
-    } catch (err) {
-      toast.error("Items cannot be matched.");
-    } finally {
-      setIsMatching(false);
-    }
-  };
-
-  const uniqueMatchIds = [...new Set(selectedMatchedItems.map(i => i.matchId))];
-  const canUnmatch = selectedItemIds.length > 0 && selectedItemIds.length === selectedMatchedItems.length && uniqueMatchIds.length === 1;
-  const matchIdToUnmatch = canUnmatch ? uniqueMatchIds[0] : null;
-
-  const canApplyTradeId = selectedItemIds.length === 1 && selectedStatements.length === 1 && !isApplying;
-
-  const handleApplyTradeId = async () => {
-    if (!canApplyTradeId || !tradeIdInput.trim()) return;
-    setIsApplying(true);
-    try {
-      const res = await fetch(`${API}/api/reconciliation/apply-trade-id`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ statementItemId: selectedStatements[0].itemId, tradeRef: tradeIdInput.trim() })
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Trade ID applied successfully.");
-        setItems(prev => prev.map(it => it.itemId === selectedStatements[0].itemId ? { ...it, ...data.item } : it));
-        setTradeIdInput("");
-        setShowApplyModal(false);
-      } else {
-        toast.error(data.message || "Failed to apply Trade ID.");
-      }
-    } catch (err) {
-      toast.error("Failed to apply Trade ID.");
-    } finally {
-      setIsApplying(false);
-    }
-  };
-
-  const handleUnmatch = async () => {
-    if (!canUnmatch || !matchIdToUnmatch) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API}/api/reconciliation/unmatch`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ matchId: matchIdToUnmatch })
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Match reversed successfully.");
-        setItems(prev => prev.map(it => it.matchId === matchIdToUnmatch ? { ...it, status: "Outstanding", matchId: null } : it));
-        setSelectedItemIds([]);
-        setLastSelectedIndex(null);
-      } else {
-        toast.error(data.message || "Failed to reverse match.");
-      }
-    } catch (err) {
-      toast.error("Failed to reverse match.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleViewMatch = () => {
-    if (selectedItemIds.length > 0) {
-      const firstItem = filteredItems.find(i => i.itemId === selectedItemIds[0]);
-      if (firstItem && firstItem.matchId) {
-        setRelationshipMatchId(firstItem.matchId);
-      } else {
-        toast.error("Selected item has no Match ID.");
-      }
-    }
-  };
-
+  // ============ Unique values for filters ============
   const uniqueDesks = [...new Set(items.map(i => i.reconDesk).filter(Boolean))].sort();
+  const uniqueCurrencies = [...new Set(items.map(i => i.currency).filter(Boolean))].sort();
 
   if (!userId) return null;
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: RECON_STYLE }} />
-      {(isLoading || isMatching) && <div className="loading-overlay">{isMatching ? "Matching..." : loadingLabel}</div>}
 
-      <div className="xp-toolbar">
-        <button className="xp-btn" onClick={() => router.push("/dashboard")}>← Dashboard</button>
-        <button className="xp-btn" onClick={() => window.open("/gcms", "_blank")}>GCMS</button>
-        <div className="xp-separator" />
-        <button className="xp-btn" onClick={loadAllocation}>⟳ Refresh</button>
-        <button className="xp-btn" onClick={handleMatch} disabled={!canMatch}>🔗 Match</button>
-        <button className="xp-btn" onClick={handleUnmatch} disabled={!canUnmatch}>🔓 Unmatch</button>
-        <button className="xp-btn" onClick={handleViewMatch} disabled={selectedItemIds.length === 0}>🔍 View Match</button>
-        <button className="xp-btn" onClick={() => setShowApplyModal(true)} disabled={!canApplyTradeId}>✏️ Apply Trade ID</button>
-        <button className="xp-btn" onClick={() => toast("Export feature not implemented yet.")}>Export</button>
+      {/* Loading overlay */}
+      {(isLoading || isMatching) && (
+        <div className="loading-overlay">
+          <div style={{ textAlign: "center", color: "white" }}>
+            <div className="loading-spinner" style={{ margin: "0 auto 12px" }} />
+            <div style={{ fontSize: 14, fontWeight: 500 }}>
+              {isMatching ? "Matching..." : loadingLabel}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Bar */}
+      <div className="topbar">
+        <div>
+          <div className="topbar-title">⚖️ Reconciliation Desk</div>
+          <div className="topbar-subtitle">Enterprise Cash Settlement Reconciliation</div>
+        </div>
+        <div className="topbar-actions">
+          <button className="btn btn-secondary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px", background: "#1E3A5F", color: "white", borderColor: "#1E3A5F" }}>
+            GCMS
+          </button>
+          <button className="btn btn-back" onClick={() => router.push("/dashboard")}>
+              ← Dashboard
+          </button>
+        </div>
       </div>
 
+      {/* Match Tray — user selects one Ledger + one Statement, then matches, or multiple to move */}
+      <div className="match-tray">
+        <span style={{ fontSize: 13, fontWeight: 700 }}>Action Menu</span>
+        <span className={`tray-chip ${selectedLedger ? "filled-ledger" : ""}`}>
+          Ledger: {selectedLedger || "—"}
+        </span>
+        <span className={`tray-chip ${selectedStatement ? "filled-statement" : ""}`}>
+          Statement: {selectedStatement || "—"}
+        </span>
+        <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
+          {isMatching ? "⏳ Matching..." : "🔗 Match"}
+        </button>
+        {canUnmatch && (
+          <button className="btn btn-secondary" onClick={handleUnmatch} disabled={!canUnmatch} style={{ marginLeft: "10px", borderColor: "#fca5a5", color: "#b91c1c" }}>
+            {isUnmatching ? "⏳ Unmatching..." : "🔓 Unmatch"}
+          </button>
+        )}
+        
+        {/* Apply Trade ID controls */}
+        {selectedItemIds.length === 1 && selectedStatements.length === 1 && (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "10px", paddingLeft: "10px", borderLeft: "1px solid rgba(255,255,255,0.2)" }}>
+            <input 
+              type="text" 
+              placeholder="Trade ID..." 
+              style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", width: "120px" }}
+              value={tradeIdInput}
+              onChange={(e) => setTradeIdInput(e.target.value)}
+            />
+            <button className="btn btn-primary" onClick={handleApplyTradeId} disabled={!canApplyTradeId}>
+              {isApplying ? "⏳ Applying..." : "✓ Apply"}
+            </button>
+          </div>
+        )}
+
+        {selectedItemIds.length > 0 && (
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px", marginLeft: "10px" }} onClick={clearSelection}>
+            ✕ Clear Selection ({selectedItemIds.length})
+          </button>
+        )}
+        <span className="tray-hint" style={{ marginLeft: "10px" }}>Select one Ledger + Statement to match.</span>
+      </div>
+
+      {/* Stats Bar */}
+      {stats && (
+        <div className="stats-bar">
+          <div className="stat-card stat-total">
+            <div className="stat-value">{stats.totalItems}</div>
+            <div className="stat-label">Total Items</div>
+          </div>
+          <div className="stat-card stat-matched" style={{ cursor: "pointer" }} onClick={() => { setStatusFilter(statusFilter === "Matched" ? null : "Matched"); }}>
+            <div className="stat-value">{stats.matchedItems}</div>
+            <div className="stat-label">Matched</div>
+          </div>
+          <div className="stat-card stat-outstanding" style={{ cursor: "pointer" }} onClick={() => { setStatusFilter(statusFilter === "Outstanding" ? null : "Outstanding"); }}>
+            <div className="stat-value">{stats.outstandingItems}</div>
+            <div className="stat-label">Outstanding</div>
+          </div>
+          <div className="stat-card stat-rate">
+            <div className="stat-value">{stats.matchRate}%</div>
+            <div className="stat-label">Match Rate</div>
+          </div>
+          <div className="stat-card stat-ledger" style={{ cursor: "pointer" }} onClick={() => { setSourceFilter(sourceFilter === "LEDGER" ? null : "LEDGER"); }}>
+            <div className="stat-value">{stats.ledgerItems}</div>
+            <div className="stat-label">Ledger</div>
+          </div>
+          <div className="stat-card stat-statement" style={{ cursor: "pointer" }} onClick={() => { setSourceFilter(sourceFilter === "STATEMENT" ? null : "STATEMENT"); }}>
+            <div className="stat-value">{stats.statementItems}</div>
+            <div className="stat-label">Statement</div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Bar */}
       <div className="filter-bar">
-        <span>Status:</span>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All</option>
-          <option value="Outstanding">Outstanding</option>
-          <option value="Matched">Matched</option>
-        </select>
+        <span className="filter-label">Status:</span>
+        <button className={`filter-btn ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter(null)}>All</button>
+        <button className={`filter-btn ${statusFilter === "Outstanding" ? "active" : ""}`} onClick={() => setStatusFilter(statusFilter === "Outstanding" ? null : "Outstanding")}>Outstanding</button>
+        <button className={`filter-btn ${statusFilter === "Matched" ? "active" : ""}`} onClick={() => setStatusFilter(statusFilter === "Matched" ? null : "Matched")}>Matched</button>
 
-        <span>Source:</span>
-        <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-          <option value="">All</option>
-          <option value="LEDGER">Ledger</option>
-          <option value="STATEMENT">Statement</option>
-        </select>
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
 
-        <span>Desk:</span>
-        <select value={deskFilter} onChange={e => setDeskFilter(e.target.value)}>
+        <span className="filter-label">Source:</span>
+        <button className={`filter-btn ${!sourceFilter ? "active" : ""}`} onClick={() => setSourceFilter(null)}>All</button>
+        <button className={`filter-btn ${sourceFilter === "LEDGER" ? "active" : ""}`} onClick={() => setSourceFilter(sourceFilter === "LEDGER" ? null : "LEDGER")}>Ledger</button>
+        <button className={`filter-btn ${sourceFilter === "STATEMENT" ? "active" : ""}`} onClick={() => setSourceFilter(sourceFilter === "STATEMENT" ? null : "STATEMENT")}>Statement</button>
+
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+
+        <span className="filter-label">Recon Desk:</span>
+        <select className="filter-select" value={deskFilter} onChange={(e) => setDeskFilter(e.target.value)}>
           <option value="">All Desks</option>
           {uniqueDesks.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        
-        <span>Currency:</span>
-        <input style={{width: 60}} value={currencyFilter} onChange={e => setCurrencyFilter(e.target.value)} />
-        
-        <span>Trade ID:</span>
-        <input style={{width: 100}} value={tradeRefFilter} onChange={e => setTradeRefFilter(e.target.value)} />
 
-        <span>Trade Date:</span>
-        <input type="date" style={{width: 95}} value={tradeDateFrom} onChange={e => setTradeDateFrom(e.target.value)} />
-        <span>-</span>
-        <input type="date" style={{width: 95}} value={tradeDateTo} onChange={e => setTradeDateTo(e.target.value)} />
+        <span className="filter-label" style={{ marginLeft: 8 }}>Currency:</span>
+        <input
+          className="filter-input"
+          placeholder="e.g. USD"
+          style={{width: 100}}
+          value={currencyFilter}
+          onChange={(e) => setCurrencyFilter(e.target.value)}
+        />
+        <span className="filter-label">Trade ID:</span>
+        <input
+          className="filter-input"
+          placeholder="Trade ID..."
+          style={{width: 150}}
+          value={tradeRefFilter}
+          onChange={(e) => setTradeRefFilter(e.target.value)}
+        />
 
-        <span>Value Date:</span>
-        <input type="date" style={{width: 95}} value={valueDateFrom} onChange={e => setValueDateFrom(e.target.value)} />
-        <span>-</span>
-        <input type="date" style={{width: 95}} value={valueDateTo} onChange={e => setValueDateTo(e.target.value)} />
+        <div style={{ flexBasis: "100%", height: 10 }}></div>
 
-        <span>Amount:</span>
-        <input type="number" style={{width: 70}} placeholder="Min" value={amountFrom} onChange={e => setAmountFrom(e.target.value)} />
-        <span>-</span>
-        <input type="number" style={{width: 70}} placeholder="Max" value={amountTo} onChange={e => setAmountTo(e.target.value)} />
+        <span className="filter-label">Trade-Date:</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={tradeDateFrom} onChange={e => setTradeDateFrom(e.target.value)} />
+        <span className="filter-label" style={{margin: "0 2px"}}>-</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={tradeDateTo} onChange={e => setTradeDateTo(e.target.value)} />
 
-        <button className="xp-btn" style={{border: "1px solid #7F9DB9", padding: "1px 6px", marginLeft: 4}} onClick={() => {
-          setAppliedFilters({ status: statusFilter, source: sourceFilter, desk: deskFilter, currency: currencyFilter, tradeRef: tradeRefFilter, tradeDateFrom, tradeDateTo, valueDateFrom, valueDateTo, amountFrom, amountTo });
-        }}>Filter</button>
-        <button className="xp-btn" style={{border: "1px solid #7F9DB9", padding: "1px 6px"}} onClick={() => {
-          setStatusFilter(""); setSourceFilter(""); setDeskFilter(""); setCurrencyFilter(""); setTradeRefFilter(""); setTradeDateFrom(""); setTradeDateTo(""); setValueDateFrom(""); setValueDateTo(""); setAmountFrom(""); setAmountTo(""); setAppliedFilters({});
-        }}>Clear</button>
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+
+        <span className="filter-label">Value-Date:</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={valueDateFrom} onChange={e => setValueDateFrom(e.target.value)} />
+        <span className="filter-label" style={{margin: "0 2px"}}>-</span>
+        <input type="date" className="filter-input" style={{width: 110}} value={valueDateTo} onChange={e => setValueDateTo(e.target.value)} />
+
+        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
+
+        <span className="filter-label">Amount:</span>
+        <input type="number" className="filter-input" style={{width: 80}} placeholder="Min" value={amountFrom} onChange={e => setAmountFrom(e.target.value)} />
+        <span className="filter-label" style={{margin: "0 2px"}}>-</span>
+        <input type="number" className="filter-input" style={{width: 80}} placeholder="Max" value={amountTo} onChange={e => setAmountTo(e.target.value)} />
+
+        <button className="btn btn-primary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
+          setAppliedFilters({
+            status: statusFilter,
+            source: sourceFilter,
+            desk: deskFilter,
+            currency: currencyFilter,
+            tradeRef: tradeRefFilter,
+            tradeDateFrom,
+            tradeDateTo,
+            valueDateFrom,
+            valueDateTo,
+            amountFrom,
+            amountTo
+          });
+        }}>Execute Query</button>
+
+        <button className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
+          setStatusFilter(null);
+          setSourceFilter(null);
+          setDeskFilter("");
+          setCurrencyFilter("");
+          setTradeRefFilter("");
+          setTradeDateFrom("");
+          setTradeDateTo("");
+          setValueDateFrom("");
+          setValueDateTo("");
+          setAmountFrom("");
+          setAmountTo("");
+          setAppliedFilters({});
+        }}>
+          ✕ Clear
+        </button>
       </div>
 
-      {showApplyModal && (
-        <div style={{ position: 'fixed', top: '30%', left: '40%', width: '300px', background: '#ECE9D8', border: '1px solid #0055EA', boxShadow: '2px 2px 10px rgba(0,0,0,0.5)', zIndex: 1200 }}>
-          <div style={{ background: 'linear-gradient(to right, #0058e6, #3a93ff)', color: 'white', padding: '4px 6px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Tahoma', fontSize: '12px' }}>
-            <span>Apply Trade ID</span>
-            <button onClick={() => setShowApplyModal(false)} style={{ background: '#e04343', color: 'white', border: '1px solid white', fontWeight: 'bold', cursor: 'pointer', padding: '0 6px' }}>X</button>
+      {/* Main Table */}
+      <div className="container">
+        {filteredItems.length === 0 && !isLoading ? (
+          <div className="empty-state">
+            <h3>No Reconciliation Items</h3>
+            <p>The reconciliation desk allocation is empty. Try reloading the desk.</p>
           </div>
-          <div style={{ padding: '16px', background: '#F5F4F0', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label>Enter Trade ID for {selectedStatements.length === 1 ? selectedStatements[0].itemId : ""}:</label>
-            <input type="text" value={tradeIdInput} onChange={e => setTradeIdInput(e.target.value)} style={{ padding: '4px', border: '1px solid #7F9DB9' }} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-              <button className="xp-btn" style={{ border: '1px solid #7F9DB9' }} onClick={handleApplyTradeId}>{isApplying ? "Applying..." : "Apply"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {relationshipMatchId && (
-        <div style={{ position: 'fixed', top: '20%', left: '15%', width: '70%', background: '#ECE9D8', border: '1px solid #0055EA', boxShadow: '2px 2px 10px rgba(0,0,0,0.5)', zIndex: 1100 }}>
-          <div style={{ background: 'linear-gradient(to right, #0058e6, #3a93ff)', color: 'white', padding: '4px 6px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Tahoma', fontSize: '12px' }}>
-            <span>View Match Details</span>
-            <button onClick={() => setRelationshipMatchId(null)} style={{ background: '#e04343', color: 'white', border: '1px solid white', fontWeight: 'bold', cursor: 'pointer', padding: '0 6px' }}>X</button>
-          </div>
-          <div style={{ padding: '16px', background: '#fff', minHeight: '100px', fontSize: '12px', border: '2px solid #ECE9D8' }}>
-            <div style={{ position: 'relative', marginLeft: '10px' }}>
-               <div style={{
-                 position: 'absolute',
-                 left: '0px',
-                 top: '12px',
-                 bottom: '12px',
-                 width: '12px',
-                 borderLeft: '2px solid #2e7d32',
-                 borderTop: '2px solid #2e7d32',
-                 borderBottom: '2px solid #2e7d32'
-               }} />
-               {filteredItems.filter(i => i.matchId === relationshipMatchId).map(item => (
-                 <div key={item.itemId} style={{ padding: '4px 0', marginLeft: '24px', color: getRowColor(item), display: 'flex', gap: '16px', height: '24px', boxSizing: 'border-box' }}>
-                   <span style={{ width: '80px', fontWeight: 'bold' }}>{item.source}</span>
-                   <span style={{ width: '120px' }}>{item.itemId}</span>
-                   <span style={{ width: '120px' }}>{item.itemType}</span>
-                   <span style={{ width: '100px', textAlign: 'right', fontWeight: 'bold' }}>{formatAmount(item.amount)}</span>
-                   <span style={{ width: '40px' }}>{item.currency}</span>
-                   <span style={{ width: '120px' }}>Ref: {item.itemRef1 || ""}</span>
-                 </div>
-               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid-container">
-        <table>
-          <thead>
-            <tr>
-              <th style={{width: 24, textAlign: 'center'}}><input type="checkbox" disabled /></th>
-              <th style={{width: 24, textAlign: 'center'}}>M</th>
-              <th style={{width: 120}}>Item ID</th>
-              <th style={{width: 100}}>Source</th>
-              <th style={{width: 120}}>Item Type</th>
-              <th style={{width: 100}}>Amount</th>
-              <th style={{width: 60}}>Ccy</th>
-              <th style={{width: 80}}>Trade Date</th>
-              <th style={{width: 80}}>Value Date</th>
-              <th style={{width: 150}}>Match ID</th>
-              <th style={{width: 120}}>Ref1: Trade</th>
-              <th style={{width: 120}}>Ref2: Underlyer</th>
-              <th style={{width: 120}}>Ref3: Entity</th>
-              <th style={{width: 120}}>Ref4: Country</th>
-              <th style={{width: 120}}>Ref5: Product</th>
-              <th style={{width: 120}}>Ref6: ProdType</th>
-              <th style={{width: 120}}>Ref7: Cpty</th>
-              <th style={{width: 120}}>SWIFT1: BuyerBIC</th>
-              <th style={{width: 120}}>SWIFT2: SellerAcc</th>
-              <th style={{width: 120}}>SWIFT3: BuyerAcc</th>
-              <th style={{width: 120}}>SWIFT4: SellerBIC</th>
-              <th style={{width: 120}}>SWIFT5: Field20</th>
-              <th style={{width: 120}}>SWIFT6: 56A</th>
-              <th style={{width: 120}}>SWIFT7: Inst</th>
-              <th style={{width: 120}}>SWIFT8: Bank</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredItems.map((item, index) => {
-              const isMatched = item.status === "Matched";
-              const isSelected = selectedItemIds.includes(item.itemId);
-              const color = getRowColor(item);
-              const isFaded = relationshipMatchId && item.matchId !== relationshipMatchId;
-
-              return (
-                <tr
-                  key={item._id || item.itemId}
-                  className={`${isSelected ? "selected" : ""} ${isFaded ? "faded" : ""}`}
-                  onClick={(e) => toggleSelect(item, index, e)}
-                  style={{ color }}
-                >
-                  <td style={{ textAlign: "center" }}>
-                    <input type="checkbox" checked={isSelected} readOnly />
-                  </td>
-                  <td style={{ textAlign: "center", color: "#2e7d32", fontWeight: "bold" }}>
-                    {isMatched ? "✔" : ""}
-                  </td>
-                  <td>{item.itemId}</td>
-                  <td>{item.source}</td>
-                  <td>{item.itemType || "—"}</td>
-                  <td style={{ textAlign: 'right' }}>{formatAmount(item.amount)}</td>
-                  <td>{item.currency || "—"}</td>
-                  <td>{formatDate(item.tradeDate)}</td>
-                  <td>{formatDate(item.valueDate)}</td>
-                  <td>{item.matchId || "—"}</td>
-                  <td>{item.itemRef1 || "—"}</td>
-                  <td>{item.itemRef2 || "—"}</td>
-                  <td>{item.itemRef3 || "—"}</td>
-                  <td>{item.itemRef4 || "—"}</td>
-                  <td>{item.itemRef5 || "—"}</td>
-                  <td>{item.itemRef6 || "—"}</td>
-                  <td>{item.itemRef7 || "—"}</td>
-                  <td>{item.ref1 || "—"}</td>
-                  <td>{item.ref2 || "—"}</td>
-                  <td>{item.ref3 || "—"}</td>
-                  <td>{item.ref4 || "—"}</td>
-                  <td>{item.ref5 || "—"}</td>
-                  <td>{item.ref6 || "—"}</td>
-                  <td>{item.ref7 || "—"}</td>
-                  <td>{item.ref8 || "—"}</td>
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th className="sel-cell">✓</th>
+                  <th>Status</th>
+                  <th>Item ID</th>
+                  <th>Source</th>
+                  <th>Item Type</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>Trade Date</th>
+                  <th>Value Date</th>
+                  <th>Recon Desk</th>
+                  <th>Match ID</th>
+                  <th title="Trade ID">Ref1: Trade</th>
+                  <th title="Underlyer">Ref2: Underlyer</th>
+                  <th title="Entity Code">Ref3: Entity</th>
+                  <th title="Country">Ref4: Country</th>
+                  <th title="Product">Ref5: Product</th>
+                  <th title="Product Type">Ref6: ProdType</th>
+                  <th title="Counterparty Name">Ref7: Counterparty</th>
+                  <th title="Buyer BIC">SWIFT1: BuyerBIC</th>
+                  <th title="Seller Account">SWIFT2: SellerAcc</th>
+                  <th title="Buyer Account">SWIFT3: BuyerAcc</th>
+                  <th title="Seller BIC">SWIFT4: SellerBIC</th>
+                  <th title="Field20">SWIFT5: Field20</th>
+                  <th title="56A Intermediary">SWIFT6: 56A</th>
+                  <th title="Institution Name">SWIFT7: Inst</th>
+                  <th title="Bank Name">SWIFT8: Bank</th>
+                  <th title="Field72">SWIFT9: Field72</th>
+                  <th title="Field70">SWIFT10: Field70</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => {
+                  const isMatched = item.status === "Matched";
+                  const isSelected = selectedItemIds.includes(item.itemId);
+                  return (
+                  <tr
+                    key={item._id || item.itemId}
+                    className={isSelected ? "row-selected" : ""}
+                    onClick={() => toggleSelect(item)}
+                  >
+                    <td className="sel-cell" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="sel-checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(item)}
+                      />
+                    </td>
+                    <td>
+                      <span className={`status-badge ${isMatched ? "status-matched" : "status-outstanding"}`}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 600, fontFamily: "Consolas, monospace" }}>{item.itemId}</td>
+                    <td>
+                      <span className={`source-badge ${item.source === "LEDGER" ? "source-ledger" : "source-statement"}`}>
+                        {item.source}
+                      </span>
+                    </td>
+                    <td>{item.itemType || "—"}</td>
+                    <td className="num">{formatAmount(item.amount)}</td>
+                    <td style={{ fontWeight: 500 }}>{item.currency || "—"}</td>
+                    <td>{formatDate(item.tradeDate)}</td>
+                    <td>{formatDate(item.valueDate)}</td>
+                    <td>
+                      <span className={`desk-badge ${deskClass(item.reconDesk)}`}>
+                        {item.reconDesk || "—"}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: "Consolas, monospace", color: item.matchId ? "#059669" : "#94a3b8" }}>
+                      {item.matchId || "—"}
+                    </td>
+                    <td className="ref-cell">{item.itemRef1 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef2 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef3 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef4 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef5 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef6 || "—"}</td>
+                    <td className="ref-cell">{item.itemRef7 || "—"}</td>
+                    <td className="ref-cell">{item.ref1 || "—"}</td>
+                    <td className="ref-cell">{item.ref2 || "—"}</td>
+                    <td className="ref-cell">{item.ref3 || "—"}</td>
+                    <td className="ref-cell">{item.ref4 || "—"}</td>
+                    <td className="ref-cell">{item.ref5 || "—"}</td>
+                    <td className="ref-cell">{item.ref6 || "—"}</td>
+                    <td className="ref-cell">{item.ref7 || "—"}</td>
+                    <td className="ref-cell">{item.ref8 || "—"}</td>
+                    <td className="ref-cell">{item.ref9 || "—"}</td>
+                    <td className="ref-cell">{item.ref10 || "—"}</td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );
