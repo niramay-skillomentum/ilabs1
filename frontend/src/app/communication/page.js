@@ -292,6 +292,22 @@ function CommunicationComponent() {
       });
     });
 
+    socket.on("trade_update", (data) => {
+      console.log("Trade update via websocket:", data);
+      const folder = currentFolderRef.current;
+      let refreshPromise = Promise.resolve();
+      if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
+      else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
+      else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
+
+      refreshPromise.then(() => {
+        const currentSel = selectedTradeRefRef.current;
+        if (currentSel === data.tradeRef) {
+          loadConversation(currentSel, ch, null, false);
+        }
+      });
+    });
+
     // Internal System Mailbox notifications
     socket.on("new_system_mail", () => {
       if (ch !== "SYSTEM") return;

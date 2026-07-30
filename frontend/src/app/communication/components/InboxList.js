@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { getDeskBadge } from "./utils";
 
 export default function InboxList({
@@ -5,6 +6,36 @@ export default function InboxList({
   filteredInbox, userId, formatDate, getStatusBadge, selectedTradeRef,
   channel, loadConversation, openNewCompose
 }) {
+  const [visibleCount, setVisibleCount] = useState(20);
+  const observerTarget = useRef(null);
+
+  // Reset visible count when folder or search changes
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [currentFolder, searchQuery, filteredInbox.length]);
+
+  // Intersection Observer for lazy rendering (infinite scroll effect)
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => Math.min(prev + 20, filteredInbox.length));
+        }
+      },
+      { root: null, rootMargin: "200px", threshold: 0 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) observer.unobserve(observerTarget.current);
+    };
+  }, [filteredInbox.length]);
+
+  const visibleInbox = filteredInbox.slice(0, visibleCount);
+
   return (
     <div className="email-list-panel">
       <div className="search-bar">
@@ -29,35 +60,40 @@ export default function InboxList({
           filteredInbox.length === 0 ? (
             <div className="empty-state"><div className="empty-icon">📭</div><div>No emails in this folder</div></div>
           ) : (
-            filteredInbox.map(item => {
-              const senderInfo = (() => {
-                if (item.lastMsg.sender === userId) return { name: "You" };
-                if (item.lastMsg.sender === "FO") return { name: "Front Office" };
-                if (item.lastMsg.sender === "COUNTERPARTY" || item.lastMsg.sender === "CPTY") return { name: (item.trade.counterparty || "Cpty") + " Ops" };
-                return { name: item.lastMsg.sender };
-              })();
-              const time = formatDate(item.lastMsg.timestamp);
-              const badge = getStatusBadge(item.trade);
-              const deskBadge = (currentFolder === "inbox" || currentFolder === "unread") ? getDeskBadge(item.trade) : null;
-              const preview = item.lastMsg.body.substring(0, 80).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
-              const isUnread = item.lastMsg.sender !== userId;
-              return (
-                <div key={item.trade.tradeRef}
-                  className={`email-item ${selectedTradeRef === item.trade.tradeRef ? "selected" : ""} ${isUnread ? "unread" : ""}`}
-                  onClick={() => loadConversation(item.trade.tradeRef, channel, null, true)}>
-                  <div className="email-item-top">
-                    <span className="email-sender">{senderInfo.name}</span>
-                    <span className="email-time">{time}</span>
+            <>
+              {visibleInbox.map(item => {
+                const senderInfo = (() => {
+                  if (item.lastMsg.sender === userId) return { name: "You" };
+                  if (item.lastMsg.sender === "FO") return { name: "Front Office" };
+                  if (item.lastMsg.sender === "COUNTERPARTY" || item.lastMsg.sender === "CPTY") return { name: (item.trade.counterparty || "Cpty") + " Ops" };
+                  return { name: item.lastMsg.sender };
+                })();
+                const time = formatDate(item.lastMsg.timestamp);
+                const badge = getStatusBadge(item.trade);
+                const deskBadge = (currentFolder === "inbox" || currentFolder === "unread") ? getDeskBadge(item.trade) : null;
+                const preview = item.lastMsg.body.substring(0, 80).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
+                const isUnread = item.lastMsg.sender !== userId;
+                return (
+                  <div key={item.trade.tradeRef}
+                    className={`email-item ${selectedTradeRef === item.trade.tradeRef ? "selected" : ""} ${isUnread ? "unread" : ""}`}
+                    onClick={() => loadConversation(item.trade.tradeRef, channel, null, true)}>
+                    <div className="email-item-top">
+                      <span className="email-sender">{senderInfo.name}</span>
+                      <span className="email-time">{time}</span>
+                    </div>
+                    <div className="email-subject-row">
+                      {deskBadge}
+                      <span className="email-subject">{item.subject}</span>
+                      {badge}
+                    </div>
+                    <div className="email-preview">{preview}</div>
                   </div>
-                  <div className="email-subject-row">
-                    {deskBadge}
-                    <span className="email-subject">{item.subject}</span>
-                    {badge}
-                  </div>
-                  <div className="email-preview">{preview}</div>
-                </div>
-              );
-            })
+                );
+              })}
+              {visibleCount < filteredInbox.length && (
+                <div ref={observerTarget} style={{ height: "20px" }} />
+              )}
+            </>
           )
         ) : (
           <div className="empty-state">
