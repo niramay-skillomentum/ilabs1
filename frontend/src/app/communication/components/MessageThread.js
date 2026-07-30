@@ -53,12 +53,16 @@ const ThreadEmail = memo(function ThreadEmail({
                   // We would ideally look back for the MO user like in the parent, but a fallback is fine here
                   const pToLabel = getRecipientLabel(pMsg.sender, trade, desk, channel, userId, userId);
                   
+                  // Append dummy email for To if it doesn't have one, just to match the visual format
+                  const pToEmail = pToLabel.includes("Counterparty") ? "cpty@external.com" : pToLabel.toLowerCase().replace(/\s+/g, ".") + "@sgb.com";
+                  
                   return (
                     <div key={i} className="qh-item">
+                      <div className="qh-separator-text">-------- Original message --------</div>
                       <div className="qh-header-block">
                         <div><strong>From:</strong> {pSender.name} &lt;{pSender.email}&gt;</div>
-                        <div><strong>Sent:</strong> {formatDateFull(pMsg.timestamp)}</div>
-                        <div><strong>To:</strong> {pToLabel}</div>
+                        <div><strong>Date:</strong> {formatDateFull(pMsg.timestamp)}</div>
+                        <div><strong>To:</strong> {pToLabel} &lt;{pToEmail}&gt;</div>
                         <div><strong>Subject:</strong> RE: {trade.tradeRef}</div>
                       </div>
                       <div className="qh-body" dangerouslySetInnerHTML={{__html: pMsg.body}} />

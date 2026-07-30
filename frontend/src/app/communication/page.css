@@ -323,19 +323,23 @@
 .quoted-history-btn:hover, .quoted-history-btn.active { background: #e1dfdd; border-color: #c8c6c4; }
 .quoted-history-container {
   margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #edebe9;
-  font-size: 13px;
+  font-size: 14px;
   color: #323130;
   max-height: 400px;
   overflow-y: auto;
   padding-right: 12px;
 }
+.qh-separator-text {
+  font-size: 14px;
+  color: #201f1e;
+  margin-bottom: 8px;
+}
 .qh-header-block {
   margin-bottom: 12px;
-  line-height: 1.4;
+  line-height: 1.25;
+  color: #201f1e;
 }
-.qh-header-block strong { font-weight: 600; color: #201f1e; }
+.qh-header-block strong { font-weight: 700; color: #201f1e; }
 .qh-body { white-space: pre-wrap; color: #323130; line-height: 1.6; font-size: 14px; }
 .qh-item { margin-bottom: 24px; }
 
