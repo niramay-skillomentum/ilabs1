@@ -58,7 +58,7 @@ const ThreadEmail = memo(function ThreadEmail({
                   
                   return (
                     <div key={i} className="qh-item">
-                      <div className="qh-separator-text">-------- Original message --------</div>
+                      {i === 0 && <div className="qh-separator-text">-------- Original message --------</div>}
                       <div className="qh-header-block">
                         <div><strong>From:</strong> {pSender.name} &lt;{pSender.email}&gt;</div>
                         <div><strong>Date:</strong> {formatDateFull(pMsg.timestamp)}</div>
