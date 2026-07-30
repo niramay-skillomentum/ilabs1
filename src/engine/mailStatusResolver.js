@@ -68,8 +68,8 @@ function resolveMailStatus(trade, desk) {
   // ── RECONCILIATION DESK ──
   // No awaiting statuses needed for Recon based on current spec
 
-  // Return null for all other states so no badge is rendered
-  return null;
+  // Return the desk even if no badge is needed, so frontend can rely on targetDesk
+  return { label: null, desk: resolvedDesk };
 }
 
 module.exports = { resolveMailStatus, inferDesk };

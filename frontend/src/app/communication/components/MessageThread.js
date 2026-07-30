@@ -135,18 +135,13 @@ export default function MessageThread({
                 <button className="btn-action" onClick={openReplyModal}>↩↩ Reply All</button>
                 <button className="btn-action" onClick={openReplyModal}>↪ Forward</button>
               </div>
-
-              {currentTrade.direction === "SELL" && currentTrade.settlementType === "BILATERAL" && targetDesk === "SETTLEMENT" && channel !== "FO" && (
-                <>
-                  <div className="toolbar-separator" />
-                  <div className="toolbar-secondary">
-                    <button className="btn-action" onClick={openSendSSIModal}>✉ Send SSI</button>
-                  </div>
-                </>
-              )}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {/* Send SSI - only for SETTLEMENT desk */}
+              {targetDesk === "SETTLEMENT" && channel !== "FO" && (
+                <button className="btn-action" onClick={openSendSSIModal}>✉ Send SSI</button>
+              )}
               {/* Resolve / Return - only for MO desk */}
               {targetDesk === "MO" && (
                 <>
