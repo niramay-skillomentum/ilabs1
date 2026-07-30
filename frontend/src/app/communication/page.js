@@ -88,7 +88,7 @@ function CommunicationComponent() {
   const loadPersonalInbox = useCallback((dsk, uid, ch) => {
     const endpoint = ch === "FO"
       ? `/api/fo-channel/list?desk=${encodeURIComponent(dsk)}`
-      : `/api/conversations/personal?userId=${encodeURIComponent(uid)}&desk=${encodeURIComponent(dsk)}`;
+      : `/api/conversations/personal?userId=${encodeURIComponent(uid)}`;
     return fetch(endpoint, { headers: { "Authorization": "Bearer " + getToken() } })
       .then(res => res.json())
       .then(data => {
@@ -344,24 +344,47 @@ function CommunicationComponent() {
     setIsLoading(true);
 
     if (folder === "inbox") {
+      // Cross-desk personal inbox
       loadPersonalInbox(desk, userId, channel).finally(() => setIsLoading(false));
-    } else if (folder === "group") {
+    } else if (folder === "unread") {
+      // Load personal inbox then client-filter to unread
+      loadPersonalInbox(desk, userId, channel).then(mapped => {
+        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId);
+        setInboxData(unread);
+        inboxDataRef.current = unread;
+      }).finally(() => setIsLoading(false));
+    } else if (folder === "flagged") {
+      // Placeholder — no flagging yet
+      setInboxData([]);
+      setIsLoading(false);
+    } else if (folder === "group" || folder.startsWith("group_")) {
+      // Group inbox — desk-specific
       if (channel === "FO") {
         setInboxData([]);
         setIsLoading(false);
       } else {
-        loadGroupInbox(desk).finally(() => setIsLoading(false));
+        const groupDesk = folder.startsWith("group_") ? folder.replace("group_", "") : desk;
+        loadGroupInbox(groupDesk).finally(() => setIsLoading(false));
       }
     } else {
+      // Placeholder folders (sent, drafts, archive, deleted)
       setInboxData([]);
       setIsLoading(false);
     }
   };
 
+  const DESK_LABELS = { SETTLEMENT: "Settlement", CONFIRMATION: "Confirmation", MO: "Middle Office", RECONCILIATION: "Reconciliation" };
   const folderTitle = () => {
     if (channel === "SYSTEM") return "System Notifications";
     if (channel === "FO") return "Front Office Communications";
-    const titles = { inbox: "Inbox", group: "Group Inbox", sent: "Sent", drafts: "Drafts", deleted: "Deleted Items" };
+    if (currentFolder === "inbox") return "Inbox";
+    if (currentFolder === "unread") return "Unread";
+    if (currentFolder === "flagged") return "Flagged";
+    if (currentFolder.startsWith("group_")) {
+      const deskKey = currentFolder.replace("group_", "");
+      return `Group Inbox — ${DESK_LABELS[deskKey] || deskKey}`;
+    }
+    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items" };
     return titles[currentFolder] || currentFolder;
   };
 
@@ -614,7 +637,7 @@ function CommunicationComponent() {
 
       {/* ========== MAIN 3-PANEL LAYOUT ========== */}
       <div className="main">
-        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} />
+        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} />
         
         <InboxList
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}

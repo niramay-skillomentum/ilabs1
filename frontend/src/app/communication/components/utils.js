@@ -35,13 +35,38 @@ export const getRecipientLabel = (sender, trade, dsk, ch, uid, msgMoUser) => {
   return targetUser + " <" + targetUser + ">";
 };
 
+// ── Dynamic status badge (consumes backend-computed mailStatus) ──
 export const getStatusBadge = (trade) => {
+  // If backend has attached a computed mailStatus, use it directly
+  if (trade.mailStatus && trade.mailStatus.label) {
+    return (
+      <span
+        className={`status-badge ${trade.mailStatus.badgeClass || "badge-info"}`}
+        style={{ backgroundColor: trade.mailStatus.color ? undefined : undefined }}
+      >
+        {trade.mailStatus.label}
+      </span>
+    );
+  }
+
+  // Fallback for old data without mailStatus (should not happen after migration)
   const status = trade.currentStatus;
-  const isFoPendingState = status === "PENDING_FO_RESPONSE" || status === "LIASING_WITH_FO";
-  if (trade.conversation && trade.conversation.status === "RESOLVED") return <span className="status-badge badge-resolved">Resolved</span>;
-  if (isFoPendingState && trade.foResponseReceived) return <span className="status-badge badge-responded">FO Responded</span>;
-  if (status === "MO_PENDING" && trade.foResponseReceived) return <span className="status-badge badge-responded">FO Responded (Clean)</span>;
-  if (isFoPendingState && !trade.foResponseReceived) return <span className="status-badge badge-awaiting">Awaiting FO</span>;
-  if (status === "LIASING_WITH_CPTY") return <span className="status-badge badge-awaiting">Awaiting CPTY</span>;
-  return null;
+  if (!status) return null;
+  const friendly = status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  return <span className="status-badge badge-info">{friendly}</span>;
+};
+
+// ── Short desk label for cross-desk inbox ──
+const DESK_SHORT = {
+  MO: "MO",
+  CONFIRMATION: "CONF",
+  SETTLEMENT: "SETT",
+  RECONCILIATION: "RECON",
+};
+
+export const getDeskBadge = (trade) => {
+  const desk = trade.mailStatus?.desk || trade.nextDesk;
+  if (!desk) return null;
+  const label = DESK_SHORT[desk] || desk;
+  return <span className="desk-badge-mini">{label}</span>;
 };

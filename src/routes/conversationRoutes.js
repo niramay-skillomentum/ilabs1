@@ -7,6 +7,7 @@ const communicationEngine = require("../engine/communicationEngine");
 const aiParser = require("../engine/aiParser");
 const auditEngine = require("../engine/auditEngine");
 const LifecycleEngine = require("../engine/lifecycle");
+const { resolveMailStatus } = require("../engine/mailStatusResolver");
 const { authenticateToken } = require("../middleware/auth");
 
 router.post("/send", authenticateToken, async (req, res) => {
@@ -242,6 +243,9 @@ router.get("/shared", authenticateToken, async (req, res) => {
         };
       }
 
+      // Attach computed mail status (desk-scoped for group inbox)
+      trade.mailStatus = resolveMailStatus(trade, desk);
+
       finalResults.push({
         trade,
         conversation: {
@@ -278,7 +282,8 @@ router.get("/personal", authenticateToken, async (req, res) => {
   try {
     const Conversation = require("../models/Conversation");
     
-    // Also fetch conversations for trades currently or historically assigned to this user
+    // Cross-desk personal inbox: fetch ALL conversations the user is involved in
+    // regardless of desk. No desk filter applied.
     const assignedTrades = await Trade.find({ 
       $or: [
         { assignedTo: userId },
@@ -314,6 +319,9 @@ router.get("/personal", authenticateToken, async (req, res) => {
           currentStatus: conv.status
         };
       }
+
+      // Attach computed mail status (no desk filter — resolver infers it)
+      trade.mailStatus = resolveMailStatus(trade, null);
 
       results.push({
         trade,

@@ -1,3 +1,5 @@
+import { getDeskBadge } from "./utils";
+
 export default function InboxList({
   searchQuery, setSearchQuery, folderTitle, isLoading, currentFolder,
   filteredInbox, userId, formatDate, getStatusBadge, selectedTradeRef,
@@ -23,7 +25,7 @@ export default function InboxList({
       <div className="email-list">
         {isLoading ? (
           <div className="empty-state"><div className="empty-icon">⏳</div><div>Loading emails...</div></div>
-        ) : (currentFolder === "inbox" || currentFolder === "group") ? (
+        ) : (currentFolder === "inbox" || currentFolder === "group" || currentFolder === "unread" || currentFolder === "flagged" || currentFolder.startsWith("group_")) ? (
           filteredInbox.length === 0 ? (
             <div className="empty-state"><div className="empty-icon">📭</div><div>No emails in this folder</div></div>
           ) : (
@@ -36,6 +38,7 @@ export default function InboxList({
               })();
               const time = formatDate(item.lastMsg.timestamp);
               const badge = getStatusBadge(item.trade);
+              const deskBadge = (currentFolder === "inbox" || currentFolder === "unread") ? getDeskBadge(item.trade) : null;
               const preview = item.lastMsg.body.substring(0, 80).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
               const isUnread = item.lastMsg.sender !== userId;
               return (
@@ -47,6 +50,7 @@ export default function InboxList({
                     <span className="email-time">{time}</span>
                   </div>
                   <div className="email-subject-row">
+                    {deskBadge}
                     <span className="email-subject">{item.subject}</span>
                     {badge}
                   </div>
@@ -57,8 +61,8 @@ export default function InboxList({
           )
         ) : (
           <div className="empty-state">
-            <div className="empty-icon">{currentFolder === "sent" ? "📤" : currentFolder === "drafts" ? "📝" : "🗑️"}</div>
-            <div>{currentFolder === "sent" ? "No sent items" : currentFolder === "drafts" ? "No drafts" : "No deleted items"}</div>
+            <div className="empty-icon">{currentFolder === "sent" ? "📤" : currentFolder === "drafts" ? "📝" : currentFolder === "archive" ? "📁" : "🗑️"}</div>
+            <div>{currentFolder === "sent" ? "No sent items" : currentFolder === "drafts" ? "No drafts" : currentFolder === "archive" ? "No archived items" : "No deleted items"}</div>
           </div>
         )}
       </div>

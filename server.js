@@ -153,6 +153,7 @@ app.use("/api/ssi", require("./src/routes/ssiRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));
 app.use("/api/swift", require("./src/routes/swiftRoutes"));
 app.use("/api/reconciliation", require("./src/routes/reconciliationRoutes"));
+app.use("/api/user-profile", require("./src/routes/userProfileRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START
