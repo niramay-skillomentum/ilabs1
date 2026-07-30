@@ -106,6 +106,7 @@ export default function MessageThread({
 
   // ── Workflow badges ──
   const mailStatus = currentTrade.mailStatus;
+  const targetDesk = mailStatus?.desk || desk;
   const tradeAge = currentTrade.age ?? 0;
   const priority = tradeAge >= 1 ? "High" : "Normal";
   const tradeDateStr = currentTrade.tradeDate
@@ -135,7 +136,7 @@ export default function MessageThread({
                 <button className="btn-action" onClick={openReplyModal}>↪ Forward</button>
               </div>
 
-              {currentTrade.direction === "SELL" && currentTrade.settlementType === "BILATERAL" && desk === "SETTLEMENT" && channel !== "FO" && (
+              {currentTrade.direction === "SELL" && currentTrade.settlementType === "BILATERAL" && targetDesk === "SETTLEMENT" && channel !== "FO" && (
                 <>
                   <div className="toolbar-separator" />
                   <div className="toolbar-secondary">
@@ -147,7 +148,7 @@ export default function MessageThread({
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               {/* Resolve / Return - only for MO desk */}
-              {desk === "MO" && (
+              {targetDesk === "MO" && (
                 <>
                   <button className="btn-action" disabled={resolveState.disabled || isResolving}
                     onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
