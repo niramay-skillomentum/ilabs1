@@ -146,12 +146,16 @@ export default function MessageThread({
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              {/* Resolve / Return */}
-              <button className="btn-action" disabled={resolveState.disabled || isResolving}
-                onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
-                {isResolving ? "Resolving..." : resolveState.text}
-              </button>
-              {resolveState.statusText && <span className="resolve-status">{resolveState.statusText}</span>}
+              {/* Resolve / Return - only for MO desk */}
+              {desk === "MO" && (
+                <>
+                  <button className="btn-action" disabled={resolveState.disabled || isResolving}
+                    onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
+                    {isResolving ? "Resolving..." : resolveState.text}
+                  </button>
+                  {resolveState.statusText && <span className="resolve-status">{resolveState.statusText}</span>}
+                </>
+              )}
             </div>
           </div>
         )}
