@@ -49,7 +49,7 @@ export default function InboxList({
         <span className="toolbar-title">{folderTitle()}</span>
         {channel !== "SYSTEM" && (
           <button className="btn-compose" onClick={openNewCompose}>
-            ✏️ New Message
+            ✏️ New Email
           </button>
         )}
       </div>
