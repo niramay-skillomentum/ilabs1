@@ -126,35 +126,33 @@ export default function MessageThread({
             <span className="resolve-status">🖥️ System notification — read only</span>
           </div>
         ) : (
-          <div className="email-actions-bar">
-            {/* Primary actions (left) */}
-            <div className="toolbar-primary">
-              <button className="btn-action primary" onClick={openReplyModal}>↩ Reply</button>
-              <button className="btn-action" onClick={openReplyModal}>↩↩ Reply All</button>
-              <button className="btn-action" onClick={openReplyModal}>↪ Forward</button>
-            </div>
+          <div className="email-actions-bar" style={{ justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {/* Primary actions */}
+              <div className="toolbar-primary">
+                <button className="btn-action" onClick={openReplyModal}>↩ Reply</button>
+                <button className="btn-action" onClick={openReplyModal}>↩↩ Reply All</button>
+                <button className="btn-action" onClick={openReplyModal}>↪ Forward</button>
+              </div>
 
-            <div className="toolbar-separator" />
-
-            {/* Secondary actions (right) */}
-            <div className="toolbar-secondary">
               {currentTrade.direction === "SELL" && currentTrade.settlementType === "BILATERAL" && desk === "SETTLEMENT" && channel !== "FO" && (
-                <button className="btn-action" style={{backgroundColor:"#0078d4", color:"white"}} onClick={openSendSSIModal}>✉ Send SSI</button>
+                <>
+                  <div className="toolbar-separator" />
+                  <div className="toolbar-secondary">
+                    <button className="btn-action" onClick={openSendSSIModal}>✉ Send SSI</button>
+                  </div>
+                </>
               )}
-              <button className="btn-action" title="Flag"><span>🚩</span></button>
-              <button className="btn-action" title="Mark as Read"><span>✉</span></button>
-              <button className="btn-action" title="Print" onClick={() => window.print()}><span>🖨</span></button>
-              <button className="btn-action" title="Delete"><span>🗑</span></button>
             </div>
 
-            <div className="toolbar-separator" />
-
-            {/* Resolve / Return */}
-            <button className="btn-action resolve" disabled={resolveState.disabled || isResolving}
-              onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
-              {isResolving ? "Resolving..." : resolveState.text}
-            </button>
-            {resolveState.statusText && <span className="resolve-status">{resolveState.statusText}</span>}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {/* Resolve / Return */}
+              <button className="btn-action" disabled={resolveState.disabled || isResolving}
+                onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
+                {isResolving ? "Resolving..." : resolveState.text}
+              </button>
+              {resolveState.statusText && <span className="resolve-status">{resolveState.statusText}</span>}
+            </div>
           </div>
         )}
 
