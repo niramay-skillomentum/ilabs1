@@ -3,10 +3,16 @@ import ContactCard from "./ContactCard";
 
 const ThreadEmail = memo(function ThreadEmail({ 
   msg, sender, toLabel, isLatest, snippet, formatDateFull, senderRaw, trade, 
-  previousMessages, getSenderInfo, getRecipientLabel, desk, channel, userId 
+  previousMessages, getSenderInfo, getRecipientLabel, desk, channel, userId, allCollapsed
 }) {
   const [collapsed, setCollapsed] = useState(!isLatest);
   const [showQuoted, setShowQuoted] = useState(false);
+
+  useEffect(() => {
+    if (allCollapsed !== undefined) {
+      setCollapsed(allCollapsed);
+    }
+  }, [allCollapsed]);
 
   // Determine if sender is external (FO/CPTY) or internal
   const isExternal = senderRaw === "COUNTERPARTY" || senderRaw === "CPTY";
@@ -156,14 +162,15 @@ export default function MessageThread({
           </div>
         )}
 
-        {/* ── Thread Controls ── */}
         {currentMessages.length > 1 && (
           <div className="thread-controls">
             <button className="btn-thread-ctrl" onClick={() => setAllCollapsed(!allCollapsed)}>
               {allCollapsed ? "▶ Expand All" : "▼ Collapse All"}
             </button>
             <button className="btn-thread-ctrl" onClick={() => {
-              if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+              if (threadRef.current) {
+                threadRef.current.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+              }
             }}>
               ↓ Jump to Latest
             </button>
@@ -190,7 +197,7 @@ export default function MessageThread({
               const snippet = msg.body.substring(0, 60).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
               return (
                 <ThreadEmail key={idx} msg={msg} sender={sender} toLabel={toLabel}
-                  isLatest={allCollapsed ? false : isLatest}
+                  isLatest={isLatest} allCollapsed={allCollapsed}
                   snippet={snippet} formatDateFull={formatDateFull}
                   senderRaw={msg.sender} trade={currentTrade}
                   previousMessages={currentMessages.slice(0, idx)}
