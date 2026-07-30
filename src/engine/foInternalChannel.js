@@ -48,6 +48,7 @@ async function sendMessage(tradeRef, sender, message, senderRole = "USER", owner
   };
 
   channel.messages.push(msg);
+  channel.readBy = [sender];
   await channel.save();
 
   // (B4) Scope to the trade owner's room; broadcast only if owner unknown.

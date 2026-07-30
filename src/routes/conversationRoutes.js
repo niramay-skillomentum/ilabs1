@@ -118,6 +118,23 @@ router.post("/send", authenticateToken, async (req, res) => {
   res.json({ success: true });
 });
 
+router.post("/read", authenticateToken, async (req, res) => {
+  const userId = req.user.email || req.user.userId;
+  const { tradeRef } = req.body;
+  if (!tradeRef) return res.status(400).json({ error: "tradeRef required" });
+
+  try {
+    const Conversation = require("../models/Conversation");
+    await Conversation.updateOne(
+      { tradeRef },
+      { $addToSet: { readBy: userId } }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post("/resolve", authenticateToken, async (req, res) => {
   const { tradeRef } = req.body;
   const userId = req.user.userId;
@@ -252,6 +269,7 @@ router.get("/shared", authenticateToken, async (req, res) => {
       finalResults.push({
         trade,
         conversation: {
+          readBy: item.conversation.readBy || [],
           subject: item.conversation.messages[0]?.subject || item.conversation.subject || `Trade ${item.tradeRef}`,
           status: item.conversation.status,
           messages: item.conversation.messages.map(m => ({
@@ -329,6 +347,7 @@ router.get("/personal", authenticateToken, async (req, res) => {
       results.push({
         trade,
         conversation: {
+          readBy: conv.readBy || [],
           subject: conv.messages[0]?.subject || `Trade ${conv.tradeRef}`,
           status: conv.status,
           messages: conv.messages.map(m => ({

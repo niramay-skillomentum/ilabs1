@@ -32,7 +32,6 @@ function CommunicationComponent() {
   const [todayDate, setTodayDate] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [readMails, setReadMails] = useState(new Set());
 
   // Reply modal state
   const [replyModalOpen, setReplyModalOpen] = useState(false);
@@ -60,7 +59,6 @@ function CommunicationComponent() {
   const selectedTradeRefRef = useRef(null);
   const currentFolderRef = useRef("inbox");
   const lastRenderedInboxDataStr = useRef("");
-  const readMailsRef = useRef(new Set());
 
   // ========================================
   // AUTH HELPERS (shared via lib/auth)
@@ -148,18 +146,42 @@ function CommunicationComponent() {
     setSelectedTradeRef(tradeRef);
     selectedTradeRefRef.current = tradeRef;
     
-    // Mark as read locally
     const uid = loadUserId();
-    setReadMails(prev => {
-      const next = new Set(prev);
-      next.add(tradeRef);
-      readMailsRef.current = next;
-      localStorage.setItem(`readMails_${uid}`, JSON.stringify(Array.from(next)));
-      return next;
-    });
+    
+    // API call to persist read state across sessions
+    if (ch === "SYSTEM" || currentFolderRef.current === "system") {
+      fetch("/api/system-mailbox/read", {
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
+      });
+    } else if (ch === "FO") {
+      fetch("/api/fo-channel/read", {
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
+      });
+    } else {
+      fetch("/api/conversation/read", {
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
+      });
+    }
 
+    // Optimistic UI Update
     const data = currentInboxData || inboxDataRef.current;
-    const inboxItem = data.find(i => i.trade.tradeRef === tradeRef);
+    const newData = data.map(item => {
+      if (item.trade.tradeRef === tradeRef) {
+        if (ch === "SYSTEM" || currentFolderRef.current === "system") {
+          item.conversation.read = true;
+        } else {
+          item.conversation.readBy = item.conversation.readBy || [];
+          if (!item.conversation.readBy.includes(uid)) {
+            item.conversation.readBy.push(uid);
+          }
+        }
+      }
+      return item;
+    });
+    setInboxData(newData);
+    inboxDataRef.current = newData;
+
+    const inboxItem = newData.find(i => i.trade.tradeRef === tradeRef);
     if (inboxItem) setCurrentTrade(inboxItem.trade);
 
     // System mailbox messages are already loaded with the inbox list — no per-thread fetch.
@@ -207,15 +229,6 @@ function CommunicationComponent() {
     if (tRef) { setSelectedTradeRef(tRef); selectedTradeRefRef.current = tRef; }
 
     setTodayDate(new Date().toLocaleDateString());
-
-    const storedRead = localStorage.getItem(`readMails_${uid}`);
-    if (storedRead) {
-      try { 
-        const parsed = new Set(JSON.parse(storedRead));
-        setReadMails(parsed); 
-        readMailsRef.current = parsed;
-      } catch(e) {}
-    }
 
     // Check for compose mode from workstation
     const composeForTrade = searchParams.get("composeFor");
@@ -349,7 +362,7 @@ function CommunicationComponent() {
       else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
       else if (folder === "unread") {
         refreshPromise = loadPersonalInbox(dsk, uid, ch).then(mapped => {
-          const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== uid && !readMailsRef.current.has(item.trade.tradeRef));
+          const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== uid && !(item.conversation.readBy || []).includes(uid));
           setInboxData(unread);
           inboxDataRef.current = unread;
         });
@@ -394,7 +407,7 @@ function CommunicationComponent() {
     } else if (folder === "unread") {
       // Load personal inbox then client-filter to unread
       loadPersonalInbox(desk, userId, channel).then(mapped => {
-        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId && !readMailsRef.current.has(item.trade.tradeRef));
+        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId && !(item.conversation.readBy || []).includes(userId));
         setInboxData(unread);
         inboxDataRef.current = unread;
       }).finally(() => setIsLoading(false));
@@ -686,14 +699,14 @@ function CommunicationComponent() {
 
       {/* ========== MAIN 3-PANEL LAYOUT ========== */}
       <div className="main">
-        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} readMails={readMails} userId={userId} />
+        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} userId={userId} />
         
         <InboxList
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}
           isLoading={isLoading} currentFolder={currentFolder} filteredInbox={filteredInbox}
           userId={userId} formatDate={formatDate} getStatusBadge={getStatusBadge}
           selectedTradeRef={selectedTradeRef} channel={channel} loadConversation={loadConversation}
-          openNewCompose={openNewCompose} readMails={readMails}
+          openNewCompose={openNewCompose}
         />
 
         <MessageThread

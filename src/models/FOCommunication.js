@@ -13,6 +13,7 @@ const foCommunicationSchema = new mongoose.Schema({
   openedBy: String,
   openedAt: { type: Date, default: Date.now },
   status: { type: String, default: "OPEN" },
+  readBy: [{ type: String }],
   messages: [foMessageSchema]
 }, { timestamps: true });
 

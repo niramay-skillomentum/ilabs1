@@ -22,14 +22,17 @@ const Icon = ({ name }) => {
   }
 };
 
-export default function FolderNav({ channel, currentFolder, switchFolder, inboxData, desk, readMails = new Set(), userId }) {
+export default function FolderNav({ channel, currentFolder, switchFolder, inboxData, desk, userId }) {
   const [groupExpanded, setGroupExpanded] = useState(true);
 
   // ── Count unread items (messages not sent by current user and not read) ──
   const unreadCount = (inboxData || []).filter(item => {
+    if (channel === "SYSTEM") {
+      return item.conversation && !item.conversation.read;
+    }
     if (!item.lastMsg) return false;
     if (item.lastMsg.sender === userId) return false; // Sent by me
-    if (readMails.has(item.trade.tradeRef)) return false; // Read by me
+    if ((item.conversation.readBy || []).includes(userId)) return false; // Read by me
     return true;
   }).length;
 

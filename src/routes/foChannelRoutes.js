@@ -24,6 +24,7 @@ router.get("/list", authenticateToken, async (req, res) => {
       return {
         trade: t,
         conversation: {
+          readBy: c.readBy || [],
           messages: c.messages.map(m => ({
             sender: m.senderRole === "FO" ? "FO" : (m.sender || "Unknown User"),
             body: m.message,
