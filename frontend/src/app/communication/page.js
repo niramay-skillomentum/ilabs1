@@ -635,16 +635,18 @@ function CommunicationComponent() {
   // ========================================
   if (!userId) return null;
 
+  const userName = userId.split('@')[0].charAt(0).toUpperCase() + userId.split('@')[0].slice(1);
+
   return (
     <div style={{fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", background:"#f3f2f1", color:"#323130", overflow:"hidden", height:"100vh"}}>
       {/* ========== HEADER ========== */}
       <div className="header">
         <div className="header-left">
-          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB OpsMail"}</div>
+          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB Operations Mailbox"}</div>
         </div>
         <div className="header-right">
           <div className="header-user">
-            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userId}`}
+            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userName}`}
           </div>
           <div className="header-date">{todayDate}</div>
           <button className="btn-close-tab" onClick={closeMailbox}>✕ Close</button>
