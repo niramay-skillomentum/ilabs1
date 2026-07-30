@@ -11,11 +11,11 @@ export const buildSubject = (trade) => {
 };
 
 export const getSenderInfo = (sender, trade) => {
-  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@sgb.com", initials: "SY", color: "#0f766e" };
-  if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#c4314b" };
+  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@sgb.com", initials: "SY", color: "#005a9e" };
+  if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#004578" };
   if (sender === "COUNTERPARTY" || sender === "CPTY") {
     const cpName = trade ? trade.counterparty : "Counterparty";
-    return { name: cpName + " Operations", email: `operations@${(cpName||"cpty").toLowerCase()}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#107c10" };
+    return { name: cpName + " Operations", email: `operations@${(cpName||"cpty").toLowerCase()}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#0078d4" };
   }
   return { name: sender, email: sender, initials: (sender||"").substring(0,2).toUpperCase(), color: "#0f6cbd" };
 };
