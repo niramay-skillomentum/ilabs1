@@ -77,16 +77,18 @@ export default function InboxList({
                   <div key={item.trade.tradeRef}
                     className={`email-item ${selectedTradeRef === item.trade.tradeRef ? "selected" : ""} ${isUnread ? "unread" : ""}`}
                     onClick={() => loadConversation(item.trade.tradeRef, channel, null, true)}>
-                    <div className="email-item-top">
-                      <span className="email-sender">{senderInfo.name}</span>
-                      <span className="email-time">{time}</span>
+                    <div className="email-item-main">
+                      <div className="email-sender">{senderInfo.name}</div>
+                      <div className="email-subject-row">
+                        {deskBadge}
+                        <span className="email-subject">{item.subject}</span>
+                      </div>
+                      <div className="email-preview">{preview}</div>
                     </div>
-                    <div className="email-subject-row">
-                      {deskBadge}
-                      <span className="email-subject">{item.subject}</span>
-                      {badge}
+                    <div className="email-item-meta">
+                      <div className="email-time">{time}</div>
+                      {badge && <div className="email-status-badge">{badge}</div>}
                     </div>
-                    <div className="email-preview">{preview}</div>
                   </div>
                 );
               })}
