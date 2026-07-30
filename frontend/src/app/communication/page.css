@@ -320,13 +320,16 @@
   margin-bottom: 8px;
   transition: background 0.15s;
 }
-.quoted-history-btn:hover { background: #e1dfdd; }
+.quoted-history-btn:hover, .quoted-history-btn.active { background: #e1dfdd; border-color: #c8c6c4; }
 .quoted-history-container {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #edebe9;
   font-size: 13px;
   color: #323130;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 12px;
 }
 .qh-header-block {
   margin-bottom: 12px;

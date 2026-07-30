@@ -36,12 +36,16 @@ const ThreadEmail = memo(function ThreadEmail({
         <div dangerouslySetInnerHTML={{__html: msg.body}} />
         
         {previousMessages && previousMessages.length > 0 && (
-          <>
-            {!showQuoted ? (
-              <button className="quoted-history-btn" title="Show quoted history" onClick={() => setShowQuoted(true)}>
-                •••
-              </button>
-            ) : (
+          <div className="quoted-history-wrapper">
+            <button 
+              className={`quoted-history-btn ${showQuoted ? "active" : ""}`} 
+              title={showQuoted ? "Hide quoted history" : "Show quoted history"} 
+              onClick={() => setShowQuoted(!showQuoted)}
+            >
+              •••
+            </button>
+            
+            {showQuoted && (
               <div className="quoted-history-container">
                 {[...previousMessages].reverse().map((pMsg, i) => {
                   const pSender = getSenderInfo(pMsg.sender, trade);
@@ -63,7 +67,7 @@ const ThreadEmail = memo(function ThreadEmail({
                 })}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
