@@ -303,6 +303,39 @@
 .thread-email.latest { border-left: 4px solid #0f6cbd; }
 .thread-separator { height: 1px; background: #e1dfdd; margin: 0 24px; }
 
+/* ── Quoted History (3 dots) ── */
+.quoted-history-btn {
+  background: #f3f2f1;
+  border: 1px solid #e1dfdd;
+  border-radius: 12px;
+  padding: 0 12px;
+  height: 24px;
+  font-size: 14px;
+  color: #605e5c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  transition: background 0.15s;
+}
+.quoted-history-btn:hover { background: #e1dfdd; }
+.quoted-history-container {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #edebe9;
+  font-size: 13px;
+  color: #323130;
+}
+.qh-header-block {
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.qh-header-block strong { font-weight: 600; color: #201f1e; }
+.qh-body { white-space: pre-wrap; color: #323130; line-height: 1.6; font-size: 14px; }
+.qh-item { margin-bottom: 24px; }
+
 /* ========== MODAL OVERLAY ========== */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.45); z-index: 998; }
 

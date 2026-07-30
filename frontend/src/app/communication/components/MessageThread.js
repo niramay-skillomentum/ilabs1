@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect, memo } from "react";
 import ContactCard from "./ContactCard";
 
-const ThreadEmail = memo(function ThreadEmail({ msg, sender, toLabel, isLatest, snippet, formatDateFull, senderRaw, trade }) {
+const ThreadEmail = memo(function ThreadEmail({ 
+  msg, sender, toLabel, isLatest, snippet, formatDateFull, senderRaw, trade, 
+  previousMessages, getSenderInfo, getRecipientLabel, desk, channel, userId 
+}) {
   const [collapsed, setCollapsed] = useState(!isLatest);
+  const [showQuoted, setShowQuoted] = useState(false);
 
   // Determine if sender is external (FO/CPTY) or internal
   const isExternal = senderRaw === "FO" || senderRaw === "COUNTERPARTY" || senderRaw === "CPTY";
@@ -28,7 +32,40 @@ const ThreadEmail = memo(function ThreadEmail({ msg, sender, toLabel, isLatest, 
         </div>
         <span className="collapse-arrow">▶</span>
       </div>
-      <div className="thread-email-body" dangerouslySetInnerHTML={{__html: msg.body}} />
+      <div className="thread-email-body">
+        <div dangerouslySetInnerHTML={{__html: msg.body}} />
+        
+        {previousMessages && previousMessages.length > 0 && (
+          <>
+            {!showQuoted ? (
+              <button className="quoted-history-btn" title="Show quoted history" onClick={() => setShowQuoted(true)}>
+                •••
+              </button>
+            ) : (
+              <div className="quoted-history-container">
+                {[...previousMessages].reverse().map((pMsg, i) => {
+                  const pSender = getSenderInfo(pMsg.sender, trade);
+                  let pMsgMoUser = userId;
+                  // We would ideally look back for the MO user like in the parent, but a fallback is fine here
+                  const pToLabel = getRecipientLabel(pMsg.sender, trade, desk, channel, userId, userId);
+                  
+                  return (
+                    <div key={i} className="qh-item">
+                      <div className="qh-header-block">
+                        <div><strong>From:</strong> {pSender.name} &lt;{pSender.email}&gt;</div>
+                        <div><strong>Sent:</strong> {formatDateFull(pMsg.timestamp)}</div>
+                        <div><strong>To:</strong> {pToLabel}</div>
+                        <div><strong>Subject:</strong> RE: {trade.tradeRef}</div>
+                      </div>
+                      <div className="qh-body" dangerouslySetInnerHTML={{__html: pMsg.body}} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 });
@@ -160,7 +197,11 @@ export default function MessageThread({
                 <ThreadEmail key={idx} msg={msg} sender={sender} toLabel={toLabel}
                   isLatest={allCollapsed ? false : isLatest}
                   snippet={snippet} formatDateFull={formatDateFull}
-                  senderRaw={msg.sender} trade={currentTrade} />
+                  senderRaw={msg.sender} trade={currentTrade}
+                  previousMessages={currentMessages.slice(0, idx)}
+                  getSenderInfo={getSenderInfo}
+                  getRecipientLabel={getRecipientLabel}
+                  desk={desk} channel={channel} userId={userId} />
               );
             })
           )}
