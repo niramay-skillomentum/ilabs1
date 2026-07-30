@@ -56,7 +56,7 @@ export default function InboxList({
       <div className="email-list">
         {isLoading ? (
           <div className="empty-state"><div className="empty-icon">⏳</div><div>Loading emails...</div></div>
-        ) : (currentFolder === "inbox" || currentFolder === "group" || currentFolder === "unread" || currentFolder === "flagged" || currentFolder.startsWith("group_")) ? (
+        ) : (currentFolder === "inbox" || currentFolder === "system" || currentFolder === "group" || currentFolder === "unread" || currentFolder === "flagged" || currentFolder.startsWith("group_")) ? (
           filteredInbox.length === 0 ? (
             <div className="empty-state"><div className="empty-icon">📭</div><div>No emails in this folder</div></div>
           ) : (

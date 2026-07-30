@@ -150,7 +150,7 @@ function CommunicationComponent() {
     if (inboxItem) setCurrentTrade(inboxItem.trade);
 
     // System mailbox messages are already loaded with the inbox list — no per-thread fetch.
-    if (ch === "SYSTEM") {
+    if (ch === "SYSTEM" || currentFolderRef.current === "system") {
       setCurrentMessages(inboxItem ? inboxItem.conversation.messages : []);
       return;
     }
@@ -324,6 +324,7 @@ function CommunicationComponent() {
       const folder = currentFolderRef.current;
       let refreshPromise = Promise.resolve();
       if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
+      else if (folder === "system") refreshPromise = loadSystemInbox();
       else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
       else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
 
@@ -373,6 +374,8 @@ function CommunicationComponent() {
       // Placeholder — no flagging yet
       setInboxData([]);
       setIsLoading(false);
+    } else if (folder === "system") {
+      loadSystemInbox().finally(() => setIsLoading(false));
     } else if (folder === "group" || folder.startsWith("group_")) {
       // Group inbox — desk-specific
       if (channel === "FO") {
@@ -400,7 +403,7 @@ function CommunicationComponent() {
       const deskKey = currentFolder.replace("group_", "");
       return `Group Inbox — ${DESK_LABELS[deskKey] || deskKey}`;
     }
-    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items" };
+    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items", system: "System Mails" };
     return titles[currentFolder] || currentFolder;
   };
 
