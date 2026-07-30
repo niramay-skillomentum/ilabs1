@@ -48,7 +48,7 @@
 
 /* ========== LEFT NAV (FOLDERS) ========== */
 .folder-nav {
-  width: 210px;
+  width: 15vw;
   background: #faf9f8;
   border-right: 1px solid #edebe9;
   display: flex;
@@ -105,7 +105,7 @@
 
 /* ========== EMAIL LIST (MIDDLE) ========== */
 .email-list-panel {
-  width: 360px;
+  width: 25vw;
   background: #ffffff;
   border-right: 1px solid #edebe9;
   display: flex;
