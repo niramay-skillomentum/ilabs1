@@ -46,7 +46,7 @@ function resolveMailStatus(trade, desk) {
 
   // ── MIDDLE OFFICE ──
   if (resolvedDesk === "MO") {
-    if (s === "PENDING_FO_RESPONSE" || (s === "MO_PENDING" && !trade.foResponseReceived)) {
+    if ((s === "PENDING_FO_RESPONSE" || s === "MO_PENDING") && !trade.foResponseReceived) {
       return { label: "Awaiting Front Office Response", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
     }
   }

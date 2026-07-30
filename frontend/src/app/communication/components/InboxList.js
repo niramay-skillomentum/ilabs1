@@ -64,7 +64,7 @@ export default function InboxList({
               {visibleInbox.map(item => {
                 const senderInfo = (() => {
                   if (item.lastMsg.sender === userId) return { name: "You" };
-                  if (item.lastMsg.sender === "FO") return { name: "Front Office" };
+                  if (item.lastMsg.sender === "FO") return { name: "Front Office Trading Desk" };
                   if (item.lastMsg.sender === "COUNTERPARTY" || item.lastMsg.sender === "CPTY") return { name: (item.trade.counterparty || "Cpty") + " Ops" };
                   return { name: item.lastMsg.sender };
                 })();
