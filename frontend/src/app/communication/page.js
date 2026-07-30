@@ -32,6 +32,7 @@ function CommunicationComponent() {
   const [todayDate, setTodayDate] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [readMails, setReadMails] = useState(new Set());
 
   // Reply modal state
   const [replyModalOpen, setReplyModalOpen] = useState(false);
@@ -59,6 +60,7 @@ function CommunicationComponent() {
   const selectedTradeRefRef = useRef(null);
   const currentFolderRef = useRef("inbox");
   const lastRenderedInboxDataStr = useRef("");
+  const readMailsRef = useRef(new Set());
 
   // ========================================
   // AUTH HELPERS (shared via lib/auth)
@@ -145,6 +147,17 @@ function CommunicationComponent() {
   const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll) => {
     setSelectedTradeRef(tradeRef);
     selectedTradeRefRef.current = tradeRef;
+    
+    // Mark as read locally
+    const uid = loadUserId();
+    setReadMails(prev => {
+      const next = new Set(prev);
+      next.add(tradeRef);
+      readMailsRef.current = next;
+      localStorage.setItem(`readMails_${uid}`, JSON.stringify(Array.from(next)));
+      return next;
+    });
+
     const data = currentInboxData || inboxDataRef.current;
     const inboxItem = data.find(i => i.trade.tradeRef === tradeRef);
     if (inboxItem) setCurrentTrade(inboxItem.trade);
@@ -193,8 +206,16 @@ function CommunicationComponent() {
     setChannel(ch);
     if (tRef) { setSelectedTradeRef(tRef); selectedTradeRefRef.current = tRef; }
 
-    const d = new Date();
-    setTodayDate(d.toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }));
+    setTodayDate(new Date().toLocaleDateString());
+
+    const storedRead = localStorage.getItem(`readMails_${uid}`);
+    if (storedRead) {
+      try { 
+        const parsed = new Set(JSON.parse(storedRead));
+        setReadMails(parsed); 
+        readMailsRef.current = parsed;
+      } catch(e) {}
+    }
 
     // Check for compose mode from workstation
     const composeForTrade = searchParams.get("composeFor");
@@ -326,6 +347,13 @@ function CommunicationComponent() {
       if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
       else if (folder === "system") refreshPromise = loadSystemInbox();
       else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
+      else if (folder === "unread") {
+        refreshPromise = loadPersonalInbox(dsk, uid, ch).then(mapped => {
+          const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== uid && !readMailsRef.current.has(item.trade.tradeRef));
+          setInboxData(unread);
+          inboxDataRef.current = unread;
+        });
+      }
       else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
 
       refreshPromise.then(() => {
@@ -366,7 +394,7 @@ function CommunicationComponent() {
     } else if (folder === "unread") {
       // Load personal inbox then client-filter to unread
       loadPersonalInbox(desk, userId, channel).then(mapped => {
-        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId);
+        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId && !readMailsRef.current.has(item.trade.tradeRef));
         setInboxData(unread);
         inboxDataRef.current = unread;
       }).finally(() => setIsLoading(false));
@@ -658,14 +686,14 @@ function CommunicationComponent() {
 
       {/* ========== MAIN 3-PANEL LAYOUT ========== */}
       <div className="main">
-        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} />
+        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} readMails={readMails} userId={userId} />
         
         <InboxList
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}
           isLoading={isLoading} currentFolder={currentFolder} filteredInbox={filteredInbox}
           userId={userId} formatDate={formatDate} getStatusBadge={getStatusBadge}
           selectedTradeRef={selectedTradeRef} channel={channel} loadConversation={loadConversation}
-          openNewCompose={openNewCompose}
+          openNewCompose={openNewCompose} readMails={readMails}
         />
 
         <MessageThread

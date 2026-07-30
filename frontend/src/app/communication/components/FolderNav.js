@@ -22,13 +22,15 @@ const Icon = ({ name }) => {
   }
 };
 
-export default function FolderNav({ channel, currentFolder, switchFolder, inboxData, desk }) {
+export default function FolderNav({ channel, currentFolder, switchFolder, inboxData, desk, readMails = new Set(), userId }) {
   const [groupExpanded, setGroupExpanded] = useState(true);
 
-  // ── Count unread items (messages not sent by current user) ──
+  // ── Count unread items (messages not sent by current user and not read) ──
   const unreadCount = (inboxData || []).filter(item => {
     if (!item.lastMsg) return false;
-    return item.lastMsg.sender !== "USER";
+    if (item.lastMsg.sender === userId) return false; // Sent by me
+    if (readMails.has(item.trade.tradeRef)) return false; // Read by me
+    return true;
   }).length;
 
   // Internal System Mailbox: Inbox only

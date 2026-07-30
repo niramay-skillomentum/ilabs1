@@ -4,7 +4,7 @@ import { getDeskBadge } from "./utils";
 export default function InboxList({
   searchQuery, setSearchQuery, folderTitle, isLoading, currentFolder,
   filteredInbox, userId, formatDate, getStatusBadge, selectedTradeRef,
-  channel, loadConversation, openNewCompose
+  channel, loadConversation, openNewCompose, readMails = new Set()
 }) {
   const [visibleCount, setVisibleCount] = useState(20);
   const observerTarget = useRef(null);
@@ -72,7 +72,7 @@ export default function InboxList({
                 const badge = getStatusBadge(item.trade);
                 const deskBadge = (currentFolder === "inbox" || currentFolder === "unread") ? getDeskBadge(item.trade) : null;
                 const preview = item.lastMsg.body.substring(0, 80).replace(/\n/g, " ").replace(/<[^>]*>/g, "");
-                const isUnread = item.lastMsg.sender !== userId;
+                const isUnread = item.lastMsg.sender !== userId && !readMails.has(item.trade.tradeRef);
                 return (
                   <div key={item.trade.tradeRef}
                     className={`email-item ${selectedTradeRef === item.trade.tradeRef ? "selected" : ""} ${isUnread ? "unread" : ""}`}
