@@ -28,7 +28,10 @@ router.post("/send", authenticateToken, async (req, res) => {
   const parsed = aiParser.parseEmail(message);
 
   // Find trade in DB
-  const trade = await Trade.findOne({ tradeRef, assignedTo: { $ne: null } });
+  const trade = await Trade.findOne({ tradeRef });
+  if (!trade) {
+    return res.status(404).json({ error: "Trade not found" });
+  }
 
   let auditDetails = "";
   if (trade && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE")) {
