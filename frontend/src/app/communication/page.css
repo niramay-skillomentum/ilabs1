@@ -71,7 +71,7 @@
 }
 .folder-item:hover { background: #f3f2f1; }
 .folder-item.active {
-  background: #e1dfdd;
+  background: #f3f2f1;
   border-left-color: #0f6cbd;
   font-weight: 600;
   color: #0f6cbd;
@@ -79,20 +79,15 @@
 .folder-item .folder-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
 .folder-item .folder-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .folder-badge {
-  background: #0f6cbd;
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  text-align: center;
+  color: #0f6cbd;
+  font-size: 13px;
+  font-weight: 600;
   flex-shrink: 0;
 }
 .folder-divider { height: 1px; background: #edebe9; margin: 6px 16px; }
-.folder-placeholder { opacity: 0.55; }
-.folder-placeholder:hover { opacity: 0.8; }
-.folder-group-header { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; color: #605e5c; }
+.folder-placeholder { color: #323130; }
+.folder-placeholder:hover { background: #f3f2f1; }
+.folder-group-header { font-weight: 600; font-size: 12px; color: #605e5c; }
 .folder-chevron {
   font-size: 10px;
   transition: transform 0.2s;
