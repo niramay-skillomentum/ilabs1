@@ -49,11 +49,8 @@ export const getStatusBadge = (trade) => {
     );
   }
 
-  // Fallback for old data without mailStatus (should not happen after migration)
-  const status = trade.currentStatus;
-  if (!status) return null;
-  const friendly = status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  return <span className="status-badge badge-info">{friendly}</span>;
+  // If there's no mail status (e.g. not an "Awaiting" state), don't show a badge
+  return null;
 };
 
 // ── Short desk label for cross-desk inbox ──

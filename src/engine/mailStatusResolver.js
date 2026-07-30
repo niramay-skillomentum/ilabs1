@@ -46,90 +46,30 @@ function resolveMailStatus(trade, desk) {
 
   // ── MIDDLE OFFICE ──
   if (resolvedDesk === "MO") {
-    if (s === "PENDING_FO_RESPONSE") {
+    if (s === "PENDING_FO_RESPONSE" || (s === "MO_PENDING" && !trade.foResponseReceived)) {
       return { label: "Awaiting Front Office Response", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "MO_PENDING" && !trade.foResponseReceived) {
-      return { label: "Awaiting Front Office Response", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "MO_PENDING" && trade.foResponseReceived) {
-      return { label: "Awaiting Middle Office Review", color: "#107c10", badgeClass: "badge-responded", desk: resolvedDesk };
-    }
-    if (s === "MO_BREAK_OPEN") {
-      return { label: "Query Raised", color: "#d13438", badgeClass: "badge-break", desk: resolvedDesk };
-    }
-    if (s === "CONFIRMATION_PENDING") {
-      return { label: "Validation Completed", color: "#107c10", badgeClass: "badge-resolved", desk: resolvedDesk };
     }
   }
 
   // ── CONFIRMATION DESK ──
   if (resolvedDesk === "CONFIRMATION") {
     if (s === "LIASING_WITH_CPTY" && !trade.cptyResponseReceived) {
-      return { label: "Awaiting Counterparty Confirmation", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "LIASING_WITH_CPTY" && trade.cptyResponseReceived) {
-      return { label: "Counterparty Confirmed", color: "#107c10", badgeClass: "badge-responded", desk: resolvedDesk };
-    }
-    if (s === "CONFIRMATION_BREAK") {
-      return { label: "Confirmation Break", color: "#d13438", badgeClass: "badge-break", desk: resolvedDesk };
-    }
-    if (s === "LIASING_WITH_FO") {
-      return { label: "Awaiting Internal Review", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "CONFIRMATION_PENDING") {
-      return { label: "Awaiting Confirmation Team Action", color: "#0078d4", badgeClass: "badge-info", desk: resolvedDesk };
+      return { label: "Awaiting Counterparty Response", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
     }
   }
 
   // ── SETTLEMENT DESK ──
   if (resolvedDesk === "SETTLEMENT") {
-    if (s === "SETTLEMENT_BREAK" && trade.cutoffMissedReason) {
-      return { label: "Cutoff Missed", color: "#d13438", badgeClass: "badge-break", desk: resolvedDesk };
-    }
-    if (s === "SETTLEMENT_BREAK") {
-      return { label: "Settlement Break", color: "#d13438", badgeClass: "badge-break", desk: resolvedDesk };
-    }
-    if (s === "SETTLEMENT_PENDING") {
-      return { label: "Awaiting Settlement Team Action", color: "#0078d4", badgeClass: "badge-info", desk: resolvedDesk };
-    }
     if (s === "LIASING_WITH_CPTY" && !trade.cptyResponseReceived) {
-      return { label: "Awaiting Counterparty SSI", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "LIASING_WITH_CPTY" && trade.cptyResponseReceived) {
-      return { label: "Awaiting Cash Confirmation", color: "#107c10", badgeClass: "badge-responded", desk: resolvedDesk };
-    }
-    if (s === "PENDING_APPROVAL" || s === "READY_FOR_APPROVAL") {
-      return { label: "Awaiting Settlement Approval", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "PENDING_AMENDMENT") {
-      return { label: "Pending Amendment", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "AMENDED") {
-      return { label: "Trade Amended", color: "#0078d4", badgeClass: "badge-info", desk: resolvedDesk };
-    }
-    if (s === "SETTLED") {
-      return { label: "Settlement Completed", color: "#107c10", badgeClass: "badge-resolved", desk: resolvedDesk };
+      return { label: "Awaiting Counterparty Response", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
     }
   }
 
   // ── RECONCILIATION DESK ──
-  if (resolvedDesk === "RECONCILIATION") {
-    if (s === "RECON_PENDING") {
-      return { label: "Awaiting Ledger Match", color: "#835c00", badgeClass: "badge-awaiting", desk: resolvedDesk };
-    }
-    if (s === "UNMATCHED_BY_USER") {
-      return { label: "Exception Raised", color: "#d13438", badgeClass: "badge-break", desk: resolvedDesk };
-    }
-    if (s === "RECON_CLEARED") {
-      return { label: "Fully Matched", color: "#107c10", badgeClass: "badge-resolved", desk: resolvedDesk };
-    }
-  }
+  // No awaiting statuses needed for Recon based on current spec
 
-  // ── FALLBACK ──
-  // Generic status derived from the raw trade status
-  const friendlyStatus = (s || "Unknown").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  return { label: friendlyStatus, color: "#605e5c", badgeClass: "badge-info", desk: resolvedDesk };
+  // Return null for all other states so no badge is rendered
+  return null;
 }
 
 module.exports = { resolveMailStatus, inferDesk };
