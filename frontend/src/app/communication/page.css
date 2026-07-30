@@ -27,18 +27,7 @@
 .header-right { display: flex; align-items: center; gap: 16px; }
 .header-user { font-size: 13px; opacity: 0.95; }
 .header-date { font-size: 12px; opacity: 0.8; }
-.btn-close-tab {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: white;
-  padding: 5px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-.btn-close-tab:hover { background: rgba(255,255,255,0.25); }
+
 
 /* ========== MAIN LAYOUT ========== */
 .main {
@@ -112,21 +101,7 @@
   background: #faf9f8;
 }
 .toolbar-title { font-size: 14px; font-weight: 600; color: #323130; }
-.btn-compose {
-  background: #0f6cbd;
-  color: white;
-  border: none;
-  padding: 6px 14px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: background 0.15s;
-}
-.btn-compose:hover { background: #0e5faa; }
+
 .email-list { flex: 1; overflow-y: auto; }
 .email-item {
   padding: 12px 14px;
@@ -163,13 +138,7 @@
 .meta-item { display: flex; gap: 4px; }
 .meta-label { font-weight: 600; color: #323130; }
 .email-actions-bar { padding: 8px 24px; border-bottom: 1px solid #edebe9; display: flex; gap: 8px; align-items: center; background: #faf9f8; }
-.btn-action { padding: 6px 14px; border: 1px solid #c8c6c4; background: white; border-radius: 4px; font-size: 12px; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.12s; color: #323130; }
-.btn-action:hover { background: #f3f2f1; border-color: #8a8886; }
-.btn-action.primary { background: #0f6cbd; color: white; border-color: #0f6cbd; }
-.btn-action.primary:hover { background: #0e5faa; }
-.btn-action.resolve { background: #107c10; color: white; border-color: #107c10; }
-.btn-action.resolve:hover { background: #0b6a0b; }
-.btn-action:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .resolve-status { font-size: 11px; color: #605e5c; margin-left: 8px; }
 
 /* ========== OUTLOOK EMAIL THREAD ========== */
@@ -219,10 +188,7 @@ select.compose-value { border: none; background: transparent; cursor: pointer; }
 .quoted-message .qm-date { font-size: 11px; color: #a19f9d; margin-left: 8px; }
 .quoted-message .qm-body { font-size: 12px; color: #605e5c; margin-top: 4px; white-space: pre-wrap; line-height: 1.5; max-height: 60px; overflow: hidden; }
 .compose-footer { padding: 10px 20px; border-top: 1px solid #edebe9; display: flex; gap: 8px; background: #faf9f8; }
-.btn-send { background: #0f6cbd; color: white; border: none; padding: 8px 24px; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 600; transition: background 0.15s; }
-.btn-send:hover { background: #0e5faa; }
-.btn-discard { background: white; color: #323130; border: 1px solid #c8c6c4; padding: 8px 16px; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; transition: background 0.15s; }
-.btn-discard:hover { background: #f3f2f1; }
+
 
 /* ========== SCROLLBAR ========== */
 ::-webkit-scrollbar { width: 6px; }

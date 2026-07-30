@@ -22,7 +22,7 @@
 // reinforced by economic agreement (amount, currency, value date).
 // ======================================
 
-const { RECON_SOURCE, RECON_STATUS } = require("./reconciliationConstants");
+const { RECON_SOURCE, RECON_STATUS, RECON_ITEM_TYPE } = require("./reconciliationConstants");
 
 // Penny tolerance for amount comparison.
 const AMOUNT_TOLERANCE = 0.01;
@@ -59,6 +59,14 @@ function validatePair(ledgerItem, statementItem) {
   // Both must still be Outstanding.
   if (ledger.status !== RECON_STATUS.OUTSTANDING || statement.status !== RECON_STATUS.OUTSTANDING) {
     return deny("Recon Status mismatch: Both items must be Outstanding.");
+  }
+
+  // ── Item Type agreement (LC <-> SD, LD <-> SC) ──
+  if (ledger.itemType === RECON_ITEM_TYPE.LEDGER_CREDIT && statement.itemType !== RECON_ITEM_TYPE.STATEMENT_DEBIT) {
+    return deny(`Item Type mismatch: ${ledger.itemType} cannot match ${statement.itemType}. Ledger Credit (LC) must match Statement Debit (SD).`);
+  }
+  if (ledger.itemType === RECON_ITEM_TYPE.LEDGER_DEBIT && statement.itemType !== RECON_ITEM_TYPE.STATEMENT_CREDIT) {
+    return deny(`Item Type mismatch: ${ledger.itemType} cannot match ${statement.itemType}. Ledger Debit (LD) must match Statement Credit (SC).`);
   }
 
   // ── Hidden business-identifier check ──

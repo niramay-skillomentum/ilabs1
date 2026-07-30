@@ -58,8 +58,7 @@ export default function GCMSPage() {
         .gcms-env-badge { background: #dc2626; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; letter-spacing: 0.5px; }
         
         .gcms-toolbar { background: #ffffff; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .btn-back { background: transparent; border: 1px solid #cbd5e1; padding: 4px 12px; border-radius: 4px; cursor: pointer; color: #475569; font-weight: 600; font-size: 12px; }
-        .btn-back:hover { background: #f1f5f9; }
+
         
         .gcms-body { display: flex; flex: 1; overflow: hidden; }
         
@@ -83,9 +82,7 @@ export default function GCMSPage() {
         .filter-input { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; font-family: inherit; }
         .filter-input:focus { outline: none; border-color: #0ea5e9; }
         .filter-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px 16px; }
-        .btn-clear { background: white; border: 1px solid #cbd5e1; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; }
-        .btn-search { background: #0ea5e9; border: 1px solid #0284c7; padding: 6px 20px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .btn-search:hover { background: #0284c7; }
+
         
         .grid-container { flex: 1; overflow: auto; background: #fff; border-top: 1px solid #cbd5e1; }
         .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -116,7 +113,7 @@ export default function GCMSPage() {
       </div>
 
       <div className="gcms-toolbar">
-        <button className="btn-back" onClick={() => router.push('/reconciliation-desk')}>← Back to Dashboard</button>
+        <button className="btn secondary" onClick={() => router.push('/reconciliation-desk')}>← Back to Dashboard</button>
         <div>Module: SWIFT Message Center</div>
       </div>
 
@@ -178,8 +175,8 @@ export default function GCMSPage() {
               </div>
             </div>
             <div className="filter-actions">
-              <button className="btn-clear">CLEAR</button>
-              <button className="btn-search">EXECUTE QUERY</button>
+              <button className="btn secondary">CLEAR</button>
+              <button className="btn primary">EXECUTE QUERY</button>
             </div>
           </div>
 
@@ -224,10 +221,8 @@ export default function GCMSPage() {
                       <td>
                         {activeRowId === tx.id && (
                           <button 
-                            style={{
-                              background: '#3b82f6', color: 'white', border: 'none', 
-                              padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'
-                            }}
+                            className="btn primary"
+                            style={{ padding: '2px 8px', fontSize: '11px' }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedTx(tx);
@@ -252,7 +247,8 @@ export default function GCMSPage() {
                   <div>
                     <span style={{marginRight: '16px'}}>Selected: {selectedTx?.id || "None"}</span>
                     <button 
-                      style={{background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '11px'}}
+                      className="btn secondary"
+                      style={{ padding: '2px 8px', fontSize: '11px' }}
                       onClick={() => setIsInspectorOpen(false)}
                     >
                       CLOSE

@@ -15,7 +15,7 @@ export default function InboxList({
       <div className="email-list-toolbar">
         <span className="toolbar-title">{folderTitle()}</span>
         {channel !== "SYSTEM" && (
-          <button className="btn-compose" onClick={openNewCompose}>
+          <button className="btn primary" onClick={openNewCompose}>
             ✏️ New Message
           </button>
         )}

@@ -28,10 +28,16 @@ export const DeskSelectionPage = () => {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="max-w-6xl mx-auto pb-12">
+          <div className="max-w-7xl mx-auto pb-12">
             <WelcomePanel />
-            <LifecycleTimeline hoveredStage={hoveredStage} />
-            <WorkstationGrid onHover={setHoveredStage} onSelect={handleSelect} />
+            <div className="flex flex-col lg:flex-row gap-8">
+              <div className="w-full lg:w-3/4 xl:w-4/5">
+                <WorkstationGrid onHover={setHoveredStage} onSelect={handleSelect} />
+              </div>
+              <div className="w-full lg:w-1/4 xl:w-1/5 shrink-0 lg:sticky lg:top-8 self-start">
+                <LifecycleTimeline hoveredStage={hoveredStage} />
+              </div>
+            </div>
           </div>
         </main>
       </div>

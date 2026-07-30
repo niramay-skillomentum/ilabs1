@@ -57,11 +57,11 @@ export default function MessageThread({
           </div>
         ) : (
           <div className="email-actions-bar">
-            <button className="btn-action primary" onClick={openReplyModal}>↩ Reply</button>
+            <button className="btn primary" onClick={openReplyModal}>↩ Reply</button>
             {currentTrade.direction === "SELL" && currentTrade.settlementType === "BILATERAL" && desk === "SETTLEMENT" && channel !== "FO" && (
-              <button className="btn-action" style={{backgroundColor:"#0078d4", color:"white"}} onClick={openSendSSIModal}>✉ Send SSI</button>
+              <button className="btn primary" onClick={openSendSSIModal}>✉ Send SSI</button>
             )}
-            <button className="btn-action resolve" disabled={resolveState.disabled || isResolving}
+            <button className="btn primary2" disabled={resolveState.disabled || isResolving}
               onClick={resolveState.isClose ? () => window.close() : resolveConversation}>
               {isResolving ? "Resolving..." : resolveState.text}
             </button>

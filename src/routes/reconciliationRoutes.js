@@ -125,10 +125,10 @@ router.get("/allocation", authenticateToken, async (req, res) => {
 // ======================================
 router.post("/apply-trade-id", authenticateToken, async (req, res) => {
   try {
-    const { statementItemId, tradeRef } = req.body || {};
+    const { itemId, tradeRef } = req.body || {};
     
-    if (!statementItemId || !tradeRef) {
-      return res.status(400).json({ success: false, message: "Statement ID and Trade Reference are required." });
+    if (!itemId || !tradeRef) {
+      return res.status(400).json({ success: false, message: "Item ID and Trade Reference are required." });
     }
 
     const Trade = require("../models/Trade");
@@ -139,24 +139,24 @@ router.post("/apply-trade-id", authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: "Trade not found in database." });
     }
 
-    const statement = await ReconciliationItem.findOne({ itemId: statementItemId, source: "STATEMENT" });
-    if (!statement) {
-      return res.status(404).json({ success: false, message: "Statement item not found." });
+    const item = await ReconciliationItem.findOne({ itemId: itemId });
+    if (!item) {
+      return res.status(404).json({ success: false, message: "Reconciliation item not found." });
     }
 
-    statement.itemRef1 = trade.tradeRef || null;
-    statement.itemRef2 = trade.underlyer || null;
-    statement.itemRef3 = trade.entity || null;
-    statement.itemRef4 = trade.foRegion || null;
-    statement.itemRef5 = trade.product || null;
-    statement.itemRef6 = trade.productType || null;
-    statement.itemRef7 = trade.counterpartyGroup || trade.counterparty || null;
+    item.itemRef1 = trade.tradeRef || null;
+    item.itemRef2 = trade.underlyer || null;
+    item.itemRef3 = trade.entity || null;
+    item.itemRef4 = trade.foRegion || null;
+    item.itemRef5 = trade.product || null;
+    item.itemRef6 = trade.productType || null;
+    item.itemRef7 = trade.counterpartyGroup || trade.counterparty || null;
 
-    await statement.save();
+    await item.save();
     
     try { getIo().emit("recon_desk_update"); } catch(e) { console.error("Socket emit error:", e); }
 
-    return res.json({ success: true, item: statement });
+    return res.json({ success: true, item: item });
   } catch (err) {
     console.error("[Reconciliation Route] POST /apply-trade-id error:", err);
     res.status(500).json({ success: false, message: "Failed to apply trade ID." });

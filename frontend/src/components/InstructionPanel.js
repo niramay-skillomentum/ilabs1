@@ -38,15 +38,15 @@ export default function InstructionPanel({ desk }) {
   );
 
   return (
-    <div className="mt-4">
+    <div>
       {/* Toggle Button */}
       <button 
         onClick={() => setIsInlineOpen(!isInlineOpen)}
-        className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg transition-all duration-200 shadow-sm cursor-pointer mx-auto"
+        className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg transition-all duration-200 shadow-sm cursor-pointer"
       >
         <span className="text-lg leading-none">📖</span>
         <span className="font-semibold text-sm tracking-wide">
-          {isInlineOpen ? "Hide Desk Guide" : "View Desk Guide"}
+          {isInlineOpen ? "Hide Operations Guide" : "View Operations Guide"}
         </span>
       </button>
 

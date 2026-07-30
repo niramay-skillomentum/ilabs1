@@ -41,7 +41,7 @@ export const workstationConfig: Workstation[] = [
       "Break Resolution",
       "Audit Logging"
     ],
-    buttonLabel: "Enter Middle Office",
+    buttonLabel: "Enter Middle Office Operations",
     navigationRoute: "MO" // Handled by goDesk function as ?desk=MO
   },
   {
@@ -71,7 +71,7 @@ export const workstationConfig: Workstation[] = [
       "Trade Investigation",
       "Audit Tracking"
     ],
-    buttonLabel: "Enter Confirmation Desk",
+    buttonLabel: "Enter Confirmation Operations",
     navigationRoute: "CONFIRMATION"
   },
   {
@@ -102,7 +102,7 @@ export const workstationConfig: Workstation[] = [
       "Settlement Resolution",
       "Lifecycle Completion"
     ],
-    buttonLabel: "Enter Settlement Desk",
+    buttonLabel: "Enter Settlement Operations",
     navigationRoute: "SETTLEMENT"
   },
   {
@@ -134,7 +134,7 @@ export const workstationConfig: Workstation[] = [
       "Cross-Desk Reconciliation",
       "Enterprise Cash Recon"
     ],
-    buttonLabel: "Open Reconciliation Desk",
+    buttonLabel: "Enter Reconciliation Operations",
     navigationRoute: "RECONCILIATION"
   },
   {
@@ -166,7 +166,7 @@ export const workstationConfig: Workstation[] = [
       "Decision Analysis",
       "Historical Comparison"
     ],
-    buttonLabel: "Open Reports",
+    buttonLabel: "Enter Reporting Operations",
     navigationRoute: "REPORTING"
   }
 ];

@@ -48,10 +48,10 @@ export default function ComposeModal({
             value={composeBody} onChange={e => setComposeBody(e.target.value)} autoFocus />
         </div>
         <div className="compose-footer">
-          <button className="btn-send" onClick={sendCompose} disabled={isSendingCompose}>
+          <button className="btn primary" onClick={sendCompose} disabled={isSendingCompose}>
             {isSendingCompose ? "Sending..." : "Send"}
           </button>
-          <button className="btn-discard" onClick={() => setComposeModalOpen(false)} disabled={isSendingCompose}>Discard</button>
+          <button className="btn secondary" onClick={() => setComposeModalOpen(false)} disabled={isSendingCompose}>Discard</button>
         </div>
       </div>
     </>
