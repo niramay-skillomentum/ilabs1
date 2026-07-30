@@ -93,92 +93,90 @@ export default function TutorialPanel({ desk, selectedTrade }) {
         )}
       </button>
 
-      {/* --- TUTORIAL PANEL POPUP --- */}
-      <div 
-        className={`absolute top-14 right-0 w-96 max-w-[90vw] flex flex-col transform transition-all duration-400 origin-top-right ${
-          isFloatingOpen ? "scale-100 opacity-100 translate-y-0" : "scale-90 opacity-0 pointer-events-none translate-y-4"
-        }`}
-      >
-        <div className="bg-white/95 backdrop-blur-xl border border-slate-200/50 shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-2xl overflow-hidden text-slate-800 flex flex-col max-h-[60vh]">
-          
-          <div className="bg-gradient-to-r from-indigo-900 to-purple-900 p-4 border-b border-indigo-700/50 flex justify-between items-center shadow-md z-10">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl shadow-inner">
-                🤖
-              </div>
-              <div>
-                <h3 className="text-md font-bold text-white m-0 tracking-wide">
-                  Tutorial Assistant
-                </h3>
-                <p className="text-indigo-200 text-[11px] mt-0.5 mb-0 font-medium flex items-center space-x-1">
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                  <span>{deskInfo.title}</span>
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setIsFloatingOpen(false)}
-              className="text-indigo-300 hover:text-white transition-colors cursor-pointer text-2xl px-2"
-            >
-              ×
-            </button>
-          </div>
-
-          <div className="overflow-y-auto custom-scrollbar flex-1 p-4 bg-slate-50 text-left">
-            <div className="flex flex-col space-y-4">
-              {/* Chat History */}
-              {messages.map((msg, idx) => (
-                <div key={idx} className={`flex items-start space-x-2 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${msg.role === 'user' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                    {msg.role === 'user' ? '👤' : '🤖'}
-                  </div>
-                  <div className={`p-3 rounded-2xl shadow-sm text-sm border ${msg.role === 'user' ? 'bg-purple-600 text-white rounded-tr-none border-purple-700' : 'bg-white text-slate-700 rounded-tl-none border-slate-100'}`}>
-                    <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert text-white' : 'prose-slate'} prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-a:text-indigo-600`}>
-                      <ReactMarkdown>
-                        {msg.text}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
+      {/* --- TUTORIAL PANEL POPUP (Modal Style) --- */}
+      {isFloatingOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white/95 backdrop-blur-xl border border-slate-200/50 shadow-2xl rounded-2xl overflow-hidden text-slate-800 flex flex-col w-[600px] max-w-[90vw] h-[80vh] max-h-[800px] transform transition-all duration-200 scale-100 opacity-100">
+            
+            <div className="bg-gradient-to-r from-indigo-900 to-purple-900 p-4 border-b border-indigo-700/50 flex justify-between items-center shadow-md z-10">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl shadow-inner">
+                  🤖
                 </div>
-              ))}
-
-              {isTyping && (
-                <div className="flex items-start space-x-2">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-sm font-bold shadow-sm">🤖</div>
-                  <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-slate-100 text-sm text-slate-500 italic flex space-x-1 items-center h-10">
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                  </div>
+                <div>
+                  <h3 className="text-md font-bold text-white m-0 tracking-wide">
+                    Tutorial Assistant
+                  </h3>
+                  <p className="text-indigo-200 text-[11px] mt-0.5 mb-0 font-medium flex items-center space-x-1">
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                    <span>{deskInfo.title}</span>
+                  </p>
                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          <div className="p-3 bg-white border-t border-slate-200">
-            <div className="flex items-end space-x-2">
-              <textarea 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder="Ask the AI Tutor..."
-                className="flex-1 max-h-24 min-h-[40px] resize-none border border-slate-300 rounded-xl p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 custom-scrollbar"
-                rows="1"
-              />
+              </div>
               <button 
-                onClick={handleSend}
-                disabled={isTyping || !inputText.trim()}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl px-4 py-2 text-sm font-bold transition-colors h-[40px]"
+                onClick={() => setIsFloatingOpen(false)}
+                className="text-indigo-300 hover:text-white transition-colors cursor-pointer text-2xl px-2"
               >
-                Send
+                ×
               </button>
             </div>
-            <p className="text-[10px] text-slate-400 font-medium m-0 mt-2 text-center">Powered by Nvidia Nemotron 3</p>
-          </div>
 
+            <div className="overflow-y-auto custom-scrollbar flex-1 p-4 bg-slate-50 text-left">
+              <div className="flex flex-col space-y-4">
+                {/* Chat History */}
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`flex items-start space-x-2 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${msg.role === 'user' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                      {msg.role === 'user' ? '👤' : '🤖'}
+                    </div>
+                    <div className={`p-3 rounded-2xl shadow-sm text-sm border ${msg.role === 'user' ? 'bg-purple-600 text-white rounded-tr-none border-purple-700' : 'bg-white text-slate-700 rounded-tl-none border-slate-100'}`}>
+                      <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert text-white' : 'prose-slate'} prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-a:text-indigo-600`}>
+                        <ReactMarkdown>
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {isTyping && (
+                  <div className="flex items-start space-x-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-sm font-bold shadow-sm">🤖</div>
+                    <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-slate-100 text-sm text-slate-500 italic flex space-x-1 items-center h-10">
+                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            <div className="p-3 bg-white border-t border-slate-200">
+              <div className="flex items-end space-x-2">
+                <textarea 
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder="Ask the AI Tutor..."
+                  className="flex-1 max-h-24 min-h-[40px] resize-none border border-slate-300 rounded-xl p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 custom-scrollbar"
+                  rows="1"
+                />
+                <button 
+                  onClick={handleSend}
+                  disabled={isTyping || !inputText.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl px-4 py-2 text-sm font-bold transition-colors h-[40px]"
+                >
+                  Send
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium m-0 mt-2 text-center">Powered by Nvidia Nemotron 3</p>
+            </div>
+
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

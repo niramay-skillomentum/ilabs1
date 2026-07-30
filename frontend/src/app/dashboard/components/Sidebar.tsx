@@ -14,10 +14,10 @@ export const Sidebar = () => {
     >
       <div className={`px-4 mb-8 flex items-center ${isExpanded ? 'justify-start' : 'justify-center'}`}>
         <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-          <span className="text-[var(--color-primary)] font-bold text-xl leading-none">N</span>
+          <img src="/skillomentum-logo.png" alt="Skillomentum" className="w-8 h-8 object-contain rounded" />
         </div>
         <div className={`ml-3 transition-opacity duration-300 whitespace-nowrap overflow-hidden ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
-          <h1 className="text-[var(--color-text-primary)] text-lg font-bold tracking-tight">Niramay</h1>
+          <h1 className="text-[var(--color-text-primary)] text-lg font-bold tracking-tight">Skillomentum</h1>
           <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5 uppercase tracking-wider font-semibold">Operations</p>
         </div>
       </div>

@@ -169,7 +169,7 @@ export default function LoginPage() {
       </div>
       
       <div className="mt-8 text-slate-400 text-xs font-medium">
-        © {new Date().getFullYear()} Niramay Skillomentum. All rights reserved.
+        © {new Date().getFullYear()} Skillomentum. All rights reserved.
       </div>
     </div>
   );

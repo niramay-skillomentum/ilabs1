@@ -1,15 +1,40 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { loadUserId } from '../../../lib/auth';
 import { Bell, UserIcon } from './Icons';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 export const Header = () => {
   const [userId, setUserId] = useState<string | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setUserId(loadUserId());
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    sessionStorage.clear();
+    router.push('/');
+  };
+
+  const handleViewProfile = () => {
+    setIsProfileOpen(false);
+    toast("Profile view coming soon!", { icon: '👤' });
+  };
 
   const displayUsername = userId ? userId.split('@')[0] : 'Analyst';
 
@@ -18,8 +43,8 @@ export const Header = () => {
       <div className="flex items-center gap-8">
         {/* Logo area */}
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center">
-            <span className="text-white font-bold text-lg leading-none">N</span>
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center overflow-hidden">
+            <img src="/skillomentum-logo.png" alt="Skillomentum" className="w-full h-full object-cover" />
           </div>
           <h2 className="text-[var(--color-primary)] font-bold text-lg tracking-tight hidden md:block">Skillomentum</h2>
         </div>
@@ -56,11 +81,34 @@ export const Header = () => {
           <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--color-danger)] border border-white"></span>
         </Button>
         <div className="h-6 w-[1px] bg-[var(--color-border)]"></div>
-        <button className="flex items-center gap-3 hover:opacity-80 transition-opacity p-1 rounded-full hover:bg-slate-50">
-          <div className="w-10 h-10 rounded-full bg-slate-100 border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-secondary)] shadow-sm">
-            <UserIcon className="w-5 h-5" />
-          </div>
-        </button>
+        <div className="relative" ref={dropdownRef}>
+          <button 
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity p-1 rounded-full hover:bg-slate-50 focus:outline-none"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-100 border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-secondary)] shadow-sm">
+              <UserIcon className="w-5 h-5" />
+            </div>
+          </button>
+
+          {isProfileOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-50 overflow-hidden">
+              <button 
+                onClick={handleViewProfile}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-[var(--color-primary)] transition-colors"
+              >
+                View Profile
+              </button>
+              <div className="h-[1px] bg-slate-100 my-1"></div>
+              <button 
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
