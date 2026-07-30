@@ -118,17 +118,6 @@ export default function MessageThread({
         {/* Subject Header */}
         <div className="email-header">
           <div className="email-header-subject">{buildSubject(currentTrade)}</div>
-
-          {/* Workflow Badge Bar */}
-          <div className="workflow-badges">
-            <span className="wf-badge"><span className="wf-badge-label">Trade</span>{currentTrade.tradeRef}</span>
-            <span className="wf-badge"><span className="wf-badge-label">Desk</span>{mailStatus?.desk || desk || "—"}</span>
-            <span className="wf-badge"><span className="wf-badge-label">Priority</span><span className={priority === "High" ? "wf-high" : ""}>{priority}</span></span>
-            {mailStatus && <span className="wf-badge"><span className="wf-badge-label">Workflow</span>{mailStatus.label}</span>}
-            <span className="wf-badge"><span className="wf-badge-label">Trade Date</span>{tradeDateStr}</span>
-            <span className="wf-badge"><span className="wf-badge-label">Messages</span>{currentMessages.length}</span>
-            {currentTrade.counterparty && <span className="wf-badge"><span className="wf-badge-label">CPTY</span>{currentTrade.counterparty}</span>}
-          </div>
         </div>
 
         {/* ── Outlook-Style Action Toolbar ── */}

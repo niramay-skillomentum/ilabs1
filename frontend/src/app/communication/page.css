@@ -207,34 +207,6 @@
 .meta-item { display: flex; gap: 4px; }
 .meta-label { font-weight: 600; color: #323130; }
 
-/* ── Workflow Badges ── */
-.workflow-badges {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.wf-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: #f3f2f1;
-  border: 1px solid #e1dfdd;
-  border-radius: 3px;
-  font-size: 11px;
-  color: #323130;
-  white-space: nowrap;
-}
-.wf-badge-label {
-  font-weight: 600;
-  color: #605e5c;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-.wf-high { color: #d13438; font-weight: 600; }
-
 /* ── Outlook Action Toolbar ── */
 .email-actions-bar {
   padding: 6px 24px;
