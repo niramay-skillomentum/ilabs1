@@ -114,14 +114,6 @@ export default function ContactCard({ children, senderId, counterpartyName, isEx
                 <div className="contact-card-row">
                   <span className="cc-icon">✉️</span> {profile.email}
                 </div>
-                <div className="contact-card-row">
-                  <span className="cc-icon">🌐</span> <strong>Timezone</strong> {profile.timezone}
-                </div>
-                <div className="contact-card-divider" />
-                <div className="contact-card-row"><strong>Preferred</strong> {profile.preferredCommunication || "Email"}</div>
-                {profile.lastInteraction && (
-                  <div className="contact-card-row"><strong>Last Interaction</strong> {profile.lastInteraction}</div>
-                )}
               </>
             ) : (
               /* ── Internal Contact Card ── */
