@@ -78,3 +78,96 @@ body {
 @utility shadow-float {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
+
+/* Global Button Styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  margin: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9999px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.btn:focus {
+  outline: 2px solid #0B1F3A;
+  outline-offset: 2px;
+}
+
+.btn:disabled, .btn.disabled {
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn.primary {
+  background-color: #0B1F3A;
+  color: white;
+  border-color: #0B1F3A;
+}
+.btn.primary:hover:not(:disabled) {
+  background-color: #061121;
+  border-color: #061121;
+}
+.btn.primary:disabled, .btn.primary.disabled {
+  background-color: #94a3b8 !important;
+  border-color: #94a3b8 !important;
+  color: #f8fafc !important;
+}
+
+.btn.primary2 {
+  background-color: #0f766e;
+  color: white;
+  border-color: #0f766e;
+}
+.btn.primary2:focus {
+  outline-color: #0f766e;
+}
+.btn.primary2:hover:not(:disabled) {
+  background-color: #115e59;
+  border-color: #115e59;
+}
+.btn.primary2:disabled, .btn.primary2.disabled {
+  background-color: #99f6e4 !important;
+  border-color: #99f6e4 !important;
+  color: #f0fdfa !important;
+}
+
+.btn.secondary {
+  background-color: transparent;
+  color: #0B1F3A;
+  border-color: #0B1F3A;
+}
+.btn.secondary:hover:not(:disabled) {
+  background-color: #f1f5f9;
+}
+.btn.secondary:disabled, .btn.secondary.disabled {
+  border-color: #cbd5e1 !important;
+  color: #cbd5e1 !important;
+  background-color: transparent !important;
+}
+
+.btn.warning {
+  background-color: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
+}
+.btn.warning:focus {
+  outline-color: #f59e0b;
+}
+.btn.warning:hover:not(:disabled) {
+  background-color: #d97706;
+  border-color: #d97706;
+}
+.btn.warning:disabled, .btn.warning.disabled {
+  background-color: #fde68a !important;
+  border-color: #fde68a !important;
+  color: #fffbeb !important;
+}

@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { loadUserId } from '../../../lib/auth';
 import { Bell, UserIcon } from './Icons';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 
 export const Header = () => {
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUserId(loadUserId());
+  }, []);
+
+  const displayUsername = userId ? userId.split('@')[0] : 'Analyst';
+
   return (
     <header className="h-[72px] sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[var(--color-border)] flex items-center justify-between px-8 flex-shrink-0 transition-all duration-300">
       <div className="flex items-center gap-8">
@@ -39,6 +48,9 @@ export const Header = () => {
       </div>
 
       <div className="flex items-center gap-4">
+        <div className="text-lg font-medium text-[var(--color-text-secondary)] mr-2 hidden md:block">
+          Welcome, <span className="text-[var(--color-primary)] font-bold">{displayUsername}</span>
+        </div>
         <Button variant="ghost" size="icon" className="relative text-[var(--color-text-secondary)]">
           <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--color-danger)] border border-white"></span>

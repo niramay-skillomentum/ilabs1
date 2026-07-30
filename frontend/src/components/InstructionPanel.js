@@ -38,43 +38,43 @@ export default function InstructionPanel({ desk }) {
   );
 
   return (
-    <div className="mt-4">
+    <>
       {/* Toggle Button */}
       <button 
-        onClick={() => setIsInlineOpen(!isInlineOpen)}
-        className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg transition-all duration-200 shadow-sm cursor-pointer mx-auto"
+        onClick={() => setIsInlineOpen(true)}
+        className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg transition-all duration-200 shadow-sm cursor-pointer"
       >
         <span className="text-lg leading-none">📖</span>
         <span className="font-semibold text-sm tracking-wide">
-          {isInlineOpen ? "Hide Desk Guide" : "View Desk Guide"}
+          View Operations Guide
         </span>
       </button>
 
-      {/* Expandable Panel */}
-      <div 
-        className={`overflow-hidden transition-all duration-500 ease-in-out ${
-          isInlineOpen ? "max-h-[800px] opacity-100 mt-4" : "max-h-0 opacity-0 mt-0"
-        }`}
-      >
-        <div className="bg-white/90 backdrop-blur-xl border border-slate-200 shadow-lg rounded-xl overflow-hidden text-slate-800 mx-auto max-w-4xl">
-          <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 border-b border-slate-700/50 flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center space-x-2 m-0">
-                <span>🎯</span>
-                <span>{deskInfo.title}</span>
-              </h3>
-              <p className="text-slate-300 text-xs mt-1 mb-0 font-medium">Standard Operating Procedure</p>
+      {/* Modal Popup */}
+      {isInlineOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full overflow-hidden transform transition-all duration-200 scale-100 opacity-100">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 border-b border-slate-700/50 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center space-x-2 m-0">
+                  <span>🎯</span>
+                  <span>{deskInfo.title}</span>
+                </h3>
+                <p className="text-slate-300 text-xs mt-1 mb-0 font-medium">Standard Operating Procedure</p>
+              </div>
+              <button 
+                onClick={() => setIsInlineOpen(false)}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-2xl leading-none"
+              >
+                ×
+              </button>
             </div>
-            <button 
-              onClick={() => setIsInlineOpen(false)}
-              className="text-slate-400 hover:text-white transition-colors cursor-pointer text-xl"
-            >
-              ×
-            </button>
+            <div className="max-h-[80vh] overflow-y-auto bg-white">
+              {renderContent()}
+            </div>
           </div>
-          {renderContent()}
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

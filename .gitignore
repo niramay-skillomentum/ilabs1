@@ -9,8 +9,7 @@ frontend/out
 frontend/build
 
 # Reference Data source files
-reference-data/source/*.xlsx
-reference-data/source/*.csv
+
 
 # Logs
 npm-debug.log*

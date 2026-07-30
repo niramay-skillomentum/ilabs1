@@ -6,8 +6,8 @@ export const WelcomePanel = () => {
   return (
     <Card accentColor="blue" className="mb-8">
       <SectionHeader 
-        title={<>Welcome Back, <span className="text-[var(--color-primary)]">Analyst</span></>}
-        description="Operations Analyst • Post Trade Operations Division"
+        title="Post Trade Operations"
+        description="Operations Analyst Dashboard"
         isPageTitle={true}
       />
       <div className="text-body text-[var(--color-text-secondary)] leading-relaxed space-y-2 max-w-3xl">

@@ -680,7 +680,7 @@ function CommunicationComponent() {
             {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userName}`}
           </div>
           <div className="header-date">{todayDate}</div>
-          <button className="btn-close-tab" onClick={closeMailbox}>✕ Close</button>
+          <button className="btn secondary" onClick={closeMailbox}>✕ Close</button>
         </div>
       </div>
 

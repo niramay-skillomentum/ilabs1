@@ -22,28 +22,20 @@ function getSwiftTitle(messageType) {
 
 // Static stylesheet — hoisted so it isn't re-created on every render.
 const WORKSTATION_STYLE = `
-        body { font-family: 'Inter', sans-serif; background: #f0f4f8; margin: 0; color: #1e293b; }
-        .topbar { padding: 16px 30px; background: linear-gradient(135deg, #0B1F3A 0%, #1E3A5F 100%); color: white; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        body { font-family: 'Inter', sans-serif; background: #f0f4f8; margin: 0; color: #1e293b; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { flex-shrink: 0; padding: 16px 30px; background: linear-gradient(135deg, #0B1F3A 0%, #1E3A5F 100%); color: white; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .clock { font-size: 14px; font-weight: 500; margin: 0 15px; }
         .session-timer { font-size: 13px; padding: 4px 10px; border-radius: 4px; background: rgba(255,255,255,0.15); margin: 0 10px; }
-        .container { width: 96%; max-width: 1600px; margin: 24px auto; }
-        .table-container { height: 550px; overflow: auto; background: white; border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #cbd5e1; }
+        .container { flex: 1; display: flex; flex-direction: column; width: 96%; max-width: 1600px; margin: 16px auto; overflow: hidden; }
+        .table-container { flex: 1; overflow: auto; background: white; border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #cbd5e1; }
         table { border-collapse: collapse; width: 100%; min-width: 1500px; font-size: 12px; }
         th { position: sticky; top: 0; background: #1e293b; color: #f8fafc; padding: 6px 10px; font-weight: 600; text-align: left; border-bottom: 2px solid #0f172a; border-right: 1px solid #334155; z-index: 10; white-space: nowrap; }
         td { padding: 4px 10px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; color: #334155; white-space: nowrap; }
         tbody tr:nth-child(even) td { background-color: #f8fafc; }
         tbody tr:hover td { background-color: #e0e7ff; cursor: pointer; }
         .num { text-align: right; font-family: 'Consolas', 'Courier New', monospace; }
-        .action-bar { background: white; padding: 16px; margin-top: 20px; display: flex; justify-content: space-between; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0; }
-        .btn { padding: 10px 18px; margin: 4px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; border-radius: 6px; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn:active { transform: translateY(0); }
-        .primary { background: #0B1F3A; color: white; }
-        .primary:hover { background: #1E3A5F; }
-        .secondary { background: #e2e8f0; color: #1e293b; }
-        .secondary:hover { background: #cbd5e1; }
-        .warning { background: #f59e0b; color: white; }
-        .warning:hover { background: #d97706; }
+        .action-bar { flex-shrink: 0; background: white; padding: 16px; margin-top: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0; }
+
         .popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); padding: 24px; border-radius: 16px; width: 450px; z-index: 999; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.4); }
         .popup h3 { margin-top: 0; color: #0f172a; font-size: 18px; }
         .popup textarea, .popup input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; margin-top: 10px; resize: vertical; }
@@ -91,7 +83,8 @@ const CURRENCY_CUTOFF_DISPLAY = {
 // every second. Renders the timer/clock spans with the Refresh button (passed as
 // children) between them to preserve the original header layout.
 const SessionClock = memo(function SessionClock({ sessionExpiry, sessionStart, onExpire, children }) {
-  const [simTime, setSimTime] = useState("");
+  const [simDateStr, setSimDateStr] = useState("");
+  const [simTimeStr, setSimTimeStr] = useState("");
   const [sessionTimerStr, setSessionTimerStr] = useState("");
   const alert1hrShown = useRef(false);
   const alert10minShown = useRef(false);
@@ -117,7 +110,8 @@ const SessionClock = memo(function SessionClock({ sessionExpiry, sessionStart, o
       currentSimTime.setHours(9, 0, 0, 0);
       currentSimTime.setTime(currentSimTime.getTime() + elapsedMs * SIM_SPEED);
       const pad = (n) => String(n).padStart(2, "0");
-      setSimTime(`${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth() + 1)}-${pad(currentSimTime.getDate())} ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
+      setSimDateStr(`Date: ${currentSimTime.getFullYear()}-${pad(currentSimTime.getMonth() + 1)}-${pad(currentSimTime.getDate())}`);
+      setSimTimeStr(`Time: ${pad(currentSimTime.getHours())}:${pad(currentSimTime.getMinutes())}:${pad(currentSimTime.getSeconds())}`);
 
       const totalMinutesLeft = Math.floor(diff / (1000 * 60));
       if (totalMinutesLeft <= 60 && !alert1hrShown.current) {
@@ -131,13 +125,15 @@ const SessionClock = memo(function SessionClock({ sessionExpiry, sessionStart, o
     }, 1000);
     return () => clearInterval(interval);
   }, [sessionExpiry, sessionStart, onExpire]);
-
   return (
-    <>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
       <span className="session-timer">{sessionTimerStr}</span>
+      <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.2)' }} />
+      <span className="clock">{simDateStr}</span>
+      <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.2)' }} />
+      <span className="clock">{simTimeStr}</span>
       {children}
-      <span className="clock">{simTime}</span>
-    </>
+    </div>
   );
 });
 
@@ -155,6 +151,7 @@ const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewS
       <td className="num">{t.age}</td>
       <td>{format(t.tradeDate)}</td>
       <td>{format(t.valueDate)}</td>
+      <td>{t.settlementType}</td>
       <td>{t.counterpartyGroup}</td>
       <td>{t.counterparty}</td>
       <td>{t.entity}</td>
@@ -163,7 +160,6 @@ const TradeRow = memo(function TradeRow({ t, desk, isSelected, onToggle, onViewS
       <td>{t.productType || ''}</td>
       <td>{t.tradeType}</td>
       <td style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.underlyer || ''}>{t.underlyer || ''}</td>
-      <td>{t.settlementType}</td>
       {desk === "SETTLEMENT" && (
         <td>
           <button className="btn secondary" style={{ padding: "4px 8px", fontSize: "11px", margin: 0 }} onClick={(e) => { e.stopPropagation(); onViewSSI(t); }}>View SSI</button>
@@ -355,8 +351,14 @@ function WorkstationComponent() {
 
   // Stable handlers for the memoized TradeRow (F1/F2).
   const handleToggleSelect = useCallback((t) => {
-    setSelectedTrade(prev => prev?.tradeRef === t.tradeRef ? null : t);
-  }, []);
+    setSelectedTrade(prev => {
+      const isSelectingNew = prev?.tradeRef !== t.tradeRef;
+      if (isSelectingNew && desk === "SETTLEMENT" && t.settlementType === "ELECTRONIC") {
+        setPopupState({ type: "electronic_warning" });
+      }
+      return isSelectingNew ? t : null;
+    });
+  }, [desk]);
 
   const logout = useCallback(async () => {
     await fetch("/api/session/logout", { method: "POST", headers: authHeaders(), body: JSON.stringify({}) });
@@ -472,7 +474,7 @@ function WorkstationComponent() {
   const downloadCSV = () => {
     if (!queue || queue.length === 0) return toast.error("No data to export");
     const baseHeaders = [
-      "Trade Ref", "Status", "Next Desk", "Age", "Trade Date", "Value Date", "CP Group", "Counterparty", "Entity", "Region",
+      "Trade Ref", "Status", "Next Operations", "Age", "Trade Date", "Value Date", "CP Group", "Counterparty", "Entity", "Region",
       "Product", "Product Type", "Trade Type", "Underlyer"
     ];
 
@@ -704,43 +706,62 @@ function WorkstationComponent() {
 
       {popupState.type && <div className="overlay" onClick={() => setPopupState({ type: null })}></div>}
 
-      <div className="topbar" style={{ background: desk === "SETTLEMENT" ? "#3A1F1F" : desk === "CONFIRMATION" ? "#1E3A5F" : "#0B1F3A" }}>
-        <div className="desk-title">{desk} Desk | Welcome, {userId}</div>
-        <div>
-          {desk === "MO" && <button className="btn" onClick={openTermsheet} style={{ background: "#f59e0b", color: "white", marginRight: "10px" }}>📄 View Termsheet</button>}
-          <button className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
-          {desk === "SETTLEMENT" && (
-            <button className="btn" style={{ background: "#0f766e", color: "white", marginLeft: "10px" }}
-              onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
-              🖥️ System Mailbox
-            </button>
-          )}
+      <div className="topbar" style={{ background: "#1e293b" }}>
+        <div className="desk-title">{desk} Operations | Welcome, {userId?.split('@')[0] || userId}</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <SessionClock sessionExpiry={sessionExpiry} sessionStart={sessionStart} onExpire={logout}>
-            <button className="btn warning" onClick={refreshQueue} disabled={isRefreshingQueue}>
-              {isRefreshingQueue ? "Refreshing..." : "Refresh"}
-            </button>
+            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.2)', marginLeft: '16px', marginRight: '16px' }} />
+            <button className="btn" style={{ 
+              background: 'rgba(255,255,255,0.1)', 
+              border: '1px solid rgba(255,255,255,0.3)', 
+              color: 'white', 
+              padding: '6px 16px', 
+              borderRadius: '6px'
+            }} onClick={logout}
+            onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.6)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'; }}
+            >Logoff</button>
           </SessionClock>
-          <button className="btn secondary" onClick={logout}>Logoff</button>
         </div>
       </div>
 
       <div className="container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <button className="btn warning" onClick={generateQueue} disabled={isGeneratingQueue} style={{ margin: 0 }}>
-            {isGeneratingQueue ? "Generating..." : "Generate Queue"}
-          </button>
-
-          <TutorialPanel desk={desk} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button className="btn primary" onClick={generateQueue} disabled={isGeneratingQueue || queue.length > 0} style={{ margin: 0 }}>
+              {isGeneratingQueue ? "Generating..." : "Generate Queue"}
+            </button>
+            <button className="btn primary" onClick={refreshQueue} disabled={isRefreshingQueue} style={{ margin: 0 }}>
+              {isRefreshingQueue ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {selectedTrade?.currentStatus === "SETTLED" && (
+              <button className="btn primary" onClick={viewSwift} disabled={isLoadingSwift}>
+                {isLoadingSwift ? "Loading..." : "📄 View SWIFT ↗"}
+              </button>
+            )}
+            <button className="btn primary" onClick={viewTruth} disabled={!selectedTrade}>👁️ View Truth ↗</button>
+            {desk === "SETTLEMENT" && <button className="btn primary" onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement ↗</button>}
+            {desk === "SETTLEMENT" && <button className="btn primary" onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database ↗</button>}
+            {desk === "MO" && <button className="btn primary" onClick={openTermsheet}>📄 View Termsheet ↗</button>}
+            {desk === "SETTLEMENT" && (
+              <button className="btn primary"
+                onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
+                🖥️ System Mailbox ↗
+              </button>
+            )}
+            <button className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox ↗</button>
+          </div>
         </div>
 
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Desk</th><th className="num">Age</th>
-                <th>Trade Date</th><th>Value Date</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>Region</th>
+                <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Operations</th><th className="num">Age</th>
+                <th>Trade Date</th><th>Value Date</th><th>Settlement Mode</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>Region</th>
                 <th>Product</th><th>Product Type</th><th>Trade Type</th><th>Underlyer</th>
-                <th>Settlement Mode</th>
                 {desk === "SETTLEMENT" && <th>SSI Details</th>}
                 <th>Direction</th><th>Currency</th>
                 <th className="num">Amount</th>
@@ -761,78 +782,80 @@ function WorkstationComponent() {
           </table>
         </div>
 
-        <div className="action-bar">
-          <div>
-            {selectedTrade?.settlementType === "ELECTRONIC" && desk === "SETTLEMENT" ? (
-              <div style={{color: '#dc2626', fontWeight: 600, fontSize: '13px', marginLeft: '12px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px'}}>
-                ⚠️ Actions for Electronic trades must be performed in the STCC Electronic Settlement dashboard.
-              </div>
-            ) : (
-
-              <>
-                {desk === "MO" && (
-                  <>
-                    <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
-                    <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
-                    <button className="btn primary" onClick={sendToFO}>Send to FO</button>
-                  </>
-                )}
-                {desk === "CONFIRMATION" && (
-                  <>
-                    <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
-                    <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
-                    <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
-                    <button className="btn primary" onClick={() => {
-                      if (!selectedTrade) return toast.error("Select a trade first");
-                      if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
-                      const mailParams = new URLSearchParams({ desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO" });
-                      window.open("/communication?" + mailParams.toString(), "mailbox_tab");
-                    }}>Escalate to FO</button>
-                  </>
-                )}
-                {desk === "SETTLEMENT" && (
-                  <>
-                    <button
-                      className={`btn primary ${(cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge)) ? 'disabled' : ''}`}
-                      disabled={cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge)}
-                      title={cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)` : ''}
-                      onClick={startSettlementCptyFlow}
-                    >Mail CPTY</button>
-                    <button
-                      className={`btn primary ${(cutoffsReached.includes(selectedTrade?.currency) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)) ? 'disabled' : ''}`}
-                      disabled={cutoffsReached.includes(selectedTrade?.currency) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)}
-                      title={
-                        cutoffsReached.includes(selectedTrade?.currency)
-                          ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)`
-                          : (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : '')
-                      }
-                      onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
-                    >Approve Settlement</button>
-                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
-                    <button className="btn primary" onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                    <button className="btn secondary" style={{ backgroundColor: "#0f766e", color: "white", border: "none" }} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
-                    <button className="btn" style={{ background: "#1a1a1a", color: "white", border: "none", marginLeft: "8px" }} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
-                  </>
-                )}
-              </>
-            )}
+        <div className="action-bar" style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+            {(() => {
+              const isElectronic = selectedTrade?.settlementType === "ELECTRONIC" && desk === "SETTLEMENT";
+              return (
+                <>
+                  {desk === "MO" && (
+                    <>
+                      <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
+                      <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
+                      <button className="btn primary" onClick={sendToFO}>Send to FO</button>
+                    </>
+                  )}
+                  {desk === "CONFIRMATION" && (
+                    <>
+                      <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
+                      <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
+                      <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
+                      <button className="btn primary" onClick={() => {
+                        if (!selectedTrade) return toast.error("Select a trade first");
+                        if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+                        const mailParams = new URLSearchParams({ desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO" });
+                        window.open("/communication?" + mailParams.toString(), "mailbox_tab");
+                      }}>Escalate to FO</button>
+                    </>
+                  )}
+                  {desk === "SETTLEMENT" && (
+                    <>
+                      <button
+                        className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))) ? 'disabled' : ''}`}
+                        disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))}
+                        title={isElectronic ? 'Must use STCC dashboard' : (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)` : '')}
+                        onClick={startSettlementCptyFlow}
+                      >Mail CPTY</button>
+                      <button
+                        className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)) ? 'disabled' : ''}`}
+                        disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)}
+                        title={
+                          isElectronic ? 'Must use STCC dashboard' :
+                          (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)
+                            ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)`
+                            : (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''))
+                        }
+                        onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
+                      >Approve Settlement</button>
+                      <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
+                      <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+            <button className="btn primary" style={{marginLeft: "8px"}} onClick={openAudit}>Audit</button>
+            <button className="btn primary" onClick={downloadCSV}>Download Excel</button>
           </div>
-          <div>
-            <button className="btn secondary" onClick={downloadCSV}>Download Excel</button>
-            <button className="btn secondary" onClick={openAudit}>Audit</button>
-            <button className="btn secondary" onClick={() => openMailboxGeneral()}>📧 Mailbox</button>
-            <button className="btn secondary" style={{ backgroundColor: "#8b5cf6", color: "white", border: "none" }} onClick={viewTruth}>👁️ View Truth</button>
-            {selectedTrade?.currentStatus === "SETTLED" && (
-              <button className="btn" style={{ background: "linear-gradient(135deg, #0d9488 0%, #0f766e 100%)", color: "white", border: "none", fontWeight: 600 }} onClick={viewSwift} disabled={isLoadingSwift}>
-                {isLoadingSwift ? "Loading..." : "📄 View SWIFT"}
-              </button>
-            )}
+          
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <TutorialPanel desk={desk} />
+            {desk && <InstructionPanel desk={desk} />}
           </div>
         </div>
-
-        {/* Instructions Panel */}
-        {desk && <InstructionPanel desk={desk} />}
       </div>
+
+      {popupState.type === "electronic_warning" && (
+        <div className="popup" style={{ display: 'block' }}>
+          <h3 style={{ marginBottom: '15px', color: '#dc2626' }}>⚠️ Electronic Settlement</h3>
+          <div style={{ color: '#475569', fontSize: '14px', marginBottom: '20px' }}>
+            Trades with an Electronic settlement type should be worked from the STCC Electronic platform only.
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn primary" onClick={() => setPopupState({ type: null })}>Understood</button>
+          </div>
+        </div>
+      )}
 
       {popupState.type === "action" && (
         <div className="popup" style={{ display: 'block' }}>
@@ -883,7 +906,7 @@ function WorkstationComponent() {
               !auditData.xml && <p style={{ color: '#94a3b8' }}>No audit entries yet.</p>
             )}
           </div>
-          <button onClick={() => setPopupState({ type: null })}>Close</button>
+          <button className="btn secondary" onClick={() => setPopupState({ type: null })}>Close</button>
         </div>
       )}
 
@@ -912,7 +935,7 @@ function WorkstationComponent() {
                   </div>
                 )}
                 {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
-                  <button onClick={handleSendToSystemAmendment} style={{ padding: "4px 10px", background: "#f59e0b", color: "white", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}>Send to System for Amendment</button>
+                  <button className="btn warning" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
                 )}
                 <span style={{ background: isCorrespondent ? '#f59e0b' : '#22c55e', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>
                   {settlType}
@@ -1139,13 +1162,13 @@ function WorkstationComponent() {
         return (
           <div className="popup" style={{ display: 'block', width: '1000px', maxWidth: '96vw', maxHeight: '92vh', overflowY: 'auto', padding: '0', borderRadius: '8px', border: '1px solid #ccc', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', background: 'white' }}>
 
-            {/* Title Bar */}
             <div style={{ padding: '14px 24px', background: 'white', borderBottom: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>{msgType} Swift Message</span>
               </div>
-              <button onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}
-                style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#94a3b8', fontWeight: 700, lineHeight: 1 }}>&times;</button>
+              <button className="btn secondary" onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}>
+                Close
+              </button>
             </div>
 
             {/* Description bar */}
