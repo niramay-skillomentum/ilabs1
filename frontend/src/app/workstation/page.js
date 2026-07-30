@@ -829,8 +829,6 @@ function WorkstationComponent() {
                       >Approve Settlement</button>
                       <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                       <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                      <button className="btn secondary" style={{ backgroundColor: "#0f766e", color: "white", border: "none", marginLeft: "8px" }} onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database</button>
-                      <button className="btn" style={{ background: "#1a1a1a", color: "white", border: "none", marginLeft: "8px" }} onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement</button>
                     </>
                   )}
                 </>
