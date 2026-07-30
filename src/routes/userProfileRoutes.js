@@ -50,6 +50,25 @@ router.get("/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
 
+    if (userId === "FO") {
+      return res.json({
+        success: true,
+        profile: {
+          fullName: "Front Office Trading Desk",
+          email: "fo.trading@sgb.com",
+          designation: "Trading Desk",
+          department: "Front Office",
+          reportingManager: "N/A",
+          officeLocation: "Skillomentum Office",
+          extension: "—",
+          currentDesk: null,
+          lastActive: null,
+          presence: { status: "Available", dot: "🟢", color: "#107c10" },
+          type: "INTERNAL"
+        }
+      });
+    }
+
     const user = await User.findOne({ email: userId }).select("-password").lean();
 
     if (!user) {

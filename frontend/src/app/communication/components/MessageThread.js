@@ -9,7 +9,7 @@ const ThreadEmail = memo(function ThreadEmail({
   const [showQuoted, setShowQuoted] = useState(false);
 
   // Determine if sender is external (FO/CPTY) or internal
-  const isExternal = senderRaw === "FO" || senderRaw === "COUNTERPARTY" || senderRaw === "CPTY";
+  const isExternal = senderRaw === "COUNTERPARTY" || senderRaw === "CPTY";
   const counterpartyName = trade?.counterparty || "Counterparty";
 
   return (
