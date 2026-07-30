@@ -12,6 +12,13 @@ export default function ContactCard({ children, senderId, counterpartyName, isEx
   const leaveTimer = useRef(null);
   const cardRef = useRef(null);
 
+  const getInitials = (name) => {
+    if (!name) return "U";
+    const parts = name.split(" ").filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+  };
+
   const cacheKey = isExternal ? `ext_${counterpartyName}` : `int_${senderId}`;
 
   const loadProfile = useCallback(async () => {
@@ -95,13 +102,21 @@ export default function ContactCard({ children, senderId, counterpartyName, isEx
             isExternal ? (
               /* ── External Contact Card ── */
               <>
-                <div className="contact-card-name">{profile.name || counterpartyName}</div>
-                <div className="contact-card-row">{profile.email}</div>
+                <div className="cc-header">
+                  <div className="cc-avatar external">{getInitials(profile.name || counterpartyName)}</div>
+                  <div className="cc-header-info">
+                    <div className="contact-card-name">{profile.name || counterpartyName}</div>
+                    <div className="cc-title">{profile.role || "External Contact"}</div>
+                    <div className="cc-dept">{profile.company}</div>
+                  </div>
+                </div>
                 <div className="contact-card-divider" />
-                <div className="contact-card-row"><strong>Company</strong> {profile.company}</div>
-                <div className="contact-card-row"><strong>Department</strong> {profile.department}</div>
-                <div className="contact-card-row"><strong>Role</strong> {profile.role}</div>
-                <div className="contact-card-row"><strong>Timezone</strong> {profile.timezone}</div>
+                <div className="contact-card-row">
+                  <span className="cc-icon">✉️</span> {profile.email}
+                </div>
+                <div className="contact-card-row">
+                  <span className="cc-icon">🌐</span> <strong>Timezone</strong> {profile.timezone}
+                </div>
                 <div className="contact-card-divider" />
                 <div className="contact-card-row"><strong>Preferred</strong> {profile.preferredCommunication || "Email"}</div>
                 {profile.lastInteraction && (
@@ -111,26 +126,37 @@ export default function ContactCard({ children, senderId, counterpartyName, isEx
             ) : (
               /* ── Internal Contact Card ── */
               <>
-                <div className="contact-card-name">
-                  <span className="presence-dot">{profile.presence?.dot || "⚫"}</span>
-                  {profile.fullName || senderId}
-                </div>
-                <div className="contact-card-row" style={{ color: profile.presence?.color }}>
-                  {profile.presence?.status || "Offline"}
+                <div className="cc-header">
+                  <div className="cc-avatar-wrapper">
+                    <div className="cc-avatar">{getInitials(profile.fullName || senderId)}</div>
+                    <div className="cc-presence" style={{ background: profile.presence?.color || "#d13438" }} title={profile.presence?.status || "Offline"}></div>
+                  </div>
+                  <div className="cc-header-info">
+                    <div className="contact-card-name">{profile.fullName || senderId}</div>
+                    <div className="cc-title">{profile.designation}</div>
+                    <div className="cc-dept">{profile.department}</div>
+                  </div>
                 </div>
                 <div className="contact-card-divider" />
-                <div className="contact-card-row"><strong>Title</strong> {profile.designation}</div>
-                <div className="contact-card-row"><strong>Dept</strong> {profile.department}</div>
-                <div className="contact-card-row"><strong>Email</strong> {profile.email}</div>
-                <div className="contact-card-row"><strong>Reports To</strong> {profile.reportingManager}</div>
+                <div className="contact-card-row">
+                  <span className="cc-icon">✉️</span> {profile.email}
+                </div>
+                <div className="contact-card-row">
+                  <span className="cc-icon">👤</span> <strong>Reports To</strong> {profile.reportingManager}
+                </div>
                 <div className="contact-card-divider" />
-                <div className="contact-card-row"><strong>Office</strong> {profile.officeLocation}</div>
-                <div className="contact-card-row"><strong>Extension</strong> {profile.extension}</div>
+                <div className="contact-card-row">
+                  <span className="cc-icon">🏢</span> <strong>Office</strong> Skillomentum Office
+                </div>
                 {profile.currentDesk && (
-                  <div className="contact-card-row"><strong>Currently</strong> {profile.currentDesk} Desk</div>
+                  <div className="contact-card-row">
+                    <span className="cc-icon">💻</span> <strong>Currently</strong> {profile.currentDesk} Desk
+                  </div>
                 )}
                 {profile.lastActive && (
-                  <div className="contact-card-row"><strong>Last Active</strong> {profile.lastActive}</div>
+                  <div className="contact-card-row">
+                    <span className="cc-icon">🕒</span> <strong>Last Active</strong> {profile.lastActive}
+                  </div>
                 )}
               </>
             )
