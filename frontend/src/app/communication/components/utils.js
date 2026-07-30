@@ -7,7 +7,7 @@ export const formatAmount = (amount) => Number(amount).toLocaleString();
 export const buildSubject = (trade) => {
   if (!trade) return "";
   const vd = new Date(trade.valueDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short" });
-  return `${trade.tradeRef} | ${trade.currency} ${formatAmount(trade.amount)} | ${vd}`;
+  return `${trade.counterparty} || ${trade.tradeRef} | ${trade.currency} ${formatAmount(trade.amount)} | ${vd}`;
 };
 
 export const getSenderInfo = (sender, trade) => {
