@@ -36,13 +36,13 @@ const WORKSTATION_STYLE = `
         .num { text-align: right; font-family: 'Consolas', 'Courier New', monospace; }
         .action-bar { flex-shrink: 0; background: white; padding: 16px; margin-top: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); flex-wrap: wrap; gap: 10px; border: 1px solid #e2e8f0; }
 
-        .popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); padding: 24px; border-radius: 16px; width: 450px; z-index: 999; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.4); }
+        .popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #ffffff; padding: 24px; border-radius: 8px; width: 450px; z-index: 999; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); border: 1px solid #cbd5e1; }
         .popup h3 { margin-top: 0; color: #0f172a; font-size: 18px; }
         .popup textarea, .popup input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 14px; margin-top: 10px; resize: vertical; }
         .popup textarea:focus, .popup input:focus { outline: none; border-color: #3b82f6; }
         .popup textarea { height: 100px; }
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 998; }
-        #auditContent { max-height: 300px; overflow-y: auto; margin: 15px 0; padding-right: 10px; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.2); z-index: 998; }
+        #auditContent { overflow-y: auto; margin: 15px 0; padding-right: 10px; }
         .audit-card { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 12px; margin-bottom: 10px; border-radius: 4px 8px 8px 4px; font-size: 13px; }
         .audit-card.system { border-left-color: #8b5cf6; background: #f5f3ff; }
         .audit-header { display: flex; justify-content: space-between; color: #64748b; margin-bottom: 4px; font-size: 11px; }
@@ -845,9 +845,25 @@ function WorkstationComponent() {
         </div>
       </div>
 
+      {popupState.type && (
+        <div className="overlay" onClick={() => {
+          if (popupState.type !== "action" && popupState.type !== "email") {
+            setPopupState({ type: null });
+            if (popupState.type === "ssi") {
+              setIsEditingSSI(false);
+              setSsiEditData(null);
+            }
+            if (popupState.type === "swift") {
+              setSwiftData(null);
+            }
+          }
+        }} />
+      )}
+
       {popupState.type === "electronic_warning" && (
         <div className="popup" style={{ display: 'block' }}>
-          <h3 style={{ marginBottom: '15px', color: '#dc2626' }}>⚠️ Electronic Settlement</h3>
+          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
+          <h3 style={{ marginBottom: '15px', color: '#dc2626', paddingRight: '20px' }}>⚠️ Electronic Settlement</h3>
           <div style={{ color: '#475569', fontSize: '14px', marginBottom: '20px' }}>
             Trades with an Electronic settlement type should be worked from the STCC Electronic platform only.
           </div>
@@ -859,7 +875,8 @@ function WorkstationComponent() {
 
       {popupState.type === "action" && (
         <div className="popup" style={{ display: 'block' }}>
-          <h3 style={{ marginBottom: '10px' }}>{popupState.action?.replace(/_/g, ' ')}</h3>
+          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
+          <h3 style={{ marginBottom: '10px', paddingRight: '20px' }}>{popupState.action?.replace(/_/g, ' ')}</h3>
           <div style={{ color: '#475569', fontSize: '14px', marginBottom: '15px' }}>Are you sure you want to proceed with this action?</div>
           <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add comment (recommended for audit & scoring)"></textarea>
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
@@ -873,7 +890,8 @@ function WorkstationComponent() {
 
       {popupState.type === "email" && (
         <div className="popup" style={{ display: 'block' }}>
-          <h3 style={{ marginBottom: '15px' }}>Send Email</h3>
+          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
+          <h3 style={{ marginBottom: '15px', paddingRight: '20px' }}>Send Email</h3>
           <textarea value={emailText} onChange={e => setEmailText(e.target.value)} placeholder="Type your email body here..."></textarea>
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
             <button className="btn secondary" onClick={() => setPopupState({ type: null })} disabled={isSendingEmail}>Cancel</button>
@@ -885,28 +903,62 @@ function WorkstationComponent() {
       )}
 
       {(popupState.type === "audit" || popupState.type === "truth") && (
-        <div className="popup" style={{ display: 'block', width: '550px' }}>
-          <h3>{popupState.type === "truth" ? "Underlying Truths (Testing Only)" : "Audit Trail"}</h3>
+        <div className="popup" style={{ display: 'block', width: '800px', maxWidth: '90vw', maxHeight: '85vh', overflowY: 'auto' }}>
+          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
+          <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '15px', paddingRight: '30px' }}>
+            {popupState.type === "truth" ? "Underlying Truths (Testing Only)" : "System Audit Trail"}
+          </h3>
           <div id="auditContent">
-            {auditData.xml && (
-              <pre className="xml-section" style={{ marginBottom: "15px" }}>{auditData.xml}</pre>
-            )}
-            {auditData.trail.length > 0 ? (
-              auditData.trail.map((a, i) => (
-                <div key={i} className={`audit-card ${a.isAutomated ? "system" : ""}`}>
-                  <div className="audit-header">
-                    <strong>{a.userId || 'System'}</strong>
-                    <span>{new Date(a.timestamp).toLocaleString()}</span>
-                  </div>
-                  <div className="audit-action">{a.action}</div>
-                  <div className="audit-details">{a.details || ""}</div>
+            {auditData.xml && selectedTrade && (selectedTrade.currentStatus === "BREAK" || selectedTrade.currentStatus === "FAILED") && (
+              <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', border: '1px solid #f87171', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                <span style={{ fontSize: '20px' }}>⚠️</span>
+                <div>
+                  <div style={{ fontSize: '14px' }}>ATTENTION: TRADE STATUS IS {selectedTrade.currentStatus}</div>
+                  <div style={{ fontSize: '12px', fontWeight: 'normal', marginTop: '2px' }}>Please review the system state below for discrepancies.</div>
                 </div>
-              ))
+              </div>
+            )}
+            {auditData.xml && (
+              <div style={{ backgroundColor: '#1e293b', color: '#e2e8f0', padding: '15px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '13px', overflowX: 'auto', marginBottom: '20px', border: '1px solid #334155' }}>
+                <div style={{ borderBottom: '1px solid #334155', paddingBottom: '8px', marginBottom: '10px', color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>System State Payload</div>
+                <pre style={{ margin: 0 }}>{auditData.xml}</pre>
+              </div>
+            )}
+            
+            {auditData.trail.length > 0 ? (
+              <div style={{ borderLeft: '2px solid #e2e8f0', marginLeft: '20px', paddingLeft: '24px', display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+                {auditData.trail.map((a, i) => (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: '-37px', top: '0', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: a.isAutomated ? '#f1f5f9' : '#e0e7ff', border: `2px solid ${a.isAutomated ? '#cbd5e1' : '#818cf8'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', zIndex: 1 }}>
+                      {a.isAutomated ? '🤖' : '👤'}
+                    </div>
+                    <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', marginBottom: '12px' }}>
+                        <strong style={{ color: '#334155', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {a.userId || 'System Process'} 
+                          {a.isAutomated && <span style={{ fontSize: '10px', backgroundColor: '#e2e8f0', color: '#475569', padding: '3px 6px', borderRadius: '4px', fontWeight: 'bold' }}>AUTO</span>}
+                        </strong>
+                        <span style={{ color: '#64748b', fontSize: '12px', fontFamily: 'monospace', backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>
+                          {new Date(a.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '14px', marginBottom: '8px' }}>{a.action}</div>
+                      {a.details && (
+                        <div style={{ color: '#475569', fontSize: '13px', backgroundColor: '#ffffff', border: '1px dashed #cbd5e1', padding: '10px', borderRadius: '6px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.5' }}>
+                          {a.details}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              !auditData.xml && <p style={{ color: '#94a3b8' }}>No audit entries yet.</p>
+              !auditData.xml && <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>No audit entries available for this record.</p>
             )}
           </div>
-          <button className="btn secondary" onClick={() => setPopupState({ type: null })}>Close</button>
+          <div style={{ marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '15px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn secondary" onClick={() => setPopupState({ type: null })}>Close Audit Trail</button>
+          </div>
         </div>
       )}
 
@@ -919,11 +971,12 @@ function WorkstationComponent() {
 
         return (
           <div className="popup" style={{ display: 'block', width: '680px', maxHeight: '90vh', overflowY: 'auto', padding: '0' }}>
+            <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: 'white', zIndex: 10 }} onClick={() => { setPopupState({ type: null }); setIsEditingSSI(false); setSsiEditData(null); }}>✕</button>
             <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isCorrespondent ? '#1E3A5F' : '#0B1F3A' }}>
-              <h3 style={{ margin: 0, color: 'white', fontSize: '15px' }}>
+              <h3 style={{ margin: 0, color: 'white', fontSize: '15px', paddingRight: '30px' }}>
                 Standard Settlement Instruction ({settlType})
               </h3>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', paddingRight: '20px' }}>
                 {sd.alertCode && popupState.trade.direction !== 'SELL' && (
                   <div style={{ background: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "bold", color: "white" }}>
                     Alert: {sd.alertCode}
@@ -1161,14 +1214,16 @@ function WorkstationComponent() {
 
         return (
           <div className="popup" style={{ display: 'block', width: '1000px', maxWidth: '96vw', maxHeight: '92vh', overflowY: 'auto', padding: '0', borderRadius: '8px', border: '1px solid #ccc', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', background: 'white' }}>
-
+            <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#64748b', zIndex: 10 }} onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}>✕</button>
             <div style={{ padding: '14px 24px', background: 'white', borderBottom: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>{msgType} Swift Message</span>
               </div>
-              <button className="btn secondary" onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}>
-                Close
-              </button>
+              <div style={{ paddingRight: '30px' }}>
+                <button className="btn secondary" onClick={() => { setPopupState({ type: null }); setSwiftData(null); }}>
+                  Close
+                </button>
+              </div>
             </div>
 
             {/* Description bar */}

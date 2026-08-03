@@ -797,10 +797,10 @@ export default function ReconciliationDeskPage() {
       {/* View Match Popup */}
       {viewMatchData && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", justifyContent: "center", alignItems: "center" }}>
-          <div style={{ background: "white", padding: "20px", borderRadius: "8px", width: "1000px", maxWidth: "95vw", maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <div style={{ background: "white", padding: "20px", borderRadius: "8px", width: "1000px", maxWidth: "95vw", maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}>
+            <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setViewMatchData(null)}>✕</button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", paddingRight: "30px" }}>
               <h2 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>Match Details - {viewMatchData[0]?.matchId}</h2>
-              <button className="btn btn-secondary" style={{ padding: "4px 8px", fontSize: "12px" }} onClick={() => setViewMatchData(null)}>✕ Close</button>
             </div>
             <div className="table-container" style={{ flex: 1, overflow: "auto", border: "1px solid #e2e8f0", maxHeight: "400px" }}>
               <table>
@@ -906,7 +906,8 @@ export default function ReconciliationDeskPage() {
             zIndex: 1000,
             width: "360px"
           }}>
-            <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", color: "#0f172a" }}>Apply Trade ID</h3>
+            <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setIsApplyPopupOpen(false)}>✕</button>
+            <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", color: "#0f172a", paddingRight: "20px" }}>Apply Trade ID</h3>
             
             {selectedItemIds.length === 1 ? (
               <>

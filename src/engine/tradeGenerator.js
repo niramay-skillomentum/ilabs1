@@ -363,22 +363,7 @@ function generateXmlAudit(trade) {
   xml += `    <CurrentStatus>${trade.currentStatus}</CurrentStatus>\n`;
   xml += `  </TradeInfo>\n`;
 
-  if (hasBreak && moTruth) {
-    xml += `  <DiscrepancyInfo>\n`;
-    xml += `    <FOTruth>\n`;
-    xml += `      <Amount>${moTruth.amount}</Amount>\n`;
-    xml += `      <ValueDate>${formatDateForXml(moTruth.valueDate)}</ValueDate>\n`;
-    xml += `      <Currency>${moTruth.currency}</Currency>\n`;
-    xml += `      <Counterparty>${moTruth.counterparty}</Counterparty>\n`;
-    xml += `    </FOTruth>\n`;
-    xml += `    <Booking>\n`;
-    xml += `      <Amount>${trade.booking.amount}</Amount>\n`;
-    xml += `      <ValueDate>${formatDateForXml(trade.booking.valueDate)}</ValueDate>\n`;
-    xml += `      <Currency>${trade.booking.currency}</Currency>\n`;
-    xml += `      <Counterparty>${trade.booking.counterparty}</Counterparty>\n`;
-    xml += `    </Booking>\n`;
-    xml += `  </DiscrepancyInfo>\n`;
-  }
+  // System shouldn't output external 'truth' in its own audit logs
 
   xml += `  <Events>\n`;
   events.forEach(evt => {
