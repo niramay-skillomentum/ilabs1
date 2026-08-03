@@ -11,9 +11,6 @@ const amendmentEngine = require("../engine/amendmentEngine");
 const { authenticateToken } = require("../middleware/auth");
 const { getIo } = require("../engine/socketEngine");
 const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
-const cutoffEngine = require("../engine/cutoff");
-const cutoffEnforcer = require("../engine/cutoffEnforcer");
-const simulationClock = require("../engine/clock");
 
 // ======================================
 // GET ALL TRADES (DB-BACKED)
@@ -92,59 +89,8 @@ router.post("/action", authenticateToken, async (req, res) => {
       SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
     };
 
-    // ======================================
-    // MISSED VALUE DATE RESTRICTION
-    // If trade has a missed cut-off, only allow SETTLEMENT_MAIL_CPTY
-    // from SETTLEMENT_BREAK, and ONLY if the trade age is greater than the age it missed the cut-off.
-    // ======================================
-    if (sessionTrade.cutoffMissedReason === "Missed Value Date"
-        && sessionTrade.currentStatus === "SETTLEMENT_BREAK") {
-      if (action !== "SETTLEMENT_MAIL_CPTY") {
-        return res.status(400).json({
-          error: "Trade has a missed value date break. You must liaise with the counterparty first."
-        });
-      }
-      if (sessionTrade.age <= sessionTrade.cutoffMissedAtAge) {
-        return res.status(400).json({
-          error: "Trade missed cut-off today. It is frozen and cannot be processed further until the next simulated day."
-        });
-      }
-      // Allow SETTLEMENT_MAIL_CPTY to proceed from SETTLEMENT_BREAK (special override)
-    } else if (!allowedActions[action] || !allowedActions[action].includes(currentStatus)) {
+    if (!allowedActions[action] || !allowedActions[action].includes(currentStatus)) {
       return res.status(400).json({ error: "Invalid action for current state" });
-    }
-
-    // ======================================
-    // CUT-OFF TIME ENFORCEMENT
-    // Block settlement actions if currency cut-off has been breached
-    // (but don't block SETTLEMENT_MAIL_CPTY if trade already has a missed value date
-    //  and we are on the NEXT day — the user is performing the required liaison)
-    // ======================================
-    const CUTOFF_BLOCKED_ACTIONS = ["SETTLEMENT_MAIL_CPTY", "SETTLEMENT_APPROVE"];
-    const isAlreadyMissedValueDate = sessionTrade.cutoffMissedReason === "Missed Value Date";
-    const isNextDay = sessionTrade.age > sessionTrade.cutoffMissedAtAge;
-    
-    const shouldBlockForCutoff = CUTOFF_BLOCKED_ACTIONS.includes(action)
-      && cutoffEngine.isCutOffBreached(sessionTrade.currency)
-      && !(action === "SETTLEMENT_MAIL_CPTY" && isAlreadyMissedValueDate && isNextDay);
-
-    if (shouldBlockForCutoff) {
-      const currency = sessionTrade.currency;
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(currency);
-      const region = cutoffEngine.getRegionForCurrency(currency);
-
-      // Auto-transition to SETTLEMENT_BREAK with missed value date
-      await cutoffEnforcer.handleMissedCutoff(sessionTrade, userId, false);
-
-      // Refresh queue for response
-      const activeQueue = await queueComposer.getActiveQueue(userId);
-      const trades = activeQueue ? activeQueue.trades : [];
-
-      return res.status(400).json({
-        error: `Settlement cut-off for ${currency} (${cutoffTime}, ${region}) has been missed. Trade moved to Settlement Break.`,
-        cutoffBreached: true,
-        trades
-      });
     }
 
     if (
@@ -416,12 +362,6 @@ router.post("/action", authenticateToken, async (req, res) => {
         nextStatus = "LIASING_WITH_CPTY";
         nextDesk = "SETTLEMENT";
 
-        // Clear missed value date reason when user liaises with counterparty
-        if (sessionTrade.cutoffMissedReason === "Missed Value Date") {
-          sessionTrade.cutoffMissedReason = null;
-          // Note: cutoffMissedAtAge is kept for historical reference
-        }
-
         await conversationEngine.createMessage(
           sessionTrade.tradeRef,
           userId,
@@ -488,6 +428,22 @@ router.post("/action", authenticateToken, async (req, res) => {
 
   } catch (err) {
     console.error("Trade action error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ======================================
+// GET TRADE BY REF (DB-BACKED)
+// ======================================
+router.get("/:tradeRef", async (req, res) => {
+  try {
+    const trade = await Trade.findOne({ tradeRef: req.params.tradeRef }).lean();
+    if (!trade) {
+      return res.status(404).json({ error: "Trade not found" });
+    }
+    const allowedTransitions = LifecycleEngine.getAllowedTransitions(trade.currentStatus);
+    res.json({ success: true, trade, allowedTransitions });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

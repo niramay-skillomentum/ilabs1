@@ -74,7 +74,7 @@ function MoRiskComponent() {
       {/* TOP BAR */}
       <div style={{ height:"48px", background:"#0B1F3A", color:"white", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px", fontSize:"14px", flexShrink:0 }}>
         <div style={{ fontWeight:600 }}>MO Risk Management System</div>
-        <div>{desk} Operations | Welcome, {userId}</div>
+        <div>{desk} Desk | Welcome, {userId}</div>
       </div>
 
       {/* MAIN */}
@@ -150,7 +150,7 @@ function TermsheetViewer({ trade }) {
         <tbody>
           <tr><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold", width:"30%" }}>Trade Ref:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{trade.tradeRef || ""}</td></tr>
           <tr style={{ background:"#f9f9f9" }}><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold" }}>Status:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{trade.currentStatus || ""}</td></tr>
-          <tr><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold" }}>Next Operations:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{trade.nextDesk || ""}</td></tr>
+          <tr><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold" }}>Next Desk:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{trade.nextDesk || ""}</td></tr>
           <tr style={{ background:"#f9f9f9" }}><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold" }}>Age:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{trade.age || 0}</td></tr>
           <tr><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold" }}>Trade Date:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{tradeDateFormatted}</td></tr>
           <tr style={{ background:"#f9f9f9" }}><td style={{ padding:"6px", border:"1px solid #ddd", fontWeight:"bold" }}>Value Date:</td><td style={{ padding:"6px", border:"1px solid #ddd" }}>{valueDateFormatted}</td></tr>

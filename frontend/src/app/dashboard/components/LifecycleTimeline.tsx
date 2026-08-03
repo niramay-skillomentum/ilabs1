@@ -13,24 +13,23 @@ export const LifecycleTimeline: React.FC<LifecycleTimelineProps> = ({ hoveredSta
     { id: 'confirmation', label: 'Confirmation', department: 'Back Office' },
     { id: 'settlement', label: 'Settlement', department: 'Back Office' },
     { id: 'tlm', label: 'Reconciliation Operations', department: 'Back Office' },
-    { id: 'reporting', label: 'Performance and Reporting', department: 'Management' },
     { id: 'completed', label: 'Completed', department: '' },
   ];
 
   return (
-    <Card className="mb-8">
-      <h3 className="text-caption text-[var(--color-text-secondary)] uppercase tracking-wider mb-4">Trade Lifecycle Workflow</h3>
+    <Card className="mb-8 overflow-x-auto">
+      <h3 className="text-caption text-[var(--color-text-secondary)] uppercase tracking-wider mb-8">Trade Lifecycle Workflow</h3>
 
-      <div className="flex flex-col px-4 pb-4">
+      <div className="flex items-start justify-between min-w-[800px] px-4 pb-4">
         {stages.map((stage, index) => {
           const isHovered = hoveredStage === stage.id;
           const isCompleted = stage.id === 'completed';
 
           return (
-            <div key={stage.id} className="flex flex-row items-start gap-4 group cursor-default">
-              <div className="flex flex-col items-center">
+            <React.Fragment key={stage.id}>
+              <div className="flex flex-col items-center gap-4 relative z-10 w-28 group cursor-default pt-2">
                 <div className={`
-                  w-9 h-9 shrink-0 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                  w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all duration-300
                   ${isHovered
                     ? 'border-[var(--color-secondary)] bg-yellow-50 text-[var(--color-primary)] shadow-md scale-110'
                     : isCompleted
@@ -38,27 +37,27 @@ export const LifecycleTimeline: React.FC<LifecycleTimelineProps> = ({ hoveredSta
                       : 'border-[var(--color-border)] bg-slate-50 text-[var(--color-text-muted)] group-hover:border-[var(--color-secondary)] group-hover:text-[var(--color-primary)]'
                   }
                 `}>
-                  {isCompleted ? <CheckCircle className="w-5 h-5" /> : <span className="text-sm font-bold">{index + 1}</span>}
+                  {isCompleted ? <CheckCircle className="w-6 h-6" /> : <span className="text-base font-bold">{index + 1}</span>}
                 </div>
-                {index < stages.length - 1 && (
-                  <div className={`w-0.5 h-6 my-1 transition-colors duration-300 ${isHovered ? 'bg-[var(--color-secondary)]' : 'bg-[var(--color-border)]'}`}>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex flex-col justify-center pt-1">
-                <span className={`text-sm font-medium leading-tight transition-colors duration-300
-                  ${isHovered ? 'text-[var(--color-primary)] font-semibold' : 'text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]'}
-                `}>
-                  {stage.label}
-                </span>
-                {stage.department && (
-                  <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mt-1">
-                    {stage.department}
+                <div className="flex flex-col items-center gap-1">
+                  <span className={`text-sm font-medium text-center leading-tight transition-colors duration-300
+                    ${isHovered ? 'text-[var(--color-primary)] font-semibold' : 'text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]'}
+                  `}>
+                    {stage.label}
                   </span>
-                )}
+                  {stage.department && (
+                    <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-center">
+                      {stage.department}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+
+              {index < stages.length - 1 && (
+                <div className={`flex-1 h-0.5 relative top-8 mx-1 transition-colors duration-300 ${isHovered ? 'bg-[var(--color-secondary)]' : 'bg-[var(--color-border)]'}`}>
+                </div>
+              )}
+            </React.Fragment>
           );
         })}
       </div>

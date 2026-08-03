@@ -191,15 +191,7 @@ class QueueComposer {
           t.age = ageCalculator.calculateAge(t.tradeDate, now, desk);
           return t;
         })
-        .filter(t => {
-          // Exclude trades stuck at missed cut-off age
-          if (t.cutoffMissedReason === "Missed Value Date"
-              && t.cutoffMissedAtAge != null
-              && t.age <= t.cutoffMissedAtAge) {
-            return false;
-          }
-          return t.age <= maxAllowedAge;
-        });
+        .filter(t => t.age <= maxAllowedAge);
 
       const shuffledDbTrades = shuffle(freshDbTrades);
 

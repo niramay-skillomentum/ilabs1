@@ -88,7 +88,7 @@ function CommunicationComponent() {
   const loadPersonalInbox = useCallback((dsk, uid, ch) => {
     const endpoint = ch === "FO"
       ? `/api/fo-channel/list?desk=${encodeURIComponent(dsk)}`
-      : `/api/conversations/personal?userId=${encodeURIComponent(uid)}`;
+      : `/api/conversations/personal?userId=${encodeURIComponent(uid)}&desk=${encodeURIComponent(dsk)}`;
     return fetch(endpoint, { headers: { "Authorization": "Bearer " + getToken() } })
       .then(res => res.json())
       .then(data => {
@@ -145,47 +145,12 @@ function CommunicationComponent() {
   const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll) => {
     setSelectedTradeRef(tradeRef);
     selectedTradeRefRef.current = tradeRef;
-    
-    const uid = loadUserId();
-    
-    // API call to persist read state across sessions
-    if (ch === "SYSTEM" || currentFolderRef.current === "system") {
-      fetch("/api/system-mailbox/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
-      });
-    } else if (ch === "FO") {
-      fetch("/api/fo-channel/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
-      });
-    } else {
-      fetch("/api/conversation/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
-      });
-    }
-
-    // Optimistic UI Update
     const data = currentInboxData || inboxDataRef.current;
-    const newData = data.map(item => {
-      if (item.trade.tradeRef === tradeRef) {
-        if (ch === "SYSTEM" || currentFolderRef.current === "system") {
-          item.conversation.read = true;
-        } else {
-          item.conversation.readBy = item.conversation.readBy || [];
-          if (!item.conversation.readBy.includes(uid)) {
-            item.conversation.readBy.push(uid);
-          }
-        }
-      }
-      return item;
-    });
-    setInboxData(newData);
-    inboxDataRef.current = newData;
-
-    const inboxItem = newData.find(i => i.trade.tradeRef === tradeRef);
+    const inboxItem = data.find(i => i.trade.tradeRef === tradeRef);
     if (inboxItem) setCurrentTrade(inboxItem.trade);
 
     // System mailbox messages are already loaded with the inbox list — no per-thread fetch.
-    if (ch === "SYSTEM" || currentFolderRef.current === "system") {
+    if (ch === "SYSTEM") {
       setCurrentMessages(inboxItem ? inboxItem.conversation.messages : []);
       return;
     }
@@ -228,7 +193,8 @@ function CommunicationComponent() {
     setChannel(ch);
     if (tRef) { setSelectedTradeRef(tRef); selectedTradeRefRef.current = tRef; }
 
-    setTodayDate(new Date().toLocaleDateString());
+    const d = new Date();
+    setTodayDate(d.toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }));
 
     // Check for compose mode from workstation
     const composeForTrade = searchParams.get("composeFor");
@@ -326,22 +292,6 @@ function CommunicationComponent() {
       });
     });
 
-    socket.on("trade_update", (data) => {
-      console.log("Trade update via websocket:", data);
-      const folder = currentFolderRef.current;
-      let refreshPromise = Promise.resolve();
-      if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
-      else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
-      else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
-
-      refreshPromise.then(() => {
-        const currentSel = selectedTradeRefRef.current;
-        if (currentSel === data.tradeRef) {
-          loadConversation(currentSel, ch, null, false);
-        }
-      });
-    });
-
     // Internal System Mailbox notifications
     socket.on("new_system_mail", () => {
       if (ch !== "SYSTEM") return;
@@ -358,15 +308,7 @@ function CommunicationComponent() {
       const folder = currentFolderRef.current;
       let refreshPromise = Promise.resolve();
       if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
-      else if (folder === "system") refreshPromise = loadSystemInbox();
       else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
-      else if (folder === "unread") {
-        refreshPromise = loadPersonalInbox(dsk, uid, ch).then(mapped => {
-          const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== uid && !(item.conversation.readBy || []).includes(uid));
-          setInboxData(unread);
-          inboxDataRef.current = unread;
-        });
-      }
       else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
 
       refreshPromise.then(() => {
@@ -402,49 +344,24 @@ function CommunicationComponent() {
     setIsLoading(true);
 
     if (folder === "inbox") {
-      // Cross-desk personal inbox
       loadPersonalInbox(desk, userId, channel).finally(() => setIsLoading(false));
-    } else if (folder === "unread") {
-      // Load personal inbox then client-filter to unread
-      loadPersonalInbox(desk, userId, channel).then(mapped => {
-        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId && !(item.conversation.readBy || []).includes(userId));
-        setInboxData(unread);
-        inboxDataRef.current = unread;
-      }).finally(() => setIsLoading(false));
-    } else if (folder === "flagged") {
-      // Placeholder — no flagging yet
-      setInboxData([]);
-      setIsLoading(false);
-    } else if (folder === "system") {
-      loadSystemInbox().finally(() => setIsLoading(false));
-    } else if (folder === "group" || folder.startsWith("group_")) {
-      // Group inbox — desk-specific
+    } else if (folder === "group") {
       if (channel === "FO") {
         setInboxData([]);
         setIsLoading(false);
       } else {
-        const groupDesk = folder.startsWith("group_") ? folder.replace("group_", "") : desk;
-        loadGroupInbox(groupDesk).finally(() => setIsLoading(false));
+        loadGroupInbox(desk).finally(() => setIsLoading(false));
       }
     } else {
-      // Placeholder folders (sent, drafts, archive, deleted)
       setInboxData([]);
       setIsLoading(false);
     }
   };
 
-  const DESK_LABELS = { SETTLEMENT: "Settlement", CONFIRMATION: "Confirmation", MO: "Middle Office", RECONCILIATION: "Reconciliation" };
   const folderTitle = () => {
     if (channel === "SYSTEM") return "System Notifications";
     if (channel === "FO") return "Front Office Communications";
-    if (currentFolder === "inbox") return "Inbox";
-    if (currentFolder === "unread") return "Unread";
-    if (currentFolder === "flagged") return "Flagged";
-    if (currentFolder.startsWith("group_")) {
-      const deskKey = currentFolder.replace("group_", "");
-      return `Group Inbox — ${DESK_LABELS[deskKey] || deskKey}`;
-    }
-    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items", system: "System Mails" };
+    const titles = { inbox: "Inbox", group: "Group Inbox", sent: "Sent", drafts: "Drafts", deleted: "Deleted Items" };
     return titles[currentFolder] || currentFolder;
   };
 
@@ -679,27 +596,25 @@ function CommunicationComponent() {
   // ========================================
   if (!userId) return null;
 
-  const userName = userId.split('@')[0].charAt(0).toUpperCase() + userId.split('@')[0].slice(1);
-
   return (
     <div style={{fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", background:"#f3f2f1", color:"#323130", overflow:"hidden", height:"100vh"}}>
       {/* ========== HEADER ========== */}
       <div className="header">
         <div className="header-left">
-          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB Operations Mailbox"}</div>
+          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB OpsMail"}</div>
         </div>
         <div className="header-right">
           <div className="header-user">
-            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userName}`}
+            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userId}`}
           </div>
           <div className="header-date">{todayDate}</div>
-          <button className="btn secondary" onClick={closeMailbox}>✕ Close</button>
+          <button className="btn-close-tab" onClick={closeMailbox}>✕ Close</button>
         </div>
       </div>
 
       {/* ========== MAIN 3-PANEL LAYOUT ========== */}
       <div className="main">
-        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} userId={userId} />
+        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} />
         
         <InboxList
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}

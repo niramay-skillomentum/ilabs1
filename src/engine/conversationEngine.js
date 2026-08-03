@@ -37,7 +37,6 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
 
   const updateDoc = {
     $setOnInsert: { tradeRef, status: "OPEN" },
-    $set: { readBy: [sender] },
     $push: {
       messages: {
         $each: [{

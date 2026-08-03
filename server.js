@@ -12,7 +12,6 @@ const communicationEngine = require("./src/engine/communicationEngine");
 const conversationEngine = require("./src/engine/conversationEngine");
 const foInternalChannel = require("./src/engine/foInternalChannel");
 const systemWorkflowEngine = require("./src/engine/systemWorkflowEngine");
-const cutoffEnforcer = require("./src/engine/cutoffEnforcer");
 const { startAgenda } = require("./src/engine/agendaJobs");
 const { initSocket } = require("./src/engine/socketEngine");
 
@@ -36,6 +35,7 @@ function guardedInterval(name, fn, ms) {
   let busy = false;
   return setInterval(async () => {
     if (busy) return;
+    if (!getIsConnected()) return;
     busy = true;
     try {
       await fn();
@@ -102,9 +102,6 @@ function startBackgroundProcessors() {
   // SYSTEM WORKFLOW PROCESSOR (amendment + verification/approval bot)
   guardedInterval("system-workflow", () => systemWorkflowEngine.processJobs(), POLL_MS);
 
-  // CUTOFF ENFORCER (auto-transitions trades past cut-off to SETTLEMENT_BREAK)
-  guardedInterval("cutoff-enforcer", () => cutoffEnforcer.checkAndEnforceCutoffs(), POLL_MS);
-
   console.log(`⚙️  Background processors started (role=${process.env.ROLE || "all"}, interval=${POLL_MS}ms)`);
 }
 
@@ -153,7 +150,8 @@ app.use("/api/ssi", require("./src/routes/ssiRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));
 app.use("/api/swift", require("./src/routes/swiftRoutes"));
 app.use("/api/reconciliation", require("./src/routes/reconciliationRoutes"));
-app.use("/api/user-profile", require("./src/routes/userProfileRoutes"));
+app.use("/api/security", require("./src/routes/securityRoutes"));
+app.use("/api/entity", require("./src/routes/entityRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START

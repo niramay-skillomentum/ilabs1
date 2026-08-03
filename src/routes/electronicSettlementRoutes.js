@@ -5,10 +5,6 @@ const auditEngine = require("../engine/auditEngine");
 const { authenticateToken } = require("../middleware/auth");
 const LifecycleEngine = require("../engine/lifecycle");
 const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
-const cutoffEngine = require("../engine/cutoff");
-const cutoffEnforcer = require("../engine/cutoffEnforcer");
-const simulationClock = require("../engine/clock");
-
 
 // ======================================
 // ELECTRONIC SETTLEMENT PAGE ROUTES
@@ -146,13 +142,6 @@ router.post("/settle", authenticateToken, async (req, res) => {
     const trade = await Trade.findOne({ tradeRef, assignedTo: userId });
     if (!trade) return res.status(404).json({ success: false, error: "Trade not found or not assigned to you" });
 
-    // Cut-off enforcement
-    if (cutoffEngine.isCutOffBreached(trade.currency)) {
-      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
-      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Settlement not allowed.`, cutoffBreached: true });
-    }
-
     // Only trades with NO discrepancy (MATCHED) can be settled directly
     const eStatus = classifyElectronicStatus(trade.toObject());
     if (eStatus !== "MATCHED") {
@@ -227,13 +216,6 @@ router.post("/save-edit", authenticateToken, async (req, res) => {
     // User can only edit trades assigned to them
     const trade = await Trade.findOne({ tradeRef, assignedTo: userId });
     if (!trade) return res.status(404).json({ success: false, error: "Trade not found or not assigned to you" });
-
-    // Cut-off enforcement
-    if (cutoffEngine.isCutOffBreached(trade.currency)) {
-      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
-      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Amendment not allowed.`, cutoffBreached: true });
-    }
 
     const eStatus = classifyElectronicStatus(trade.toObject());
     if (eStatus !== "UNMATCHED") {

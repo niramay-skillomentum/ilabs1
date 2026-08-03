@@ -7,9 +7,8 @@ class SimulationClock {
     // ===== CONFIG =====
     this.realTickMs = 1000;         // 1 sec real
     this.simulatedMsPerTick = 3000; // 3 sec simulated (9h → 3h)
-    this.simSpeed = 3;              // 3x simulation speed
 
-    this.sessionStart = null;
+    this.simulatedTime = this.getToday9AM();
   }
 
   // ===== LOCAL TODAY 9AM =====
@@ -24,43 +23,31 @@ class SimulationClock {
     );
   }
 
-  setSessionStart(sessionStart) {
-    this.sessionStart = new Date(sessionStart);
-  }
-
   start() {
     if (this.interval) return;
 
     this.interval = setInterval(() => {
-      const simTime = this.getTime();
+      this.simulatedTime = new Date(
+        this.simulatedTime.getTime() + this.simulatedMsPerTick
+      );
 
+      // Broadcast the clock via websockets
       try {
         const io = getIo();
-        const hours = simTime.getHours();
-        const minutes = simTime.getMinutes();
+        const hours = this.simulatedTime.getHours();
+        const minutes = this.simulatedTime.getMinutes();
         const totalMinutesLeft = (18 * 60) - (hours * 60 + minutes);
-
-        // Build cutoff breach info for frontend
-        let cutoffsReached = [];
-        try {
-          const cutoffEngine = require("./cutoff");
-          const statuses = cutoffEngine.getAllCutoffStatuses();
-          cutoffsReached = Object.entries(statuses)
-            .filter(([, s]) => s.breached)
-            .map(([ccy]) => ccy);
-        } catch (e) { /* cutoff engine not ready */ }
 
         io.emit("clock_tick", {
           simTime: this.getFormattedTime(),
-          timeLeftMinutes: totalMinutesLeft,
-          cutoffsReached
+          timeLeftMinutes: totalMinutesLeft
         });
       } catch (err) {
         // Socket.io might not be initialized yet, silently ignore
       }
 
       // Stop at 6PM
-      if (simTime.getHours() >= 18) {
+      if (this.simulatedTime.getHours() >= 18) {
         this.stop();
       }
 
@@ -76,35 +63,19 @@ class SimulationClock {
 
   reset() {
     this.stop();
-    this.sessionStart = new Date();
+    this.simulatedTime = this.getToday9AM();
   }
 
   getTime() {
-    if (!this.sessionStart) {
-      return this.getToday9AM();
-    }
-    const elapsedMs = new Date() - this.sessionStart;
-    const currentSimTime = this.getToday9AM();
-    currentSimTime.setTime(currentSimTime.getTime() + elapsedMs * this.simSpeed);
-    return currentSimTime;
-  }
-
-  // ===== HOURS AND MINUTES (for cutoff comparisons) =====
-  getSimulatedHoursMinutes() {
-    const simTime = this.getTime();
-    return {
-      hours: simTime.getHours(),
-      minutes: simTime.getMinutes()
-    };
+    return this.simulatedTime;
   }
 
   // ===== SIMPLE, NO TIMEZONE CONVERSION =====
   getFormattedTime() {
     const pad = (n) => String(n).padStart(2, "0");
-    const simTime = this.getTime();
 
-    return `${simTime.getFullYear()}-${pad(simTime.getMonth()+1)}-${pad(simTime.getDate())} ` +
-           `${pad(simTime.getHours())}:${pad(simTime.getMinutes())}:${pad(simTime.getSeconds())}`;
+    return `${this.simulatedTime.getFullYear()}-${pad(this.simulatedTime.getMonth()+1)}-${pad(this.simulatedTime.getDate())} ` +
+           `${pad(this.simulatedTime.getHours())}:${pad(this.simulatedTime.getMinutes())}:${pad(this.simulatedTime.getSeconds())}`;
   }
 
   getOperationalTimeET() {

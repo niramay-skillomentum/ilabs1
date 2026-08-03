@@ -7,15 +7,15 @@ export const formatAmount = (amount) => Number(amount).toLocaleString();
 export const buildSubject = (trade) => {
   if (!trade) return "";
   const vd = new Date(trade.valueDate).toLocaleDateString("en-GB", { day:"2-digit", month:"short" });
-  return `${trade.counterparty} | ${trade.tradeRef} | ${trade.currency} ${formatAmount(trade.amount)} | ${vd}`;
+  return `${trade.tradeRef} | ${trade.currency} ${formatAmount(trade.amount)} | ${vd}`;
 };
 
 export const getSenderInfo = (sender, trade) => {
-  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@sgb.com", initials: "SY", color: "#005a9e" };
-  if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#004578" };
+  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@sgb.com", initials: "SY", color: "#0f766e" };
+  if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#c4314b" };
   if (sender === "COUNTERPARTY" || sender === "CPTY") {
     const cpName = trade ? trade.counterparty : "Counterparty";
-    return { name: cpName + " Operations", email: `operations@${(cpName||"cpty").toLowerCase()}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#0078d4" };
+    return { name: cpName + " Operations", email: `operations@${(cpName||"cpty").toLowerCase()}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#107c10" };
   }
   return { name: sender, email: sender, initials: (sender||"").substring(0,2).toUpperCase(), color: "#0f6cbd" };
 };
@@ -35,35 +35,13 @@ export const getRecipientLabel = (sender, trade, dsk, ch, uid, msgMoUser) => {
   return targetUser + " <" + targetUser + ">";
 };
 
-// ── Dynamic status badge (consumes backend-computed mailStatus) ──
 export const getStatusBadge = (trade) => {
-  // If backend has attached a computed mailStatus, use it directly
-  if (trade.mailStatus && trade.mailStatus.label) {
-    return (
-      <span
-        className={`status-badge ${trade.mailStatus.badgeClass || "badge-info"}`}
-        style={{ backgroundColor: trade.mailStatus.color ? undefined : undefined }}
-      >
-        {trade.mailStatus.label}
-      </span>
-    );
-  }
-
-  // If there's no mail status (e.g. not an "Awaiting" state), don't show a badge
+  const status = trade.currentStatus;
+  const isFoPendingState = status === "PENDING_FO_RESPONSE" || status === "LIASING_WITH_FO";
+  if (trade.conversation && trade.conversation.status === "RESOLVED") return <span className="status-badge badge-resolved">Resolved</span>;
+  if (isFoPendingState && trade.foResponseReceived) return <span className="status-badge badge-responded">FO Responded</span>;
+  if (status === "MO_PENDING" && trade.foResponseReceived) return <span className="status-badge badge-responded">FO Responded (Clean)</span>;
+  if (isFoPendingState && !trade.foResponseReceived) return <span className="status-badge badge-awaiting">Awaiting FO</span>;
+  if (status === "LIASING_WITH_CPTY") return <span className="status-badge badge-awaiting">Awaiting CPTY</span>;
   return null;
-};
-
-// ── Short desk label for cross-desk inbox ──
-const DESK_SHORT = {
-  MO: "MO",
-  CONFIRMATION: "CONF",
-  SETTLEMENT: "SETT",
-  RECONCILIATION: "RECON",
-};
-
-export const getDeskBadge = (trade) => {
-  const desk = trade.mailStatus?.desk || trade.nextDesk;
-  if (!desk) return null;
-  const label = DESK_SHORT[desk] || desk;
-  return <span className="desk-badge-mini">{label}</span>;
 };

@@ -1,0 +1,954 @@
+{
+  "Command Catalogue": [
+    {
+      "Command": "DES",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "DES",
+      "Screen Name": "Security Description",
+      "Description": "Displays complete security profile",
+      "Primary Use Case": "Verify security",
+      "Data Source": "Security Master",
+      "Input Parameters": "ISIN/Company",
+      "Status": "✅",
+      "Related Commands": "SRCH,ISIN,RELS"
+    },
+    {
+      "Command": "SRCH",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "SRCH",
+      "Screen Name": "Security Search",
+      "Description": "Search securities",
+      "Primary Use Case": "Find security",
+      "Data Source": "Security Master",
+      "Input Parameters": "Keyword",
+      "Status": "✅",
+      "Related Commands": "DES"
+    },
+    {
+      "Command": "ISIN",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "ISIN",
+      "Screen Name": "ISIN Lookup",
+      "Description": "Lookup by ISIN",
+      "Primary Use Case": "Validate trade",
+      "Data Source": "Security Master",
+      "Input Parameters": "ISIN",
+      "Status": "✅",
+      "Related Commands": "DES"
+    },
+    {
+      "Command": "ENTITY",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Entity Profile",
+      "Description": "Legal entity info",
+      "Primary Use Case": "Verify entity",
+      "Data Source": "Entity Master",
+      "Input Parameters": "Entity",
+      "Status": "✅",
+      "Related Commands": "BIC,ACC"
+    },
+    {
+      "Command": "CPTY",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Counterparty Profile",
+      "Description": "Counterparty details",
+      "Primary Use Case": "Settlement",
+      "Data Source": "SSI DB",
+      "Input Parameters": "Counterparty",
+      "Status": "✅",
+      "Related Commands": "SSI"
+    },
+    {
+      "Command": "SSI",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "SSI",
+      "Screen Name": "Settlement Instructions",
+      "Description": "Settlement instructions",
+      "Primary Use Case": "Settlement validation",
+      "Data Source": "SSI DB",
+      "Input Parameters": "Counterparty+Currency",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "CPTY,ACC,BIC"
+    },
+    {
+      "Command": "BIC",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "BIC Directory",
+      "Description": "SWIFT/BIC",
+      "Primary Use Case": "Validate SWIFT",
+      "Data Source": "Entity+SSI",
+      "Input Parameters": "BIC",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "SSI"
+    },
+    {
+      "Command": "ACC",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Settlement Accounts",
+      "Description": "Settlement accounts",
+      "Primary Use Case": "Verify accounts",
+      "Data Source": "SSI+Entity",
+      "Input Parameters": "Counterparty",
+      "Status": "✅",
+      "Related Commands": "SSI"
+    },
+    {
+      "Command": "AGENT",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Agent Bank Profile",
+      "Description": "Agent bank",
+      "Primary Use Case": "Validate intermediary",
+      "Data Source": "SSI DB",
+      "Input Parameters": "Agent",
+      "Status": "✅",
+      "Related Commands": "BIC"
+    },
+    {
+      "Command": "CUT",
+      "Category": "Reference",
+      "Screen Name": "Settlement Cut-offs",
+      "Description": "Cut-off timings",
+      "Primary Use Case": "Planning",
+      "Data Source": "Static",
+      "Input Parameters": "Currency",
+      "Status": "✅",
+      "Related Commands": "HOL"
+    },
+    {
+      "Command": "HOL",
+      "Category": "Reference",
+      "Screen Name": "Holiday Calendar",
+      "Description": "Settlement holidays",
+      "Primary Use Case": "Value date",
+      "Data Source": "Static",
+      "Input Parameters": "Currency/Country",
+      "Status": "✅",
+      "Related Commands": "CUT"
+    },
+    {
+      "Command": "FX",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "FX",
+      "Screen Name": "Currency Directory",
+      "Description": "Currency reference",
+      "Primary Use Case": "Validation",
+      "Data Source": "Security Master",
+      "Input Parameters": "Currency",
+      "Status": "✅"
+    },
+    {
+      "Command": "PROD",
+      "Category": "Reference",
+      "Screen Name": "Product Directory",
+      "Description": "Products",
+      "Primary Use Case": "Learning",
+      "Data Source": "Security Master",
+      "Input Parameters": "Product",
+      "Status": "✅"
+    },
+    {
+      "Command": "HELP",
+      "Category": "Utility",
+      "Bloomberg Equivalent": "HELP",
+      "Screen Name": "Help Centre",
+      "Description": "Command help",
+      "Primary Use Case": "Learning",
+      "Data Source": "Internal",
+      "Input Parameters": "Command",
+      "Status": "⭐ Core",
+      "Priority": "Core"
+    },
+    {
+      "Command": "TRD",
+      "Category": "Operations",
+      "Bloomberg Equivalent": "TRADE",
+      "Screen Name": "Trade Inquiry",
+      "Description": "Complete trade",
+      "Primary Use Case": "Investigate",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "HIST,LIFE"
+    },
+    {
+      "Command": "HIST",
+      "Category": "Operations",
+      "Screen Name": "Trade History",
+      "Description": "Lifecycle timeline",
+      "Primary Use Case": "Audit",
+      "Data Source": "Lifecycle DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "TRD"
+    },
+    {
+      "Command": "LIFE",
+      "Category": "Operations",
+      "Screen Name": "Lifecycle View",
+      "Description": "Workflow",
+      "Primary Use Case": "Stage",
+      "Data Source": "Lifecycle Engine",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "HIST"
+    },
+    {
+      "Command": "BRK",
+      "Category": "Operations",
+      "Screen Name": "Break Monitor",
+      "Description": "Open breaks",
+      "Primary Use Case": "Break mgmt",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "FAIL"
+    },
+    {
+      "Command": "FAIL",
+      "Category": "Operations",
+      "Screen Name": "Failed Settlements",
+      "Description": "Failed settlements",
+      "Primary Use Case": "Investigate",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "SETTLE"
+    },
+    {
+      "Command": "SETTLE",
+      "Category": "Operations",
+      "Screen Name": "Settlement Details",
+      "Description": "Settlement info",
+      "Primary Use Case": "Validation",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "FAIL"
+    },
+    {
+      "Command": "CONF",
+      "Category": "Operations",
+      "Screen Name": "Confirmation Status",
+      "Description": "Confirmation",
+      "Primary Use Case": "Monitor",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core"
+    },
+    {
+      "Command": "SWIFT",
+      "Category": "SWIFT",
+      "Screen Name": "SWIFT Viewer",
+      "Description": "Generated messages",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID",
+      "Related Commands": "MT103,MT202"
+    },
+    {
+      "Command": "MT103",
+      "Category": "SWIFT",
+      "Screen Name": "MT103 Viewer",
+      "Description": "Customer Transfer",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID"
+    },
+    {
+      "Command": "MT202",
+      "Category": "SWIFT",
+      "Screen Name": "MT202 Viewer",
+      "Description": "Bank Transfer",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID"
+    },
+    {
+      "Command": "MT202COV",
+      "Category": "SWIFT",
+      "Screen Name": "MT202 COV Viewer",
+      "Description": "Cover Payment",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID"
+    },
+    {
+      "Command": "FIELDS",
+      "Category": "SWIFT",
+      "Screen Name": "SWIFT Field Guide",
+      "Description": "Field explanations",
+      "Primary Use Case": "Reference",
+      "Data Source": "Knowledge Base",
+      "Input Parameters": "Field"
+    },
+    {
+      "Command": "SEARCH",
+      "Category": "Utility",
+      "Screen Name": "Universal Search",
+      "Description": "Search terminal",
+      "Primary Use Case": "Lookup",
+      "Data Source": "All",
+      "Input Parameters": "Keyword"
+    },
+    {
+      "Command": "RECENT",
+      "Category": "Utility",
+      "Screen Name": "Recent Searches",
+      "Description": "History",
+      "Primary Use Case": "Productivity",
+      "Data Source": "Internal"
+    },
+    {
+      "Command": "NEWS",
+      "Category": "Utility",
+      "Screen Name": "Operations Notices",
+      "Description": "Notices",
+      "Primary Use Case": "Announcements",
+      "Data Source": "Internal"
+    },
+    {
+      "Command": "ABOUT",
+      "Category": "Utility",
+      "Screen Name": "Terminal Information",
+      "Description": "Version",
+      "Primary Use Case": "Support",
+      "Data Source": "Internal"
+    }
+  ],
+  "Reference Commands": [
+    {
+      "Command": "DES",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "DES",
+      "Screen Name": "Security Description",
+      "Description": "Displays complete security profile",
+      "Primary Use Case": "Verify security",
+      "Data Source": "Security Master",
+      "Input Parameters": "ISIN/Company",
+      "Status": "✅",
+      "Related Commands": "SRCH,ISIN,RELS"
+    },
+    {
+      "Command": "SRCH",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "SRCH",
+      "Screen Name": "Security Search",
+      "Description": "Search securities",
+      "Primary Use Case": "Find security",
+      "Data Source": "Security Master",
+      "Input Parameters": "Keyword",
+      "Status": "✅",
+      "Related Commands": "DES"
+    },
+    {
+      "Command": "ISIN",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "ISIN",
+      "Screen Name": "ISIN Lookup",
+      "Description": "Lookup by ISIN",
+      "Primary Use Case": "Validate trade",
+      "Data Source": "Security Master",
+      "Input Parameters": "ISIN",
+      "Status": "✅",
+      "Related Commands": "DES"
+    },
+    {
+      "Command": "RELS",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Related Securities",
+      "Description": "Related instruments",
+      "Primary Use Case": "Understand underlying",
+      "Data Source": "Security Master",
+      "Input Parameters": "ISIN/Security",
+      "Status": "✅",
+      "Related Commands": "DES"
+    },
+    {
+      "Command": "ENTITY",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Entity Profile",
+      "Description": "Legal entity info",
+      "Primary Use Case": "Verify entity",
+      "Data Source": "Entity Master",
+      "Input Parameters": "Entity",
+      "Status": "✅",
+      "Related Commands": "BIC,ACC"
+    },
+    {
+      "Command": "CPTY",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Counterparty Profile",
+      "Description": "Counterparty details",
+      "Primary Use Case": "Settlement",
+      "Data Source": "SSI DB",
+      "Input Parameters": "Counterparty",
+      "Status": "✅",
+      "Related Commands": "SSI"
+    },
+    {
+      "Command": "SSI",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "SSI",
+      "Screen Name": "Settlement Instructions",
+      "Description": "Settlement instructions",
+      "Primary Use Case": "Settlement validation",
+      "Data Source": "SSI DB",
+      "Input Parameters": "Counterparty+Currency",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "CPTY,ACC,BIC"
+    },
+    {
+      "Command": "BIC",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "BIC Directory",
+      "Description": "SWIFT/BIC",
+      "Primary Use Case": "Validate SWIFT",
+      "Data Source": "Entity+SSI",
+      "Input Parameters": "BIC",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "SSI"
+    },
+    {
+      "Command": "ACC",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Settlement Accounts",
+      "Description": "Settlement accounts",
+      "Primary Use Case": "Verify accounts",
+      "Data Source": "SSI+Entity",
+      "Input Parameters": "Counterparty",
+      "Status": "✅",
+      "Related Commands": "SSI"
+    },
+    {
+      "Command": "AGENT",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "N/A",
+      "Screen Name": "Agent Bank Profile",
+      "Description": "Agent bank",
+      "Primary Use Case": "Validate intermediary",
+      "Data Source": "SSI DB",
+      "Input Parameters": "Agent",
+      "Status": "✅",
+      "Related Commands": "BIC"
+    },
+    {
+      "Command": "CUT",
+      "Category": "Reference",
+      "Screen Name": "Settlement Cut-offs",
+      "Description": "Cut-off timings",
+      "Primary Use Case": "Planning",
+      "Data Source": "Static",
+      "Input Parameters": "Currency",
+      "Status": "✅",
+      "Related Commands": "HOL"
+    },
+    {
+      "Command": "HOL",
+      "Category": "Reference",
+      "Screen Name": "Holiday Calendar",
+      "Description": "Settlement holidays",
+      "Primary Use Case": "Value date",
+      "Data Source": "Static",
+      "Input Parameters": "Currency/Country",
+      "Status": "✅",
+      "Related Commands": "CUT"
+    },
+    {
+      "Command": "FX",
+      "Category": "Reference",
+      "Bloomberg Equivalent": "FX",
+      "Screen Name": "Currency Directory",
+      "Description": "Currency reference",
+      "Primary Use Case": "Validation",
+      "Data Source": "Security Master",
+      "Input Parameters": "Currency",
+      "Status": "✅"
+    },
+    {
+      "Command": "PROD",
+      "Category": "Reference",
+      "Screen Name": "Product Directory",
+      "Description": "Products",
+      "Primary Use Case": "Learning",
+      "Data Source": "Security Master",
+      "Input Parameters": "Product",
+      "Status": "✅"
+    }
+  ],
+  "Operations Commands": [
+    {
+      "Command": "TRD",
+      "Category": "Operations",
+      "Bloomberg Equivalent": "TRADE",
+      "Screen Name": "Trade Inquiry",
+      "Description": "Complete trade",
+      "Primary Use Case": "Investigate",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "HIST,LIFE"
+    },
+    {
+      "Command": "HIST",
+      "Category": "Operations",
+      "Screen Name": "Trade History",
+      "Description": "Lifecycle timeline",
+      "Primary Use Case": "Audit",
+      "Data Source": "Lifecycle DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "TRD"
+    },
+    {
+      "Command": "LIFE",
+      "Category": "Operations",
+      "Screen Name": "Lifecycle View",
+      "Description": "Workflow",
+      "Primary Use Case": "Stage",
+      "Data Source": "Lifecycle Engine",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "HIST"
+    },
+    {
+      "Command": "BRK",
+      "Category": "Operations",
+      "Screen Name": "Break Monitor",
+      "Description": "Open breaks",
+      "Primary Use Case": "Break mgmt",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "FAIL"
+    },
+    {
+      "Command": "FAIL",
+      "Category": "Operations",
+      "Screen Name": "Failed Settlements",
+      "Description": "Failed settlements",
+      "Primary Use Case": "Investigate",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "SETTLE"
+    },
+    {
+      "Command": "SETTLE",
+      "Category": "Operations",
+      "Screen Name": "Settlement Details",
+      "Description": "Settlement info",
+      "Primary Use Case": "Validation",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core",
+      "Related Commands": "FAIL"
+    },
+    {
+      "Command": "CONF",
+      "Category": "Operations",
+      "Screen Name": "Confirmation Status",
+      "Description": "Confirmation",
+      "Primary Use Case": "Monitor",
+      "Data Source": "Simulator DB",
+      "Input Parameters": "Trade ID",
+      "Status": "⭐ Core",
+      "Priority": "Core"
+    },
+    {
+      "Command": "QUEUE",
+      "Category": "Operations",
+      "Screen Name": "Work Queue",
+      "Description": "Desk workload",
+      "Primary Use Case": "Operations",
+      "Data Source": "Queue Engine",
+      "Status": "⭐ Core",
+      "Priority": "Core"
+    }
+  ],
+  "SWIFT Commands": [
+    {
+      "Command": "SWIFT",
+      "Category": "SWIFT",
+      "Screen Name": "SWIFT Viewer",
+      "Description": "Generated messages",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID",
+      "Related Commands": "MT103,MT202"
+    },
+    {
+      "Command": "MT103",
+      "Category": "SWIFT",
+      "Screen Name": "MT103 Viewer",
+      "Description": "Customer Transfer",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID"
+    },
+    {
+      "Command": "MT202",
+      "Category": "SWIFT",
+      "Screen Name": "MT202 Viewer",
+      "Description": "Bank Transfer",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID"
+    },
+    {
+      "Command": "MT202COV",
+      "Category": "SWIFT",
+      "Screen Name": "MT202 COV Viewer",
+      "Description": "Cover Payment",
+      "Primary Use Case": "Training",
+      "Data Source": "SWIFT DB",
+      "Input Parameters": "Trade ID"
+    },
+    {
+      "Command": "FIELDS",
+      "Category": "SWIFT",
+      "Screen Name": "SWIFT Field Guide",
+      "Description": "Field explanations",
+      "Primary Use Case": "Reference",
+      "Data Source": "Knowledge Base",
+      "Input Parameters": "Field"
+    }
+  ],
+  "Search Mapping": [
+    {
+      "Command": "DES",
+      "Search Keys": "Company Name, Underlyer"
+    },
+    {
+      "Command": "SRCH",
+      "Search Keys": "Company, Product, Country, Currency"
+    },
+    {
+      "Command": "ISIN",
+      "Search Keys": "ISIN"
+    },
+    {
+      "Command": "ENTITY",
+      "Search Keys": "Entity Code, Entity Name"
+    },
+    {
+      "Command": "CPTY",
+      "Search Keys": "Counterparty Name"
+    },
+    {
+      "Command": "SSI",
+      "Search Keys": "Counterparty + Currency"
+    },
+    {
+      "Command": "BIC",
+      "Search Keys": "SWIFT Code"
+    },
+    {
+      "Command": "AGENT",
+      "Search Keys": "Agent Name, Agent SWIFT"
+    },
+    {
+      "Command": "TRD",
+      "Search Keys": "Trade ID"
+    },
+    {
+      "Command": "SWIFT",
+      "Search Keys": "Trade ID, Message Type"
+    }
+  ],
+  "Navigation Flow": [
+    {
+      "LOGIN": "↓"
+    },
+    {
+      "LOGIN": "TERMINAL HOME"
+    },
+    {
+      "LOGIN": "↓"
+    },
+    {
+      "LOGIN": "Search"
+    },
+    {
+      "LOGIN": "↓"
+    },
+    {
+      "LOGIN": "Results Screen"
+    },
+    {
+      "LOGIN": "↓"
+    },
+    {
+      "LOGIN": "Drill Down"
+    },
+    {
+      "LOGIN": "↓"
+    },
+    {
+      "LOGIN": "Related Functions"
+    }
+  ],
+  "Phase 1 Freeze": [
+    {
+      "Category": "Reference",
+      "Commands": "DES, SRCH, ISIN, RELS, ENTITY, CPTY, SSI, BIC, ACC, AGENT"
+    },
+    {
+      "Category": "Operations",
+      "Commands": "TRD, HIST, LIFE, BRK, FAIL, SETTLE, CONF, QUEUE"
+    },
+    {
+      "Category": "SWIFT",
+      "Commands": "SWIFT, MT103, MT202, MT202COV, FIELDS"
+    },
+    {
+      "Category": "Utilities",
+      "Commands": "HELP, SEARCH"
+    }
+  ],
+  "Developer Notes": [
+    {
+      "Command": "DES",
+      "Required APIs": "/api/des",
+      "Search Keys": "Security Master",
+      "Drill-down": "SRCH,ISIN,RELS",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "SRCH",
+      "Required APIs": "/api/srch",
+      "Search Keys": "Security Master",
+      "Drill-down": "DES",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "ISIN",
+      "Required APIs": "/api/isin",
+      "Search Keys": "Security Master",
+      "Drill-down": "DES",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "RELS",
+      "Required APIs": "/api/rels",
+      "Search Keys": "Security Master",
+      "Drill-down": "DES",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "ENTITY",
+      "Required APIs": "/api/entity",
+      "Search Keys": "Entity Master",
+      "Drill-down": "BIC,ACC",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "CPTY",
+      "Required APIs": "/api/cpty",
+      "Search Keys": "SSI DB",
+      "Drill-down": "SSI",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "SSI",
+      "Required APIs": "/api/ssi",
+      "Search Keys": "SSI DB",
+      "Drill-down": "CPTY,ACC,BIC",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "BIC",
+      "Required APIs": "/api/bic",
+      "Search Keys": "Entity+SSI",
+      "Drill-down": "SSI",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "ACC",
+      "Required APIs": "/api/acc",
+      "Search Keys": "SSI+Entity",
+      "Drill-down": "SSI",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "AGENT",
+      "Required APIs": "/api/agent",
+      "Search Keys": "SSI DB",
+      "Drill-down": "BIC",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "CUT",
+      "Required APIs": "/api/cut",
+      "Search Keys": "Static",
+      "Drill-down": "HOL",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "HOL",
+      "Required APIs": "/api/hol",
+      "Search Keys": "Static",
+      "Drill-down": "CUT",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "FX",
+      "Required APIs": "/api/fx",
+      "Search Keys": "Security Master",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "PROD",
+      "Required APIs": "/api/prod",
+      "Search Keys": "Security Master",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "HELP",
+      "Required APIs": "/api/help",
+      "Search Keys": "Internal",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "TRD",
+      "Required APIs": "/api/trd",
+      "Search Keys": "Simulator DB",
+      "Drill-down": "HIST,LIFE",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "HIST",
+      "Required APIs": "/api/hist",
+      "Search Keys": "Lifecycle DB",
+      "Drill-down": "TRD",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "LIFE",
+      "Required APIs": "/api/life",
+      "Search Keys": "Lifecycle Engine",
+      "Drill-down": "HIST",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "BRK",
+      "Required APIs": "/api/brk",
+      "Search Keys": "Simulator DB",
+      "Drill-down": "FAIL",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "FAIL",
+      "Required APIs": "/api/fail",
+      "Search Keys": "Simulator DB",
+      "Drill-down": "SETTLE",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "SETTLE",
+      "Required APIs": "/api/settle",
+      "Search Keys": "Simulator DB",
+      "Drill-down": "FAIL",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "CONF",
+      "Required APIs": "/api/conf",
+      "Search Keys": "Simulator DB",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "QUEUE",
+      "Required APIs": "/api/queue",
+      "Search Keys": "Queue Engine",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "SWIFT",
+      "Required APIs": "/api/swift",
+      "Search Keys": "SWIFT DB",
+      "Drill-down": "MT103,MT202",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "MT103",
+      "Required APIs": "/api/mt103",
+      "Search Keys": "SWIFT DB",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "MT202",
+      "Required APIs": "/api/mt202",
+      "Search Keys": "SWIFT DB",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "MT202COV",
+      "Required APIs": "/api/mt202cov",
+      "Search Keys": "SWIFT DB",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "FIELDS",
+      "Required APIs": "/api/fields",
+      "Search Keys": "Knowledge Base",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "SEARCH",
+      "Required APIs": "/api/search",
+      "Search Keys": "All",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "RECENT",
+      "Required APIs": "/api/recent",
+      "Search Keys": "Internal",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "FAV",
+      "Required APIs": "/api/fav",
+      "Search Keys": "Internal",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "NEWS",
+      "Required APIs": "/api/news",
+      "Search Keys": "Internal",
+      "Future Enhancements": "Phase 2 analytics"
+    },
+    {
+      "Command": "ABOUT",
+      "Required APIs": "/api/about",
+      "Search Keys": "Internal",
+      "Future Enhancements": "Phase 2 analytics"
+    }
+  ]
+}

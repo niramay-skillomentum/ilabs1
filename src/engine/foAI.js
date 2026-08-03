@@ -56,7 +56,7 @@ RULES:
 - If the user's query is vague or just a greeting, ask for clarification.
 - Keep responses concise (2-5 sentences).
 - Do NOT invent issues that don't exist in the data above.
-- Sign off with a random human name (e.g., Alex Carter, Sam Reynolds) and your title. Do NOT use placeholders like [Your Name].
+- Sign off with a realistic name and title.
 
 Respond in this JSON format:
 {

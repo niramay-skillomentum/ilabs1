@@ -187,10 +187,27 @@ async function getSSIsByCounterpartyGroup(groupName, currency = null) {
   if (!cache) return [];
 
   let ssis;
+  const targetGroupUpper = String(groupName).toUpperCase();
+  
   if (currency) {
-    ssis = cache.ssiByCptyCur.get(`${groupName}::${_uc(currency)}`) || [];
+    // Case insensitive lookup for specific currency
+    const curUpper = _uc(currency);
+    ssis = [];
+    for (const [key, val] of cache.ssiByCptyCur.entries()) {
+      if (String(key).toUpperCase() === `${targetGroupUpper}::${curUpper}`) {
+        ssis = val;
+        break;
+      }
+    }
   } else {
-    ssis = cache.ssiByGroup.get(groupName) || [];
+    // Case insensitive lookup across all currencies
+    ssis = [];
+    for (const [key, val] of cache.ssiByGroup.entries()) {
+      if (String(key).toUpperCase() === targetGroupUpper) {
+        ssis = val;
+        break;
+      }
+    }
   }
 
   return ssis.map(ssi => ({

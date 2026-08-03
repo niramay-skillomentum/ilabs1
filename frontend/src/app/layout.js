@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "SGB Operations Simulator | Skillomentum",
+  title: "SGB Operations Simulator | Niramay Skillomentum",
   description: "Financial operations training simulator for post-trade lifecycle management across MO, Confirmation, and Settlement desks.",
 };
 

@@ -16,7 +16,8 @@ const nextConfig = {
   devIndicators: {
     appIsrStatus: false,
     buildActivity: false,
-  }
+  },
+  outputFileTracingRoot: process.cwd()
 };
 
 export default nextConfig;

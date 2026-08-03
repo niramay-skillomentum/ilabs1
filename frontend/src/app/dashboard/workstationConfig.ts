@@ -41,7 +41,7 @@ export const workstationConfig: Workstation[] = [
       "Break Resolution",
       "Audit Logging"
     ],
-    buttonLabel: "Enter Middle Office Operations",
+    buttonLabel: "Enter Middle Office",
     navigationRoute: "MO" // Handled by goDesk function as ?desk=MO
   },
   {
@@ -71,7 +71,7 @@ export const workstationConfig: Workstation[] = [
       "Trade Investigation",
       "Audit Tracking"
     ],
-    buttonLabel: "Enter Confirmation Operations",
+    buttonLabel: "Enter Confirmation Desk",
     navigationRoute: "CONFIRMATION"
   },
   {
@@ -102,7 +102,7 @@ export const workstationConfig: Workstation[] = [
       "Settlement Resolution",
       "Lifecycle Completion"
     ],
-    buttonLabel: "Enter Settlement Operations",
+    buttonLabel: "Enter Settlement Desk",
     navigationRoute: "SETTLEMENT"
   },
   {
@@ -134,7 +134,7 @@ export const workstationConfig: Workstation[] = [
       "Cross-Desk Reconciliation",
       "Enterprise Cash Recon"
     ],
-    buttonLabel: "Enter Reconciliation Operations",
+    buttonLabel: "Open Reconciliation Desk",
     navigationRoute: "RECONCILIATION"
   },
   {
@@ -166,7 +166,34 @@ export const workstationConfig: Workstation[] = [
       "Decision Analysis",
       "Historical Comparison"
     ],
-    buttonLabel: "Enter Reporting Operations",
+    buttonLabel: "Open Reports",
     navigationRoute: "REPORTING"
+  },
+  {
+    id: "bloomberg",
+    title: "SGB Bloomberg Terminal",
+    description: "Access the professional-grade command-driven terminal for comprehensive security, entity, and trade data.",
+    icon: "Monitor",
+    accentColor: "indigo",
+    responsibilities: [
+      "Look up Security Descriptions",
+      "Check Entity Profiles",
+      "Monitor Trade Inquiries",
+      "Review SWIFT Messages",
+      "Command-driven Navigation"
+    ],
+    exploreItems: [
+      "Security Master",
+      "Entity Reference",
+      "Trade Viewer",
+      "Settlement Instructions"
+    ],
+    experienceItems: [
+      "Command Line Interface",
+      "Professional Layout",
+      "Real-time Data Access"
+    ],
+    buttonLabel: "Launch Terminal",
+    navigationRoute: "BLOOMBERG"
   }
 ];

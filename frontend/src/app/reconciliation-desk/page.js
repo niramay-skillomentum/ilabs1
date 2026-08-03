@@ -29,6 +29,38 @@ const RECON_STYLE = `
   .topbar-subtitle { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   .topbar-actions { display: flex; gap: 10px; align-items: center; }
 
+  .stats-bar {
+    display: flex;
+    gap: 12px;
+    padding: 16px 30px;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    padding: 12px 20px;
+    border-radius: 10px;
+    min-width: 120px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .stat-value { font-size: 24px; font-weight: 700; font-family: 'Consolas', monospace; }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; opacity: 0.7; }
+
+  .stat-total { background: linear-gradient(135deg, #f0f4ff, #e0e7ff); border-color: #c7d2fe; }
+  .stat-total .stat-value { color: #3730a3; }
+  .stat-matched { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-color: #a7f3d0; }
+  .stat-matched .stat-value { color: #065f46; }
+  .stat-outstanding { background: linear-gradient(135deg, #fefce8, #fef3c7); border-color: #fde68a; }
+  .stat-outstanding .stat-value { color: #92400e; }
+  .stat-rate { background: linear-gradient(135deg, #f0f9ff, #dbeafe); border-color: #93c5fd; }
+  .stat-rate .stat-value { color: #1e40af; }
+  .stat-ledger { background: linear-gradient(135deg, #faf5ff, #ede9fe); border-color: #c4b5fd; }
+  .stat-ledger .stat-value { color: #5b21b6; }
+  .stat-statement { background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border-color: #99f6e4; }
+  .stat-statement .stat-value { color: #115e59; }
 
   .filter-bar {
     display: flex;
@@ -70,47 +102,40 @@ const RECON_STYLE = `
     cursor: pointer;
   }
 
-  .desk-layout {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-  }
-  .container { width: 100%; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .container { width: 97%; max-width: 1800px; margin: 16px auto; }
 
   .table-container {
-    flex: 1;
+    max-height: calc(100vh - 310px);
     overflow: auto;
     background: white;
-    border-radius: 0;
-    box-shadow: none;
-    border: none;
-    border-top: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+    border: 1px solid #e2e8f0;
   }
-  table { border-collapse: collapse; width: 100%; min-width: 1920px; font-size: 11px; color: #334155; }
+  table { border-collapse: collapse; width: 100%; min-width: 2400px; font-size: 11.5px; }
   th {
     position: sticky;
     top: 0;
     background: #0f172a;
     color: #f1f5f9;
-    padding: 3px 5px;
+    padding: 8px 10px;
     font-weight: 600;
     text-align: left;
     border-bottom: 2px solid #1e293b;
     border-right: 1px solid #334155;
     z-index: 10;
     white-space: nowrap;
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
   td {
-    padding: 2px 5px;
+    padding: 5px 10px;
     border-bottom: 1px solid #e2e8f0;
     border-right: 1px solid #f1f5f9;
-    color: inherit;
+    color: #334155;
     white-space: nowrap;
-    font-size: 10.5px;
+    font-size: 11.5px;
   }
   tbody tr:nth-child(even) td { background-color: #f8fafc; }
   tbody tr:hover td { background-color: #e0f2fe; cursor: pointer; }
@@ -118,9 +143,9 @@ const RECON_STYLE = `
 
   .status-badge {
     display: inline-block;
-    padding: 1px 6px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -132,20 +157,48 @@ const RECON_STYLE = `
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.3px;
   }
   .source-ledger { background: #ede9fe; color: #5b21b6; }
   .source-statement { background: #ccfbf1; color: #115e59; }
 
-
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.12); }
+  .btn:active { transform: translateY(0); }
+  .btn-primary { background: linear-gradient(135deg, #0B2027, #0A4D68); color: white; }
+  .btn-primary:hover { background: linear-gradient(135deg, #0A4D68, #088395); }
+  .btn-secondary { background: #e2e8f0; color: #1e293b; }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-back { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.2); font-size: 12px; padding: 6px 14px; }
+  .btn-back:hover { background: rgba(255,255,255,0.25); }
+  .btn-match {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    font-size: 13px;
+    padding: 8px 20px;
+  }
+  .btn-match:hover { background: linear-gradient(135deg, #047857, #059669); }
+  .btn-match:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
   .desk-badge {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 600;
   }
   .desk-apac { background: #dbeafe; color: #1e40af; }
@@ -153,12 +206,12 @@ const RECON_STYLE = `
   .desk-amer { background: #fef3c7; color: #92400e; }
   .desk-global { background: #e2e8f0; color: #475569; }
 
-  .ref-cell { color: inherit; font-family: 'Consolas', monospace; font-size: 10.5px; }
+  .ref-cell { color: #64748b; font-family: 'Consolas', monospace; font-size: 10.5px; }
 
   /* Selection */
   .sel-cell { text-align: center; width: 34px; }
-  tr.row-selected td { background-color: #ffedd5 !important; }
-  tr.row-selected:hover td { background-color: #fed7aa !important; }
+  tr.row-selected td { background-color: #dbeafe !important; }
+  tr.row-selected:hover td { background-color: #bfdbfe !important; }
   .sel-checkbox { width: 15px; height: 15px; cursor: pointer; accent-color: #0A4D68; }
 
   .match-tray {
@@ -274,7 +327,6 @@ export default function ReconciliationDeskPage() {
   // Selection for user-driven matching and moving.
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [tradeIdInput, setTradeIdInput] = useState("");
-  const [viewMatchData, setViewMatchData] = useState(null);
 
   // ============ Auth ============
   useEffect(() => {
@@ -308,7 +360,7 @@ export default function ReconciliationDeskPage() {
   const loadAllocation = useCallback(async () => {
     if (!getToken()) return;
     setIsLoading(true);
-    setLoadingLabel("Preparing Reconciliation Operations...");
+    setLoadingLabel("Preparing Reconciliation Desk...");
     try {
       const res = await fetch(`${API}/api/reconciliation/items?limit=10000&t=${Date.now()}`, {
         method: "GET",
@@ -449,17 +501,9 @@ export default function ReconciliationDeskPage() {
     }
   };
 
-  // ============ View Match ============
-  const canViewMatch = selectedItemIds.length === 1 && selectedMatchedItems.length === 1 && selectedMatchedItems[0].matchId;
-  const handleViewMatch = () => {
-    if (!canViewMatch) return;
-    setViewMatchData(items.filter(i => i.matchId === selectedMatchedItems[0].matchId));
-  };
-
   // ============ Apply Trade ID ============
   const [isApplying, setIsApplying] = useState(false);
-  const [isApplyPopupOpen, setIsApplyPopupOpen] = useState(false);
-  const canApplyTradeId = selectedItemIds.length === 1 && tradeIdInput.trim() !== "" && !isApplying;
+  const canApplyTradeId = selectedItemIds.length === 1 && selectedStatements.length === 1 && tradeIdInput.trim() !== "" && !isApplying;
 
   const handleApplyTradeId = async () => {
     if (!canApplyTradeId) return;
@@ -468,15 +512,14 @@ export default function ReconciliationDeskPage() {
       const res = await fetch(`${API}/api/reconciliation/apply-trade-id`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: selectedItemIds[0], tradeRef: tradeIdInput.trim() })
+        body: JSON.stringify({ statementItemId: selectedStatement, tradeRef: tradeIdInput.trim() })
       });
       const data = await res.json();
       if (data.success) {
         toast.success("Trade ID applied successfully.");
-        // Update local state for the item
-        setItems(prev => prev.map(it => it.itemId === selectedItemIds[0] ? { ...it, ...data.item } : it));
+        // Update local state for the statement
+        setItems(prev => prev.map(it => it.itemId === selectedStatement ? { ...it, ...data.item } : it));
         setTradeIdInput("");
-        setIsApplyPopupOpen(false);
       } else {
         toast.error(data.message || "Failed to apply Trade ID.");
       }
@@ -519,7 +562,7 @@ export default function ReconciliationDeskPage() {
   if (!userId) return null;
 
   return (
-    <div className="desk-layout">
+    <>
       <style dangerouslySetInnerHTML={{ __html: RECON_STYLE }} />
 
       {/* Loading overlay */}
@@ -537,14 +580,14 @@ export default function ReconciliationDeskPage() {
       {/* Top Bar */}
       <div className="topbar">
         <div>
-          <div className="topbar-title">⚖️ Reconciliation Operations</div>
+          <div className="topbar-title">⚖️ Reconciliation Desk</div>
           <div className="topbar-subtitle">Enterprise Cash Settlement Reconciliation</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn primary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px" }}>
+          <button className="btn btn-secondary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px", background: "#1E3A5F", color: "white", borderColor: "#1E3A5F" }}>
             GCMS
           </button>
-          <button className="btn secondary" onClick={() => router.push("/dashboard")}>
+          <button className="btn btn-back" onClick={() => router.push("/dashboard")}>
               ← Dashboard
           </button>
         </div>
@@ -559,30 +602,68 @@ export default function ReconciliationDeskPage() {
         <span className={`tray-chip ${selectedStatement ? "filled-statement" : ""}`}>
           Statement: {selectedStatement || "—"}
         </span>
-        <button className="btn primary2" onClick={handleMatch} disabled={!canMatch}>
+        <button className="btn btn-match" onClick={handleMatch} disabled={!canMatch}>
           {isMatching ? "⏳ Matching..." : "🔗 Match"}
         </button>
         {canUnmatch && (
-          <button className="btn secondary" onClick={handleUnmatch} disabled={!canUnmatch} style={{ marginLeft: "10px", borderColor: "#fca5a5", color: "#b91c1c" }}>
+          <button className="btn btn-secondary" onClick={handleUnmatch} disabled={!canUnmatch} style={{ marginLeft: "10px", borderColor: "#fca5a5", color: "#b91c1c" }}>
             {isUnmatching ? "⏳ Unmatching..." : "🔓 Unmatch"}
           </button>
         )}
-        {canViewMatch && (
-          <button className="btn secondary" onClick={handleViewMatch} style={{ marginLeft: "10px", borderColor: "#6366f1", color: "#4f46e5", background: "#e0e7ff" }}>
-            👁 View Match
-          </button>
-        )}
         
-        {/* Apply Trade ID controls moved to filter bar */}
+        {/* Apply Trade ID controls */}
+        {selectedItemIds.length === 1 && selectedStatements.length === 1 && (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "10px", paddingLeft: "10px", borderLeft: "1px solid rgba(255,255,255,0.2)" }}>
+            <input 
+              type="text" 
+              placeholder="Trade ID..." 
+              style={{ padding: "6px 10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", width: "120px" }}
+              value={tradeIdInput}
+              onChange={(e) => setTradeIdInput(e.target.value)}
+            />
+            <button className="btn btn-primary" onClick={handleApplyTradeId} disabled={!canApplyTradeId}>
+              {isApplying ? "⏳ Applying..." : "✓ Apply"}
+            </button>
+          </div>
+        )}
 
         {selectedItemIds.length > 0 && (
-          <button className="btn secondary" style={{ fontSize: 12, padding: "6px 12px", marginLeft: "10px" }} onClick={clearSelection}>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 12px", marginLeft: "10px" }} onClick={clearSelection}>
             ✕ Clear Selection ({selectedItemIds.length})
           </button>
         )}
         <span className="tray-hint" style={{ marginLeft: "10px" }}>Select one Ledger + Statement to match.</span>
       </div>
 
+      {/* Stats Bar */}
+      {stats && (
+        <div className="stats-bar">
+          <div className="stat-card stat-total">
+            <div className="stat-value">{stats.totalItems}</div>
+            <div className="stat-label">Total Items</div>
+          </div>
+          <div className="stat-card stat-matched" style={{ cursor: "pointer" }} onClick={() => { setStatusFilter(statusFilter === "Matched" ? null : "Matched"); }}>
+            <div className="stat-value">{stats.matchedItems}</div>
+            <div className="stat-label">Matched</div>
+          </div>
+          <div className="stat-card stat-outstanding" style={{ cursor: "pointer" }} onClick={() => { setStatusFilter(statusFilter === "Outstanding" ? null : "Outstanding"); }}>
+            <div className="stat-value">{stats.outstandingItems}</div>
+            <div className="stat-label">Outstanding</div>
+          </div>
+          <div className="stat-card stat-rate">
+            <div className="stat-value">{stats.matchRate}%</div>
+            <div className="stat-label">Match Rate</div>
+          </div>
+          <div className="stat-card stat-ledger" style={{ cursor: "pointer" }} onClick={() => { setSourceFilter(sourceFilter === "LEDGER" ? null : "LEDGER"); }}>
+            <div className="stat-value">{stats.ledgerItems}</div>
+            <div className="stat-label">Ledger</div>
+          </div>
+          <div className="stat-card stat-statement" style={{ cursor: "pointer" }} onClick={() => { setSourceFilter(sourceFilter === "STATEMENT" ? null : "STATEMENT"); }}>
+            <div className="stat-value">{stats.statementItems}</div>
+            <div className="stat-label">Statement</div>
+          </div>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="filter-bar">
@@ -600,9 +681,9 @@ export default function ReconciliationDeskPage() {
 
         <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
 
-        <span className="filter-label">Recon Operations:</span>
+        <span className="filter-label">Recon Desk:</span>
         <select className="filter-select" value={deskFilter} onChange={(e) => setDeskFilter(e.target.value)}>
-          <option value="">All Operations</option>
+          <option value="">All Desks</option>
           {uniqueDesks.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
 
@@ -644,7 +725,7 @@ export default function ReconciliationDeskPage() {
         <span className="filter-label" style={{margin: "0 2px"}}>-</span>
         <input type="number" className="filter-input" style={{width: 80}} placeholder="Max" value={amountTo} onChange={e => setAmountTo(e.target.value)} />
 
-        <button className="btn primary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
+        <button className="btn btn-primary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
           setAppliedFilters({
             status: statusFilter,
             source: sourceFilter,
@@ -660,7 +741,7 @@ export default function ReconciliationDeskPage() {
           });
         }}>Execute Query</button>
 
-        <button className="btn secondary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
+        <button className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
           setStatusFilter(null);
           setSourceFilter(null);
           setDeskFilter("");
@@ -675,12 +756,6 @@ export default function ReconciliationDeskPage() {
           setAppliedFilters({});
         }}>
           ✕ Clear
-        </button>
-
-        <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
-
-        <button className="btn primary" style={{ fontSize: 11, padding: "5px 12px", marginLeft: "10px" }} onClick={() => setIsApplyPopupOpen(true)}>
-          Apply Trade ID
         </button>
       </div>
 
@@ -705,7 +780,7 @@ export default function ReconciliationDeskPage() {
                   <th>Currency</th>
                   <th>Trade Date</th>
                   <th>Value Date</th>
-                  <th>Recon Operations</th>
+                  <th>Recon Desk</th>
                   <th>Match ID</th>
                   <th title="Trade ID">Ref1: Trade</th>
                   <th title="Underlyer">Ref2: Underlyer</th>
@@ -730,20 +805,11 @@ export default function ReconciliationDeskPage() {
                 {filteredItems.map((item) => {
                   const isMatched = item.status === "Matched";
                   const isSelected = selectedItemIds.includes(item.itemId);
-                  
-                  let rowColor = undefined;
-                  const iType = (item.itemType || "").toLowerCase();
-                  if (iType === "statement debit" || iType === "sd") rowColor = "#ef4444"; // red
-                  else if (iType === "statement credit" || iType === "sc") rowColor = "#9333ea"; // purple
-                  else if (iType === "ledger debit" || iType === "ld") rowColor = "#2563eb"; // blue
-                  else if (iType === "ledger credit" || iType === "lc") rowColor = "#000000"; // black
-
                   return (
                   <tr
                     key={item._id || item.itemId}
                     className={isSelected ? "row-selected" : ""}
                     onClick={() => toggleSelect(item)}
-                    style={{ color: rowColor }}
                   >
                     <td className="sel-cell" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -759,14 +825,22 @@ export default function ReconciliationDeskPage() {
                       </span>
                     </td>
                     <td style={{ fontWeight: 600, fontFamily: "Consolas, monospace" }}>{item.itemId}</td>
-                    <td>{item.source}</td>
+                    <td>
+                      <span className={`source-badge ${item.source === "LEDGER" ? "source-ledger" : "source-statement"}`}>
+                        {item.source}
+                      </span>
+                    </td>
                     <td>{item.itemType || "—"}</td>
                     <td className="num">{formatAmount(item.amount)}</td>
                     <td style={{ fontWeight: 500 }}>{item.currency || "—"}</td>
                     <td>{formatDate(item.tradeDate)}</td>
                     <td>{formatDate(item.valueDate)}</td>
-                    <td>{item.reconDesk || "—"}</td>
-                    <td style={{ fontFamily: "Consolas, monospace", color: "inherit" }}>
+                    <td>
+                      <span className={`desk-badge ${deskClass(item.reconDesk)}`}>
+                        {item.reconDesk || "—"}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: "Consolas, monospace", color: item.matchId ? "#059669" : "#94a3b8" }}>
                       {item.matchId || "—"}
                     </td>
                     <td className="ref-cell">{item.itemRef1 || "—"}</td>
@@ -793,156 +867,7 @@ export default function ReconciliationDeskPage() {
             </table>
           </div>
         )}
-
-      {/* View Match Popup */}
-      {viewMatchData && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", justifyContent: "center", alignItems: "center" }}>
-          <div style={{ background: "white", padding: "20px", borderRadius: "8px", width: "1000px", maxWidth: "95vw", maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}>
-            <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setViewMatchData(null)}>✕</button>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", paddingRight: "30px" }}>
-              <h2 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>Match Details - {viewMatchData[0]?.matchId}</h2>
-            </div>
-            <div className="table-container" style={{ flex: 1, overflow: "auto", border: "1px solid #e2e8f0", maxHeight: "400px" }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Item ID</th>
-                    <th>Source</th>
-                    <th>Item Type</th>
-                    <th>Amount</th>
-                    <th>Currency</th>
-                    <th>Trade Date</th>
-                    <th>Value Date</th>
-                    <th>Recon Operations</th>
-                    <th>Match ID</th>
-                    <th title="Trade ID">Ref1: Trade</th>
-                    <th title="Underlyer">Ref2: Underlyer</th>
-                    <th title="Entity Code">Ref3: Entity</th>
-                    <th title="Country">Ref4: Country</th>
-                    <th title="Product">Ref5: Product</th>
-                    <th title="Product Type">Ref6: ProdType</th>
-                    <th title="Counterparty Name">Ref7: Counterparty</th>
-                    <th title="Buyer BIC">SWIFT1: BuyerBIC</th>
-                    <th title="Seller Account">SWIFT2: SellerAcc</th>
-                    <th title="Buyer Account">SWIFT3: BuyerAcc</th>
-                    <th title="Seller BIC">SWIFT4: SellerBIC</th>
-                    <th title="Field20">SWIFT5: Field20</th>
-                    <th title="56A Intermediary">SWIFT6: 56A</th>
-                    <th title="Institution Name">SWIFT7: Inst</th>
-                    <th title="Bank Name">SWIFT8: Bank</th>
-                    <th title="Field72">SWIFT9: Field72</th>
-                    <th title="Field70">SWIFT10: Field70</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewMatchData.map(item => {
-                    let rowColor = undefined;
-                    const iType = (item.itemType || "").toLowerCase();
-                    if (iType === "statement debit" || iType === "sd") rowColor = "#ef4444"; // red
-                    else if (iType === "statement credit" || iType === "sc") rowColor = "#9333ea"; // purple
-                    else if (iType === "ledger debit" || iType === "ld") rowColor = "#2563eb"; // blue
-                    else if (iType === "ledger credit" || iType === "lc") rowColor = "#000000"; // black
-
-                    return (
-                      <tr key={item.id} style={{ color: rowColor }}>
-                        <td>
-                          <span className={`status-badge ${item.status === "Matched" ? "status-matched" : "status-outstanding"}`}>
-                            {item.status}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: 600, fontFamily: "Consolas, monospace" }}>{item.itemId}</td>
-                        <td>{item.source}</td>
-                        <td>{item.itemType || "—"}</td>
-                        <td className="num">{formatAmount(item.amount)}</td>
-                        <td style={{ fontWeight: 500 }}>{item.currency || "—"}</td>
-                        <td>{formatDate(item.tradeDate)}</td>
-                        <td>{formatDate(item.valueDate)}</td>
-                        <td>{item.reconDesk || "—"}</td>
-                        <td style={{ fontFamily: "Consolas, monospace", color: "inherit" }}>
-                          {item.matchId || "—"}
-                        </td>
-                        <td className="ref-cell">{item.itemRef1 || "—"}</td>
-                        <td className="ref-cell">{item.itemRef2 || "—"}</td>
-                        <td className="ref-cell">{item.itemRef3 || "—"}</td>
-                        <td className="ref-cell">{item.itemRef4 || "—"}</td>
-                        <td className="ref-cell">{item.itemRef5 || "—"}</td>
-                        <td className="ref-cell">{item.itemRef6 || "—"}</td>
-                        <td className="ref-cell">{item.itemRef7 || "—"}</td>
-                        <td className="ref-cell">{item.ref1 || "—"}</td>
-                        <td className="ref-cell">{item.ref2 || "—"}</td>
-                        <td className="ref-cell">{item.ref3 || "—"}</td>
-                        <td className="ref-cell">{item.ref4 || "—"}</td>
-                        <td className="ref-cell">{item.ref5 || "—"}</td>
-                        <td className="ref-cell">{item.ref6 || "—"}</td>
-                        <td className="ref-cell">{item.ref7 || "—"}</td>
-                        <td className="ref-cell">{item.ref8 || "—"}</td>
-                        <td className="ref-cell">{item.ref9 || "—"}</td>
-                        <td className="ref-cell">{item.ref10 || "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
       </div>
-
-      {/* Apply Trade ID Popup */}
-      {isApplyPopupOpen && (
-        <>
-          <div className="detail-overlay" onClick={() => setIsApplyPopupOpen(false)} />
-          <div style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "white",
-            padding: "24px",
-            borderRadius: "12px",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-            zIndex: 1000,
-            width: "360px"
-          }}>
-            <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setIsApplyPopupOpen(false)}>✕</button>
-            <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", color: "#0f172a", paddingRight: "20px" }}>Apply Trade ID</h3>
-            
-            {selectedItemIds.length === 1 ? (
-              <>
-                <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "12px" }}>
-                  Applying to {selectedStatements.some(s => s.itemId === selectedItemIds[0]) ? "Statement" : "Ledger"} Item: <strong>{selectedItemIds[0]}</strong>
-                </p>
-                <input 
-                  type="text" 
-                  placeholder="Enter Trade ID..." 
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", marginBottom: "16px", boxSizing: "border-box" }}
-                  value={tradeIdInput}
-                  onChange={(e) => setTradeIdInput(e.target.value)}
-                  autoFocus
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                  <button className="btn btn-secondary" onClick={() => setIsApplyPopupOpen(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={handleApplyTradeId} disabled={!canApplyTradeId}>
-                    {isApplying ? "Applying..." : "Apply"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: "13px", color: "#ef4444", marginBottom: "16px" }}>
-                  Please select exactly one Ledger or Statement item to apply a Trade ID.
-                </p>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button className="btn btn-primary" onClick={() => setIsApplyPopupOpen(false)}>Close</button>
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-    </div>
+    </>
   );
 }

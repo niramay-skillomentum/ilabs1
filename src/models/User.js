@@ -17,15 +17,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-
-  // ── Profile fields for internal contact cards ──
-  designation: { type: String, default: "Financial Analyst" },
-  department: { type: String, default: "Post Trade Operations" },
-  reportingManager: { type: String, default: "John Doe (VP)" },
-  officeLocation: { type: String, default: "Mumbai Office" },
-  extension: { type: String, default: "4521" },
-  avatar: { type: String, default: null },
-
   createdAt: {
     type: Date,
     default: Date.now

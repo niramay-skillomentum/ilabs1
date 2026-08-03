@@ -7,7 +7,6 @@ const communicationEngine = require("../engine/communicationEngine");
 const aiParser = require("../engine/aiParser");
 const auditEngine = require("../engine/auditEngine");
 const LifecycleEngine = require("../engine/lifecycle");
-const { resolveMailStatus } = require("../engine/mailStatusResolver");
 const { authenticateToken } = require("../middleware/auth");
 
 router.post("/send", authenticateToken, async (req, res) => {
@@ -28,10 +27,7 @@ router.post("/send", authenticateToken, async (req, res) => {
   const parsed = aiParser.parseEmail(message);
 
   // Find trade in DB
-  const trade = await Trade.findOne({ tradeRef });
-  if (!trade) {
-    return res.status(404).json({ error: "Trade not found" });
-  }
+  const trade = await Trade.findOne({ tradeRef, assignedTo: { $ne: null } });
 
   let auditDetails = "";
   if (trade && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE")) {
@@ -116,23 +112,6 @@ router.post("/send", authenticateToken, async (req, res) => {
   ).catch(e => console.warn("DB audit:", e.message));
 
   res.json({ success: true });
-});
-
-router.post("/read", authenticateToken, async (req, res) => {
-  const userId = req.user.email || req.user.userId;
-  const { tradeRef } = req.body;
-  if (!tradeRef) return res.status(400).json({ error: "tradeRef required" });
-
-  try {
-    const Conversation = require("../models/Conversation");
-    await Conversation.updateOne(
-      { tradeRef },
-      { $addToSet: { readBy: userId } }
-    );
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
 });
 
 router.post("/resolve", authenticateToken, async (req, res) => {
@@ -263,13 +242,9 @@ router.get("/shared", authenticateToken, async (req, res) => {
         };
       }
 
-      // Attach computed mail status (desk-scoped for group inbox)
-      trade.mailStatus = resolveMailStatus(trade, desk);
-
       finalResults.push({
         trade,
         conversation: {
-          readBy: item.conversation.readBy || [],
           subject: item.conversation.messages[0]?.subject || item.conversation.subject || `Trade ${item.tradeRef}`,
           status: item.conversation.status,
           messages: item.conversation.messages.map(m => ({
@@ -303,8 +278,7 @@ router.get("/personal", authenticateToken, async (req, res) => {
   try {
     const Conversation = require("../models/Conversation");
     
-    // Cross-desk personal inbox: fetch ALL conversations the user is involved in
-    // regardless of desk. No desk filter applied.
+    // Also fetch conversations for trades currently or historically assigned to this user
     const assignedTrades = await Trade.find({ 
       $or: [
         { assignedTo: userId },
@@ -341,13 +315,9 @@ router.get("/personal", authenticateToken, async (req, res) => {
         };
       }
 
-      // Attach computed mail status (no desk filter — resolver infers it)
-      trade.mailStatus = resolveMailStatus(trade, null);
-
       results.push({
         trade,
         conversation: {
-          readBy: conv.readBy || [],
           subject: conv.messages[0]?.subject || `Trade ${conv.tradeRef}`,
           status: conv.status,
           messages: conv.messages.map(m => ({
