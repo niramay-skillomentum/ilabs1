@@ -10,6 +10,7 @@ import TutorialPanel from "../../components/TutorialPanel";
 import { GuidedTourProvider, useGuidedTour } from "../../components/guided-tour";
 import { middleOfficeTourSteps } from "../../components/guided-tour/tours/middleOfficeTour";
 import { confirmationDeskTourSteps } from "../../components/guided-tour/tours/confirmationDeskTour";
+import { settlementDeskTourSteps } from "../../components/guided-tour/tours/settlementDeskTour";
 
 // ============ Module-scope stable constants (F2) ============
 const format = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -267,6 +268,12 @@ function WorkstationComponent() {
     );
   }, [queue.length]);
 
+  const getDynamicSettlementSteps = useCallback(() => {
+    return settlementDeskTourSteps.map(step => 
+      step.target === '#tour-generate-queue' ? { ...step, spotlightClicks: queue.length === 0 } : step
+    );
+  }, [queue.length]);
+
   const autoStarted = useRef(false);
 
   useEffect(() => {
@@ -276,8 +283,11 @@ function WorkstationComponent() {
     } else if (desk === "CONFIRMATION" && !localStorage.getItem("guidedTour.confirmationDesk.completed") && !autoStarted.current) {
       autoStarted.current = true;
       setTimeout(() => startTour('confirmationDesk', getDynamicConfirmationSteps()), 1000);
+    } else if (desk === "SETTLEMENT" && !localStorage.getItem("guidedTour.settlementDesk.completed") && !autoStarted.current) {
+      autoStarted.current = true;
+      setTimeout(() => startTour('settlementDesk', getDynamicSettlementSteps()), 1000);
     }
-  }, [desk, startTour, getDynamicMoSteps, getDynamicConfirmationSteps]);
+  }, [desk, startTour, getDynamicMoSteps, getDynamicConfirmationSteps, getDynamicSettlementSteps]);
 
   useEffect(() => {
     const uid = loadUserId();
@@ -777,11 +787,11 @@ function WorkstationComponent() {
               </button>
             )}
             <button className="btn primary" onClick={viewTruth} disabled={!selectedTrade}>👁️ View Truth ↗</button>
-            {desk === "SETTLEMENT" && <button className="btn primary" onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement ↗</button>}
-            {desk === "SETTLEMENT" && <button className="btn primary" onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database ↗</button>}
+            {desk === "SETTLEMENT" && <button id="tour-stcc-btn" className="btn primary" onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement ↗</button>}
+            {desk === "SETTLEMENT" && <button id="tour-ssi-db-btn" className="btn primary" onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database ↗</button>}
             {desk === "MO" && <button id="tour-termsheet" className="btn primary" onClick={openTermsheet}>📄 View Termsheet ↗</button>}
             {desk === "SETTLEMENT" && (
-              <button className="btn primary"
+              <button id="tour-system-mailbox" className="btn primary"
                 onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
                 🖥️ System Mailbox ↗
               </button>
@@ -797,7 +807,7 @@ function WorkstationComponent() {
                 <th>Select</th><th>Trade Ref</th><th>Status</th><th>Next Operations</th><th className="num">Age</th>
                 <th>Trade Date</th><th>Value Date</th><th>Settlement Mode</th><th>CP Group</th><th>Counterparty</th><th>Entity</th><th>Region</th>
                 <th>Product</th><th>Product Type</th><th>Trade Type</th><th>Underlyer</th>
-                {desk === "SETTLEMENT" && <th>SSI Details</th>}
+                {desk === "SETTLEMENT" && <th id="tour-view-ssi-col">SSI Details</th>}
                 <th>Direction</th><th>Currency</th>
                 <th className="num">Amount</th>
               </tr>
@@ -846,12 +856,14 @@ function WorkstationComponent() {
                   {desk === "SETTLEMENT" && (
                     <>
                       <button
+                        id="tour-mail-cpty"
                         className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))) ? 'disabled' : ''}`}
                         disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))}
                         title={isElectronic ? 'Must use STCC dashboard' : (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)` : '')}
                         onClick={startSettlementCptyFlow}
                       >Mail CPTY</button>
                       <button
+                        id="tour-settlement-approve"
                         className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)) ? 'disabled' : ''}`}
                         disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)}
                         title={
@@ -862,7 +874,7 @@ function WorkstationComponent() {
                         }
                         onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
                       >Approve Settlement</button>
-                      <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
+                      <button id="tour-settlement-break" className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
                       <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
                     </>
                   )}
@@ -874,8 +886,8 @@ function WorkstationComponent() {
           </div>
           
           <div id="tour-tutorial" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {(desk === "MO" || desk === "CONFIRMATION") && (
-              <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour(desk === "MO" ? 'middleOffice' : 'confirmationDesk', desk === "MO" ? getDynamicMoSteps() : getDynamicConfirmationSteps())}>
+            {(desk === "MO" || desk === "CONFIRMATION" || desk === "SETTLEMENT") && (
+              <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour(desk === "MO" ? 'middleOffice' : (desk === "CONFIRMATION" ? 'confirmationDesk' : 'settlementDesk'), desk === "MO" ? getDynamicMoSteps() : (desk === "CONFIRMATION" ? getDynamicConfirmationSteps() : getDynamicSettlementSteps()))}>
                 ❔ Restart Tour
               </button>
             )}
