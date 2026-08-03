@@ -19,23 +19,24 @@ export const TourTooltip: React.FC<TooltipRenderProps> = ({
         background: '#0f172a', // Sleek dark charcoal/navy
         borderRadius: '12px',
         padding: '24px',
-        width: '420px',
+        width: '440px',
         maxWidth: '90vw',
         boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
         fontFamily: "'Inter', sans-serif",
         color: '#f8fafc',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', color: '#ffffff' }}>
-          {step.title}
-        </h3>
-        <div style={{ display: 'flex', gap: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span>Guided Tutorial</span>
+          <span>Step {index + 1} of {size}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
           {Array.from({ length: size }).map((_, i) => (
             <div
               key={i}
               style={{
-                width: '24px',
+                flex: 1,
                 height: '4px',
                 borderRadius: '2px',
                 background: i <= index ? '#3b82f6' : '#334155', // Vibrant blue for active, slate for inactive
@@ -45,6 +46,10 @@ export const TourTooltip: React.FC<TooltipRenderProps> = ({
           ))}
         </div>
       </div>
+
+      <h3 style={{ margin: '0 0 10px 0', fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', color: '#ffffff' }}>
+        {step.title}
+      </h3>
       
       <div style={{ fontSize: '14.5px', color: '#cbd5e1', lineHeight: '1.6', marginBottom: '28px' }}>
         {step.content}

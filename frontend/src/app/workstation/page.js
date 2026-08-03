@@ -9,6 +9,7 @@ import InstructionPanel from "../../components/InstructionPanel";
 import TutorialPanel from "../../components/TutorialPanel";
 import { GuidedTourProvider, useGuidedTour } from "../../components/guided-tour";
 import { middleOfficeTourSteps } from "../../components/guided-tour/tours/middleOfficeTour";
+import { confirmationDeskTourSteps } from "../../components/guided-tour/tours/confirmationDeskTour";
 
 // ============ Module-scope stable constants (F2) ============
 const format = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -260,14 +261,23 @@ function WorkstationComponent() {
     );
   }, [queue.length]);
 
+  const getDynamicConfirmationSteps = useCallback(() => {
+    return confirmationDeskTourSteps.map(step => 
+      step.target === '#tour-generate-queue' ? { ...step, spotlightClicks: queue.length === 0 } : step
+    );
+  }, [queue.length]);
+
   const autoStarted = useRef(false);
 
   useEffect(() => {
     if (desk === "MO" && !localStorage.getItem("guidedTour.middleOffice.completed") && !autoStarted.current) {
       autoStarted.current = true;
       setTimeout(() => startTour('middleOffice', getDynamicMoSteps()), 1000);
+    } else if (desk === "CONFIRMATION" && !localStorage.getItem("guidedTour.confirmationDesk.completed") && !autoStarted.current) {
+      autoStarted.current = true;
+      setTimeout(() => startTour('confirmationDesk', getDynamicConfirmationSteps()), 1000);
     }
-  }, [desk, startTour, getDynamicMoSteps]);
+  }, [desk, startTour, getDynamicMoSteps, getDynamicConfirmationSteps]);
 
   useEffect(() => {
     const uid = loadUserId();
@@ -822,10 +832,10 @@ function WorkstationComponent() {
                   )}
                   {desk === "CONFIRMATION" && (
                     <>
-                      <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
-                      <button className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
-                      <button className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
-                      <button className="btn primary" onClick={() => {
+                      <button id="tour-confirm-trade" className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
+                      <button id="tour-confirm-break" className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
+                      <button id="tour-send-cpty" className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
+                      <button id="tour-escalate-fo" className="btn primary" onClick={() => {
                         if (!selectedTrade) return toast.error("Select a trade first");
                         if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
                         const mailParams = new URLSearchParams({ desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO" });
@@ -864,8 +874,8 @@ function WorkstationComponent() {
           </div>
           
           <div id="tour-tutorial" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {desk === "MO" && (
-              <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour('middleOffice', getDynamicMoSteps())}>
+            {(desk === "MO" || desk === "CONFIRMATION") && (
+              <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour(desk === "MO" ? 'middleOffice' : 'confirmationDesk', desk === "MO" ? getDynamicMoSteps() : getDynamicConfirmationSteps())}>
                 ❔ Restart Tour
               </button>
             )}

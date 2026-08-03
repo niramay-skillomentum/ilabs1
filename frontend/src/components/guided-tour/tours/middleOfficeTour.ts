@@ -11,7 +11,7 @@ export const middleOfficeTourSteps: TourStep[] = [
   {
     target: '.session-timer',
     title: 'Session Timer',
-    content: 'Keep an eye on the simulation time. Your session expires after 3 hours, and trades have specific currency cut-offs you must meet.',
+    content: 'Keep an eye on the simulation clock. Monitor your progress closely as you validate trades and investigate operational breaks within your allotted session time.',
     placement: 'bottom',
   },
   {
