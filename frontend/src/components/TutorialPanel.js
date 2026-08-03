@@ -87,7 +87,7 @@ export default function TutorialPanel({ desk, selectedTrade }) {
         </span>
         {/* Tooltip */}
         {!isFloatingOpen && (
-          <span className="absolute right-14 bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg">
+          <span className="absolute right-14 bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg pointer-events-none">
             Tutorial Assistant
           </span>
         )}

@@ -7,6 +7,8 @@ import { loadUserId, getToken, authHeaders, clearSession } from "../../lib/auth"
 import toast from "react-hot-toast";
 import InstructionPanel from "../../components/InstructionPanel";
 import TutorialPanel from "../../components/TutorialPanel";
+import { GuidedTourProvider, useGuidedTour } from "../../components/guided-tour";
+import { middleOfficeTourSteps } from "../../components/guided-tour/tours/middleOfficeTour";
 
 // ============ Module-scope stable constants (F2) ============
 const format = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -223,6 +225,9 @@ function WorkstationComponent() {
   const [swiftActiveTab, setSwiftActiveTab] = useState(0);
   const [isLoadingSwift, setIsLoadingSwift] = useState(false);
 
+  // Guided Tour Hook
+  const { startTour, isActive, nextStep } = useGuidedTour();
+
   // Cut-off tracking — currencies whose cut-offs have been breached
   const [cutoffsReached, setCutoffsReached] = useState([]);
 
@@ -248,6 +253,21 @@ function WorkstationComponent() {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => refreshQueueSilent(dsk), 300);
   }, [refreshQueueSilent]);
+
+  const getDynamicMoSteps = useCallback(() => {
+    return middleOfficeTourSteps.map(step => 
+      step.target === '#tour-generate-queue' ? { ...step, spotlightClicks: queue.length === 0 } : step
+    );
+  }, [queue.length]);
+
+  const autoStarted = useRef(false);
+
+  useEffect(() => {
+    if (desk === "MO" && !localStorage.getItem("guidedTour.middleOffice.completed") && !autoStarted.current) {
+      autoStarted.current = true;
+      setTimeout(() => startTour('middleOffice', getDynamicMoSteps()), 1000);
+    }
+  }, [desk, startTour, getDynamicMoSteps]);
 
   useEffect(() => {
     const uid = loadUserId();
@@ -397,6 +417,11 @@ function WorkstationComponent() {
     const data = await res.json();
     setIsGeneratingQueue(false);
     if (!data.success) return toast.error(data.error || "Complete Your Current Trades First");
+    
+    if (isActive) {
+      nextStep();
+    }
+    
     setQueue(data.trades || []);
     if (data.sessionExpiry) {
       setSessionExpiry(data.sessionExpiry);
@@ -728,7 +753,7 @@ function WorkstationComponent() {
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button className="btn primary" onClick={generateQueue} disabled={isGeneratingQueue || queue.length > 0} style={{ margin: 0 }}>
+            <button id="tour-generate-queue" className="btn primary" onClick={generateQueue} disabled={isGeneratingQueue || queue.length > 0} style={{ margin: 0 }}>
               {isGeneratingQueue ? "Generating..." : "Generate Queue"}
             </button>
             <button className="btn primary" onClick={refreshQueue} disabled={isRefreshingQueue} style={{ margin: 0 }}>
@@ -744,14 +769,14 @@ function WorkstationComponent() {
             <button className="btn primary" onClick={viewTruth} disabled={!selectedTrade}>👁️ View Truth ↗</button>
             {desk === "SETTLEMENT" && <button className="btn primary" onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement ↗</button>}
             {desk === "SETTLEMENT" && <button className="btn primary" onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database ↗</button>}
-            {desk === "MO" && <button className="btn primary" onClick={openTermsheet}>📄 View Termsheet ↗</button>}
+            {desk === "MO" && <button id="tour-termsheet" className="btn primary" onClick={openTermsheet}>📄 View Termsheet ↗</button>}
             {desk === "SETTLEMENT" && (
               <button className="btn primary"
                 onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
                 🖥️ System Mailbox ↗
               </button>
             )}
-            <button className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox ↗</button>
+            <button id="tour-mailbox" className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox ↗</button>
           </div>
         </div>
 
@@ -790,9 +815,9 @@ function WorkstationComponent() {
                 <>
                   {desk === "MO" && (
                     <>
-                      <button className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
-                      <button className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
-                      <button className="btn primary" onClick={sendToFO}>Send to FO</button>
+                      <button id="tour-mo-validate" className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
+                      <button id="tour-mo-break" className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
+                      <button id="tour-send-fo" className="btn primary" onClick={sendToFO}>Send to FO</button>
                     </>
                   )}
                   {desk === "CONFIRMATION" && (
@@ -834,11 +859,16 @@ function WorkstationComponent() {
                 </>
               );
             })()}
-            <button className="btn primary" style={{marginLeft: "8px"}} onClick={openAudit}>Audit</button>
+            <button id="tour-audit" className="btn primary" style={{marginLeft: "8px"}} onClick={openAudit}>Audit</button>
             <button className="btn primary" onClick={downloadCSV}>Download Excel</button>
           </div>
           
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div id="tour-tutorial" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {desk === "MO" && (
+              <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour('middleOffice', getDynamicMoSteps())}>
+                ❔ Restart Tour
+              </button>
+            )}
             <TutorialPanel desk={desk} />
             {desk && <InstructionPanel desk={desk} />}
           </div>
@@ -1355,8 +1385,10 @@ function WorkstationComponent() {
 
 export default function WorkstationPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <WorkstationComponent />
-    </Suspense>
+    <GuidedTourProvider>
+      <Suspense fallback={<div>Loading...</div>}>
+        <WorkstationComponent />
+      </Suspense>
+    </GuidedTourProvider>
   );
 }
