@@ -14,6 +14,18 @@ router.post("/send", authenticateToken, async (req, res) => {
   const { tradeRef, sender, message, desk } = req.body;
 
   const subject = `Trade ${tradeRef} - Break Investigation`;
+  
+  let actionWarning = null;
+
+  if (desk === "CONFIRMATION" || desk === "SETTLEMENT") {
+    const existingConversation = await conversationEngine.getConversation(tradeRef);
+    if (existingConversation && existingConversation.messages && existingConversation.messages.length > 0) {
+      const lastMessage = existingConversation.messages[existingConversation.messages.length - 1];
+      if (lastMessage.sender === "Counterparty") {
+        actionWarning = "Warning: The counterparty has already sent an email regarding this trade. Please check your mailbox before sending new correspondence.";
+      }
+    }
+  }
 
   await conversationEngine.createMessage(
     tradeRef,
@@ -115,7 +127,7 @@ router.post("/send", authenticateToken, async (req, res) => {
     auditDetails
   ).catch(e => console.warn("DB audit:", e.message));
 
-  res.json({ success: true });
+  res.json({ success: true, warning: actionWarning || undefined });
 });
 
 router.post("/read", authenticateToken, async (req, res) => {

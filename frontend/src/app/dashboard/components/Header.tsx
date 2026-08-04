@@ -46,7 +46,7 @@ export const Header = () => {
           <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center overflow-hidden">
             <img src="/skillomentum-logo.png" alt="Skillomentum" className="w-full h-full object-cover" />
           </div>
-          <h2 className="text-[var(--color-primary)] font-bold text-lg tracking-tight hidden md:block">Skillomentum</h2>
+          <h2 className="text-[var(--color-primary)] font-bold text-lg tracking-tight hidden md:block">Skillomentum's Investment Banking Operations</h2>
         </div>
         
         <div className="h-6 w-[1px] bg-[var(--color-border)] hidden md:block"></div>

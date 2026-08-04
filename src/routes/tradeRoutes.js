@@ -14,6 +14,7 @@ const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
 const cutoffEngine = require("../engine/cutoff");
 const cutoffEnforcer = require("../engine/cutoffEnforcer");
 const simulationClock = require("../engine/clock");
+const truthEngine = require("../engine/truthEngine");
 
 // ======================================
 // GET ALL TRADES (DB-BACKED)
@@ -61,7 +62,7 @@ router.post("/action", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Trade not found in session" });
     }
 
-    if (!comment || comment.trim() === "") {
+    if (action !== "MO_VALIDATE_PASS" && action !== "CONFIRM_TRADE" && (!comment || comment.trim() === "")) {
       return res.status(400).json({
         error: "Comment is mandatory"
       });
@@ -166,6 +167,8 @@ router.post("/action", authenticateToken, async (req, res) => {
 
     let nextStatus;
     let nextDesk;
+    let validateWarning = null;
+    let actionError = null;
 
     switch (action) {
 
@@ -192,9 +195,29 @@ router.post("/action", authenticateToken, async (req, res) => {
           sessionTrade.pendingAmendments = [];
         }
 
+        // MO Simulator Logic: Verify if trade is actually clean
+        const validateMismatches = truthEngine.getMismatchFields(sessionTrade, "mo");
+        if (validateMismatches.length > 0) {
+          validateWarning = "Warning: This trade contains discrepancies that were overlooked during validation.";
+        }
+
         break;
 
       case "MO_RAISE_BREAK":
+        // MO Simulator Logic: Verify selected discrepancies
+        const actualMismatches = truthEngine.getMismatchFields(sessionTrade, "mo");
+        const selectedDiscrepancies = req.body.selectedDiscrepancies || [];
+        
+        if (actualMismatches.length === 0) {
+          return res.status(400).json({ error: "Action Denied: A break cannot be raised as the trade contains no discrepancies." });
+        } else {
+          const wrongSelections = selectedDiscrepancies.filter(d => !actualMismatches.includes(d));
+          const missingSelections = actualMismatches.filter(d => !selectedDiscrepancies.includes(d));
+          if (wrongSelections.length > 0 || missingSelections.length > 0) {
+            actionError = "The selected discrepancies do not match the system records.";
+          }
+        }
+
         nextStatus = "MO_BREAK_OPEN";
         nextDesk = "MO";
         break;
@@ -206,6 +229,24 @@ router.post("/action", authenticateToken, async (req, res) => {
         break;
 
       case "CONFIRM_TRADE":
+        const confirmCptyCount = sessionTrade.cptyContactCount || 0;
+        if (confirmCptyCount === 0) {
+            return res.status(400).json({ error: "You must attempt to confirm the trade details with the Counterparty prior to proceeding." });
+        }
+
+        const confirmMismatches = truthEngine.getMismatchFields(sessionTrade, "universal");
+        if (confirmMismatches.length > 0) {
+            validateWarning = "Warning: The trade contained discrepancies which were overlooked during confirmation. The trade has been automatically amended to match the true economic details and moved to settlement.";
+            
+            const universalTruths = sessionTrade.truths?.universal || {};
+            if (confirmMismatches.includes("amount")) sessionTrade.amount = universalTruths.amount;
+            if (confirmMismatches.includes("valueDate")) sessionTrade.valueDate = universalTruths.valueDate;
+            if (confirmMismatches.includes("currency")) sessionTrade.currency = universalTruths.currency;
+            if (confirmMismatches.includes("counterparty")) sessionTrade.counterparty = universalTruths.counterparty;
+            if (confirmMismatches.includes("settlementMode")) sessionTrade.settlementMode = universalTruths.settlementMode;
+            if (confirmMismatches.includes("buySell")) sessionTrade.buySell = universalTruths.buySell;
+        }
+
         nextStatus = "SETTLEMENT_PENDING";
         nextDesk = "SETTLEMENT";
         break;
@@ -214,7 +255,7 @@ router.post("/action", authenticateToken, async (req, res) => {
         const cptyCount = sessionTrade.cptyContactCount || 0;
         const foCount = sessionTrade.foContactCount || 0;
         if (cptyCount !== 1 || foCount > 0) {
-            return res.status(400).json({ error: "Confirmation Break can only be raised once, after first counterparty contact." });
+            return res.status(400).json({ error: "You must attempt to confirm the trade details with the Counterparty prior to proceeding." });
         }
         nextStatus = "CONFIRMATION_BREAK";
         nextDesk = "CONFIRMATION";
@@ -226,8 +267,7 @@ router.post("/action", authenticateToken, async (req, res) => {
         nextDesk = "CONFIRMATION";
         
         // If FO supports us AND booking matches universal truth, pushing back makes CPTY concede
-        const truthEngineForReject = require("../engine/truthEngine");
-        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngineForReject.getMismatchFields(sessionTrade, "universal").length === 0) {
+        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngine.getMismatchFields(sessionTrade, "universal").length === 0) {
           if (sessionTrade.truths && sessionTrade.truths.confirmation) {
             sessionTrade.truths.confirmation.amount = sessionTrade.amount;
             sessionTrade.truths.confirmation.valueDate = sessionTrade.valueDate;
@@ -243,8 +283,7 @@ router.post("/action", authenticateToken, async (req, res) => {
         nextDesk = "CONFIRMATION";
 
         // If FO supports us AND booking matches universal truth, requesting evidence makes CPTY double check and concede
-        const truthEngineForEvidence = require("../engine/truthEngine");
-        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngineForEvidence.getMismatchFields(sessionTrade, "universal").length === 0) {
+        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngine.getMismatchFields(sessionTrade, "universal").length === 0) {
           if (sessionTrade.truths && sessionTrade.truths.confirmation) {
             sessionTrade.truths.confirmation.amount = sessionTrade.amount;
             sessionTrade.truths.confirmation.valueDate = sessionTrade.valueDate;
@@ -464,7 +503,9 @@ router.post("/action", authenticateToken, async (req, res) => {
     res.json({
       success: true,
       queueSize: trades.length,
-      trades: trades
+      trades: trades,
+      warning: validateWarning || undefined,
+      actionError: actionError || undefined
     });
 
     // Broadcast WebSocket event

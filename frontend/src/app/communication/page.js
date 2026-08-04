@@ -39,6 +39,8 @@ function CommunicationComponent() {
 
   const [sendSSIModalOpen, setSendSSIModalOpen] = useState(false);
 
+  const [popupState, setPopupState] = useState({ type: null, isError: false, title: "", message: "" });
+
   // Compose modal state
   const [composeModalOpen, setComposeModalOpen] = useState(false);
   const [composeTo, setComposeTo] = useState("FO");
@@ -532,10 +534,17 @@ function CommunicationComponent() {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk })
-    }).then(() => {
+    }).then(res => res.json()).then((data) => {
       setIsSendingReply(false);
       setReplyModalOpen(false);
       setReplyBody("");
+      
+      if (!data.success) {
+        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
+      } else if (data.warning) {
+        setPopupState({ type: "feedback", isError: false, title: "⚠️ Warning", message: data.warning });
+      }
+      
       loadConversation(selectedTradeRef, channel, null, true);
     });
   };
@@ -640,9 +649,16 @@ function CommunicationComponent() {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ tradeRef: composeTrade, sender: userId, message: composeBody, desk })
-    }).then(() => {
+    }).then(res => res.json()).then((data) => {
       setIsSendingCompose(false);
       setComposeModalOpen(false);
+      
+      if (!data.success) {
+        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
+      } else if (data.warning) {
+        setPopupState({ type: "feedback", isError: false, title: "⚠️ Warning", message: data.warning });
+      }
+      
       setSelectedTradeRef(composeTrade);
       selectedTradeRefRef.current = composeTrade;
       const folder = currentFolderRef.current;
@@ -756,6 +772,25 @@ function CommunicationComponent() {
         setComposeSubject={setComposeSubject} composeBody={composeBody} setComposeBody={setComposeBody}
         sendCompose={sendCompose} isSendingCompose={isSendingCompose}
       />
+
+      {popupState.type === "feedback" && (
+        <div className="popup" style={{ display: 'block', maxWidth: '400px' }}>
+          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
+          <h3 style={{ marginBottom: '15px', color: popupState.isError ? '#dc2626' : '#f59e0b', paddingRight: '20px' }}>
+            {popupState.title || (popupState.isError ? '⚠️ Action Denied' : '⚠️ Warning')}
+          </h3>
+          <div style={{ color: '#475569', fontSize: '14px', marginBottom: '20px', lineHeight: '1.5' }}>
+            {popupState.message}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn primary" onClick={() => setPopupState({ type: null })}>Understood</button>
+          </div>
+        </div>
+      )}
+      
+      {popupState.type && (
+        <div className="overlay" onClick={() => setPopupState({ type: null })} />
+      )}
     </div>
   );
 }

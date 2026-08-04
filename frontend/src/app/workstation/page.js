@@ -210,6 +210,7 @@ function WorkstationComponent() {
 
   const [popupState, setPopupState] = useState({ type: null, action: null });
   const [comment, setComment] = useState("");
+  const [selectedDiscrepancies, setSelectedDiscrepancies] = useState([]);
   const [emailText, setEmailText] = useState("");
   const [auditData, setAuditData] = useState({ xml: null, trail: [] });
 
@@ -445,6 +446,23 @@ function WorkstationComponent() {
 
   const handleOpenAction = (action) => {
     if (!selectedTrade) return toast.error("Select trade first");
+
+    // MO Desk Simulator Intercepts
+    if (desk === "MO") {
+      if (action === 'MO_VALIDATE_PASS' && selectedTrade.currentStatus === 'MO_BREAK_OPEN') {
+        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "From MO BREAK OPEN you have to send a mail to FO." });
+        return;
+      }
+      if (action === 'MO_RAISE_BREAK' && selectedTrade.currentStatus === 'MO_BREAK_OPEN') {
+        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "From MO BREAK OPEN you have to send a mail to FO." });
+        return;
+      }
+      if (action === 'MO_VALIDATE_PASS' && selectedTrade.currentStatus === 'PENDING_FO_RESPONSE' && !selectedTrade.foResponseReceived) {
+        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "Check mail trail for the trade." });
+        return;
+      }
+    }
+
     if (!allowed[action] || !allowed[action].includes(selectedTrade.currentStatus)) {
       return toast.error("Invalid action for current state");
     }
@@ -460,17 +478,40 @@ function WorkstationComponent() {
   };
 
   const submitAction = async () => {
-    if (!comment || comment.trim() === "") console.warn("No comment provided - will be penalized in scoring");
+    let finalComment = comment;
+    if (popupState.action === 'MO_RAISE_BREAK') {
+      if (selectedDiscrepancies.length === 0) {
+        return toast.error("Please select at least one discrepancy.");
+      }
+      finalComment = "Break raised for discrepancies: " + selectedDiscrepancies.join(", ");
+    } else if (!comment || comment.trim() === "") {
+      console.warn("No comment provided - will be penalized in scoring");
+    }
+
     setIsSubmittingAction(true);
     const res = await fetch("/api/trade/action", {
       method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ trade: selectedTrade, action: popupState.action, comment })
+      body: JSON.stringify({ trade: selectedTrade, action: popupState.action, comment: finalComment, selectedDiscrepancies })
     });
     const data = await res.json();
     setIsSubmittingAction(false);
-    if (!data.success) return toast.error(data.error || "Action failed");
+    
+    if (!data.success) {
+      setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
+      return;
+    }
+    
     setQueue(data.trades || []);
-    setPopupState({ type: null });
+    setSelectedDiscrepancies([]);
+    setComment("");
+
+    if (data.actionError) {
+      setPopupState({ type: "feedback", isError: true, title: "⚠️ Wrong Action", message: data.actionError });
+    } else if (data.warning) {
+      setPopupState({ type: "feedback", isError: false, title: "⚠️ Warning", message: data.warning });
+    } else {
+      setPopupState({ type: null });
+    }
   };
 
   const handleSendToSystemAmendment = async () => {
@@ -611,6 +652,10 @@ function WorkstationComponent() {
 
   const sendToFO = () => {
     if (!selectedTrade) return toast.error("Select trade first");
+    if (selectedTrade.currentStatus === 'MO_PENDING') {
+      setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "From MO PENDING the trade can be validated or a break can be raised. To send to FO, first declare the discrepancy." });
+      return;
+    }
     if (!allowed['MO_SEND_TO_FO'] || !allowed['MO_SEND_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
     const mailParams = new URLSearchParams({
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "FO"
@@ -903,12 +948,50 @@ function WorkstationComponent() {
         </div>
       )}
 
+      {popupState.type === "feedback" && (
+        <div className="popup" style={{ display: 'block', maxWidth: '400px' }}>
+          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
+          <h3 style={{ marginBottom: '15px', color: popupState.isError ? '#dc2626' : '#f59e0b', paddingRight: '20px' }}>
+            {popupState.isError ? '⚠️ Action Denied' : '⚠️ Warning'}
+          </h3>
+          <div style={{ color: '#475569', fontSize: '14px', marginBottom: '20px', lineHeight: '1.5' }}>
+            {popupState.message}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn primary" onClick={() => setPopupState({ type: null })}>Understood</button>
+          </div>
+        </div>
+      )}
+
       {popupState.type === "action" && (
         <div className="popup" style={{ display: 'block' }}>
           <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
           <h3 style={{ marginBottom: '10px', paddingRight: '20px' }}>{popupState.action?.replace(/_/g, ' ')}</h3>
           <div style={{ color: '#475569', fontSize: '14px', marginBottom: '15px' }}>Are you sure you want to proceed with this action?</div>
-          <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add comment (recommended for audit & scoring)"></textarea>
+          
+          {popupState.action === 'MO_RAISE_BREAK' && (
+            <div style={{ marginBottom: '15px' }}>
+              <strong style={{ display: 'block', marginBottom: '8px' }}>Select Discrepancies:</strong>
+              {['amount', 'valueDate', 'currency', 'counterparty'].map(field => (
+                <label key={field} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', fontSize: '14px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedDiscrepancies.includes(field)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedDiscrepancies(prev => [...prev, field]);
+                      else setSelectedDiscrepancies(prev => prev.filter(f => f !== field));
+                    }}
+                    style={{ marginRight: '8px', width: 'auto' }}
+                  />
+                  {field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {popupState.action !== 'MO_RAISE_BREAK' && (
+            <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add comment (recommended for audit & scoring)"></textarea>
+          )}
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
             <button className="btn secondary" onClick={() => setPopupState({ type: null })} disabled={isSubmittingAction}>Cancel</button>
             <button className="btn primary" onClick={submitAction} disabled={isSubmittingAction}>
