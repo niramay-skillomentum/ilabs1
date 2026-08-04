@@ -22,6 +22,7 @@ const matchingEngine = require("../engine/matchingEngine");
 const allocationService = require("../engine/allocationService");
 const ReconciliationConfig = require("../models/ReconciliationConfig");
 const { getIo } = require("../engine/socketEngine");
+const learningEngine = require("../engine/learningEngine");
 
 // ======================================
 // GET /items — List reconciliation items with filtering
@@ -128,7 +129,12 @@ router.post("/apply-trade-id", authenticateToken, async (req, res) => {
     const { itemId, tradeRef } = req.body || {};
     
     if (!itemId || !tradeRef) {
-      return res.status(400).json({ success: false, message: "Item ID and Trade Reference are required." });
+      let learning = null;
+      try {
+        const userId = req.user?.userId;
+        learning = await learningEngine.processFailure({ userId, desk: "RECONCILIATION", ruleCode: "RECON_MISSING_FIELDS" });
+      } catch (e) { /* non-blocking */ }
+      return res.status(400).json({ success: false, message: "Item ID and Trade Reference are required.", learning: learning || undefined });
     }
 
     const Trade = require("../models/Trade");
@@ -172,7 +178,12 @@ router.post("/manual-match", authenticateToken, async (req, res) => {
   try {
     const { ledgerItemId, statementItemId } = req.body || {};
     if (!ledgerItemId || !statementItemId) {
-      return res.status(400).json({ success: false, message: "Select one Ledger and one Statement item." });
+      let learning = null;
+      try {
+        const userId = req.user?.userId;
+        learning = await learningEngine.processFailure({ userId, desk: "RECONCILIATION", ruleCode: "RECON_MISSING_PAIR" });
+      } catch (e) { /* non-blocking */ }
+      return res.status(400).json({ success: false, message: "Select one Ledger and one Statement item.", learning: learning || undefined });
     }
 
     const result = await matchingEngine.manualMatch(ledgerItemId, statementItemId);
