@@ -11,11 +11,16 @@ export const buildSubject = (trade) => {
 };
 
 export const getSenderInfo = (sender, trade) => {
-  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@sgb.com", initials: "SY", color: "#005a9e" };
-  if (sender === "FO") return { name: "Front Office Trading Desk", email: "fo.trading@sgb.com", initials: "FO", color: "#004578" };
+  if (sender === "System" || sender === "SYSTEM") return { name: "System", email: "system@skillomentum.com", initials: "SY", color: "#005a9e" };
+  if (sender === "FO") {
+    const reg = (trade?.foRegion || trade?.region || "americas").toLowerCase();
+    const regionName = reg === "amer" ? "americas" : reg;
+    return { name: "Front Office Trading Desk", email: `fo-operations-${regionName}@skillomentum.com`, initials: "FO", color: "#004578" };
+  }
   if (sender === "COUNTERPARTY" || sender === "CPTY") {
     const cpName = trade ? trade.counterparty : "Counterparty";
-    return { name: cpName + " Operations", email: `operations@${(cpName||"cpty").toLowerCase()}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#0078d4" };
+    const domain = (cpName || "cpty").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return { name: cpName + " Operations", email: `operations@${domain}.com`, initials: (cpName||"CP").substring(0,2).toUpperCase(), color: "#0078d4" };
   }
   return { name: sender, email: sender, initials: (sender||"").substring(0,2).toUpperCase(), color: "#0f6cbd" };
 };
@@ -25,11 +30,14 @@ export const getRecipientLabel = (sender, trade, dsk, ch, uid, msgMoUser) => {
   if (sender !== "FO" && sender !== "CPTY" && sender !== "COUNTERPARTY") {
     if (trade) {
       if (trade.currentStatus && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE" || trade.currentStatus === "LIASING_WITH_FO")) {
-        return "Front Office Trading Desk <fo.trading@sgb.com>";
+        const reg = (trade?.foRegion || trade?.region || "americas").toLowerCase();
+        const regionName = reg === "amer" ? "americas" : reg;
+        return `Front Office Trading Desk <fo-operations-${regionName}@skillomentum.com>`;
       }
-      return trade.counterparty + " Operations <operations@" + trade.counterparty.toLowerCase() + ".com>";
+      const domain = (trade.counterparty || "cpty").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return trade.counterparty + ` Operations <operations@${domain}.com>`;
     }
-    if (ch === "FO") return "Front Office Trading Desk <fo.trading@sgb.com>";
+    if (ch === "FO") return "Front Office Trading Desk <fo-operations-americas@skillomentum.com>";
     return dsk + " Desk";
   }
   return targetUser + " <" + targetUser + ">";

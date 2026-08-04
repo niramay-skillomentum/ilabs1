@@ -313,6 +313,8 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
       if (foResponse.action === "HOLDING_MESSAGE") {
          scheduleFOFinalReply(reply.tradeRef, trade, foResponse);
       } else {
+         trade.foResponseReceived = true;
+
          const cleanCategories = [
            "ERROR_CHECK_NO_ISSUES", "AMOUNT_CORRECT", "VALUE_DATE_CORRECT",
            "CURRENCY_CORRECT", "COUNTERPARTY_CORRECT", "CLEAN_TRADE"
@@ -323,7 +325,6 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
          ];
 
          if (cleanCategories.includes(foResponse.category)) {
-             trade.foResponseReceived = true;
              if (trade.currentStatus === "PENDING_FO_RESPONSE") {
                  trade.currentStatus = "MO_PENDING";
              } else if (trade.currentStatus === "LIASING_WITH_FO") {
@@ -331,7 +332,6 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
                  if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_US";
              }
          } else if (breakCategories.includes(foResponse.category)) {
-             trade.foResponseReceived = true;
              if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_CPTY";
 
              if (trade.currentStatus === "CONFIRMATION_BREAK") {

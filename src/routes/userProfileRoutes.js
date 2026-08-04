@@ -11,6 +11,7 @@ const User = require("../models/User");
 const Queue = require("../models/Queue");
 const Counterparty = require("../models/Counterparty");
 const { authenticateToken } = require("../middleware/auth");
+const mailRoutingEngine = require("../engine/mailRoutingEngine");
 
 // ── Simulated presence from lastActivity ──
 function getPresence(lastActivity) {
@@ -32,7 +33,7 @@ function generateExternalProfile(counterpartyName) {
   const hash = counterpartyName.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return {
     name: counterpartyName + " Operations",
-    email: `operations@${counterpartyName.toLowerCase().replace(/\s+/g, "")}.com`,
+    email: mailRoutingEngine.getCptyOperationsEmail(counterpartyName),
     company: counterpartyName,
     department: EXTERNAL_DEPTS[hash % EXTERNAL_DEPTS.length],
     role: EXTERNAL_ROLES[hash % EXTERNAL_ROLES.length],
@@ -55,7 +56,7 @@ router.get("/:userId", authenticateToken, async (req, res) => {
         success: true,
         profile: {
           fullName: "Front Office Trading Desk",
-          email: "fo.trading@sgb.com",
+          email: "fo-operations-americas@skillomentum.com",
           designation: "Trading Desk",
           department: "Front Office",
           reportingManager: "N/A",
