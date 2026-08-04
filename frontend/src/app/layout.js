@@ -1,5 +1,7 @@
 import { Inter } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import { LearningProvider } from "../components/learning/LearningProvider";
+import "../components/learning/LearningCard.css";
 import "./globals.css";
 
 const inter = Inter({
@@ -19,9 +21,12 @@ export default function RootLayout({ children }) {
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
-        {children}
+        <LearningProvider>
+          {children}
+        </LearningProvider>
         <Toaster position="top-center" />
       </body>
     </html>
   );
 }
+

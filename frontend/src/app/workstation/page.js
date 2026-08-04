@@ -11,6 +11,7 @@ import { GuidedTourProvider, useGuidedTour } from "../../components/guided-tour"
 import { middleOfficeTourSteps } from "../../components/guided-tour/tours/middleOfficeTour";
 import { confirmationDeskTourSteps } from "../../components/guided-tour/tours/confirmationDeskTour";
 import { settlementDeskTourSteps } from "../../components/guided-tour/tours/settlementDeskTour";
+import { useLearning } from "../../components/learning/LearningProvider";
 
 // ============ Module-scope stable constants (F2) ============
 const format = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -231,6 +232,9 @@ function WorkstationComponent() {
   // Guided Tour Hook
   const { startTour, isActive, nextStep } = useGuidedTour();
 
+  // Learning Engine Hook
+  const { showLearningCard, attachSocketListener } = useLearning();
+
   // Cut-off tracking — currencies whose cut-offs have been breached
   const [cutoffsReached, setCutoffsReached] = useState([]);
 
@@ -366,6 +370,9 @@ function WorkstationComponent() {
       scheduleRefresh(dsk);
     });
 
+    // Attach Learning Engine socket listener for real-time learning events
+    attachSocketListener(socket);
+
     return () => socket.disconnect();
   }, [searchParams]);
 
@@ -470,15 +477,103 @@ function WorkstationComponent() {
     // MO Desk Simulator Intercepts
     if (desk === "MO") {
       if (action === 'MO_VALIDATE_PASS' && selectedTrade.currentStatus === 'MO_BREAK_OPEN') {
-        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "From MO BREAK OPEN you have to send a mail to FO." });
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "ERROR",
+          title: "Cannot Validate from Break Status",
+          mentorIntro: "Think like a Middle Office analyst for a moment.",
+          message: "A trade in MO_BREAK_OPEN status cannot be directly validated. The break must first be escalated to the Front Office for resolution.",
+          whyItMatters: "When a break is raised, it indicates a discrepancy between the booking and the source system. The Front Office (trader) must review and confirm or amend the trade before it can proceed.",
+          realWorldImpact: ["Unresolved discrepancy flows to Confirmation desk", "Counterparty receives incorrect trade details", "Settlement failure if economic terms are wrong"],
+          correctAction: "1. Select the trade in MO_BREAK_OPEN status\n2. Click 'Send to FO' to open the Front Office mailbox\n3. Compose a clear message describing the discrepancy\n4. Wait for the FO response before validating",
+          scoreImpact: -10,
+          xpReward: 5,
+          repeatCount: 1,
+          desk: "MO",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "MO_VALIDATE_FROM_BREAK"
+        });
         return;
       }
       if (action === 'MO_RAISE_BREAK' && selectedTrade.currentStatus === 'MO_BREAK_OPEN') {
-        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "From MO BREAK OPEN you have to send a mail to FO." });
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "WARNING",
+          title: "Break Already Raised",
+          mentorIntro: "Good learning opportunity — here's what happened.",
+          message: "This trade already has an open break. From MO_BREAK_OPEN, the next step is to escalate to the Front Office.",
+          whyItMatters: "Raising a duplicate break creates noise in the system and delays resolution. The correct workflow is to communicate the existing break to the Front Office trader for review.",
+          realWorldImpact: ["Duplicate exception reports clutter the system", "Delays in FO response due to confusion"],
+          correctAction: "Click 'Send to FO' to communicate the break to the Front Office. Include specific details about which fields are mismatched.",
+          scoreImpact: -5,
+          xpReward: 3,
+          repeatCount: 1,
+          desk: "MO",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "MO_BREAK_FROM_BREAK"
+        });
         return;
       }
       if (action === 'MO_VALIDATE_PASS' && selectedTrade.currentStatus === 'PENDING_FO_RESPONSE' && !selectedTrade.foResponseReceived) {
-        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "Check mail trail for the trade." });
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "ERROR",
+          title: "Front Office Response Pending",
+          mentorIntro: "This validation protects downstream operations.",
+          message: "You cannot validate this trade while waiting for the Front Office response. Check the mailbox for updates.",
+          whyItMatters: "The Front Office response may contain amendments or confirmations that affect the trade data. Validating before receiving this response means you're passing through potentially incorrect data.",
+          realWorldImpact: ["Incorrect trade data reaches Confirmation desk", "Counterparty dispute if economics are wrong", "Amendment cycle required — delays settlement"],
+          correctAction: "1. Open the Mailbox to check for FO responses\n2. Review any amendments proposed by the trader\n3. Apply accepted amendments\n4. Only then validate the trade",
+          scoreImpact: -10,
+          xpReward: 5,
+          repeatCount: 1,
+          desk: "MO",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "MO_VALIDATE_AWAITING_FO"
+        });
+        return;
+      }
+    }
+
+    // CONFIRMATION Desk Simulator Intercepts
+    if (desk === "CONFIRMATION") {
+      if (action === 'CONFIRM_RAISE_BREAK' && selectedTrade.currentStatus === 'CONFIRMATION_PENDING') {
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "ERROR",
+          title: "Confirmation Break Without Prior Contact",
+          mentorIntro: "No worries — this is exactly how we learn.",
+          message: "You can only raise a Confirmation Break after the first contact with the counterparty. The break should be based on a dispute in their response.",
+          whyItMatters: "A confirmation break represents a genuine dispute between your records and the counterparty's records. You need evidence of the dispute (their response) before escalating to a break.",
+          realWorldImpact: ["Premature break escalation — wastes investigation resources", "No evidence to support the break in audit", "Process violation flagged in compliance review"],
+          correctAction: "1. First, send the trade confirmation to the counterparty\n2. Review their response for any disputes\n3. If they dispute terms, then raise a Confirmation Break\n4. Include specific disputed fields in your comment",
+          desk: "CONFIRMATION",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "CONFIRM_BREAK_WITHOUT_CPTY",
+          scoreImpact: -10,
+          xpReward: 5,
+          repeatCount: 1
+        });
+        return;
+      }
+
+      if (action === 'CONFIRM_ESCALATE_TO_FO' && selectedTrade.currentStatus === 'CONFIRMATION_PENDING') {
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "ERROR",
+          title: "Premature Escalation to Front Office",
+          mentorIntro: "Let's review the escalation process.",
+          message: "You are escalating a trade to the Front Office before verifying the details with the counterparty.",
+          whyItMatters: "The Front Office should only be involved when there is a confirmed discrepancy between our booking and the counterparty's records. Escalating without counterparty contact wastes trader time.",
+          realWorldImpact: ["Unnecessary noise for the trading desk", "Delayed resolution of actual breaks", "Loss of credibility with the Front Office"],
+          correctAction: "1. Click 'Send to CPTY' to contact the counterparty\n2. Wait for their response\n3. If they claim a discrepancy, only then Escalate to FO",
+          desk: "CONFIRMATION",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "CONFIRM_ESCALATE_PREMATURE",
+          scoreImpact: -10,
+          xpReward: 5,
+          repeatCount: 1
+        });
         return;
       }
     }
@@ -517,7 +612,14 @@ function WorkstationComponent() {
     setIsSubmittingAction(false);
     
     if (!data.success) {
-      setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
+      // If backend returned a learning payload, show the learning card
+      if (data.learning) {
+        showLearningCard(data.learning);
+        setPopupState({ type: null });
+      } else {
+        // Fallback: show the old feedback popup for errors without learning data
+        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
+      }
       return;
     }
     
@@ -525,7 +627,10 @@ function WorkstationComponent() {
     setSelectedDiscrepancies([]);
     setComment("");
 
-    if (data.actionError) {
+    if (data.learning) {
+      showLearningCard(data.learning);
+      setPopupState({ type: null });
+    } else if (data.actionError) {
       setPopupState({ type: "feedback", isError: true, title: "⚠️ Wrong Action", message: data.actionError });
     } else if (data.warning) {
       setPopupState({ type: "feedback", isError: false, title: "⚠️ Warning", message: data.warning });
@@ -673,7 +778,22 @@ function WorkstationComponent() {
   const sendToFO = () => {
     if (!selectedTrade) return toast.error("Select trade first");
     if (selectedTrade.currentStatus === 'MO_PENDING') {
-      setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: "From MO PENDING the trade can be validated or a break can be raised. To send to FO, first declare the discrepancy." });
+      showLearningCard({
+        eventId: `local_${Date.now()}`,
+        severity: "ERROR",
+        title: "Cannot Send to FO from Pending Status",
+        mentorIntro: "Let's review the correct sequence of operations.",
+        message: "From MO_PENDING status, a trade can either be validated or a break can be raised. To communicate with FO, first identify the discrepancy.",
+        whyItMatters: "The workflow requires you to first determine whether the trade has a discrepancy. If it does, raise a break — only then can you escalate to FO. If it doesn't, validate it directly.",
+        realWorldImpact: ["Unnecessary escalation to Front Office", "Process violation — skipping the validation step", "Delayed trade processing"],
+        correctAction: "1. Compare booking data with Truth values\n2. If discrepancies exist → Raise Break → then Send to FO\n3. If no discrepancies → Validate the trade directly",
+        scoreImpact: -10,
+        xpReward: 5,
+        repeatCount: 1,
+        desk: "MO",
+        tradeRef: selectedTrade.tradeRef,
+        mistakeCode: "MO_SEND_FO_FROM_PENDING"
+      });
       return;
     }
     if (!allowed['MO_SEND_TO_FO'] || !allowed['MO_SEND_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
@@ -936,8 +1056,8 @@ function WorkstationComponent() {
                 ❔ Restart Tour
               </button>
             )}
-            <TutorialPanel desk={desk} />
             {desk && <InstructionPanel desk={desk} />}
+            <TutorialPanel desk={desk} />
           </div>
         </div>
       </div>

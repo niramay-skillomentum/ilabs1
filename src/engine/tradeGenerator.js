@@ -187,8 +187,16 @@ function generateRealisticAmount(currency) {
   let base;
   if (currency === "JPY") base = Math.random() * 10000000;
   else base = Math.random() * 2000000;
+  
   const irregular = Math.floor(Math.random() * 997) + 3;
-  return Math.floor(base / irregular) * irregular + Math.floor(Math.random() * 97);
+  const integerPart = Math.floor(base / irregular) * irregular + Math.floor(Math.random() * 97);
+  
+  if (currency === "JPY") {
+    return integerPart;
+  } else {
+    const cents = Math.floor(Math.random() * 100) / 100;
+    return parseFloat((integerPart + cents).toFixed(2));
+  }
 }
 
 function generateTradeRef() {
