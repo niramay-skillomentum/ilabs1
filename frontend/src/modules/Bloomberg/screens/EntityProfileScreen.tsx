@@ -13,8 +13,7 @@ export default function EntityProfileScreen({ parameter, command = 'ENTITY' }: P
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Default to Accounts tab if command is ACC
-  const [activeTab, setActiveTab] = useState(command === 'ACC' ? 2 : 1);
+  const [activeTab, setActiveTab] = useState(1);
 
   useEffect(() => {
     if (!parameter) return;
@@ -40,7 +39,16 @@ export default function EntityProfileScreen({ parameter, command = 'ENTITY' }: P
   }, [parameter]);
 
   if (!parameter) {
-    return <div style={{ padding: '24px' }}>Please specify an entity identifier (e.g. ENTITY HSBC).</div>;
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>{command}</span></div>
+        </div>
+        <div style={{ padding: '32px', color: 'var(--bb-alert)', fontSize: '16px', textAlign: 'center' }}>
+          Please specify an Entity ID (e.g. {command} SBG).
+        </div>
+      </div>
+    );
   }
 
   if (loading) return <div style={{ padding: '24px' }}>Loading {parameter}...</div>;

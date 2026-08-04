@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ScreenType } from '../hooks/useCommandEngine';
+import { bloombergApi } from '../services/api';
 
 export const ALL_COMMANDS = [
   { cmd: 'HOME', desc: 'Home Dashboard' },
@@ -12,7 +13,6 @@ export const ALL_COMMANDS = [
   { cmd: 'PROD', desc: 'Product Search' },
   { cmd: 'RELS', desc: 'Related Securities' },
   { cmd: 'ENTITY', desc: 'Entity Profile' },
-  { cmd: 'ACC', desc: 'Settlement Accounts (Alias for ENTITY)' },
   { cmd: 'CPTY', desc: 'Counterparty Profile' },
   { cmd: 'AGENT', desc: 'Agent Bank Profile (Alias for CPTY)' },
   { cmd: 'SSI', desc: 'Settlement Instructions' },
@@ -21,7 +21,6 @@ export const ALL_COMMANDS = [
   { cmd: 'HOL', desc: 'Holiday Calendar' },
   { cmd: 'TRADE', desc: 'Trade Inquiry' },
   { cmd: 'TRD', desc: 'Trade Inquiry (Alias for TRADE)' },
-  { cmd: 'TGEN', desc: 'Trade Generator' },
   { cmd: 'LIFE', desc: 'Trade Lifecycle' },
   { cmd: 'HIST', desc: 'Trade History' },
   { cmd: 'SETTLE', desc: 'Settlement Screen' },
@@ -65,16 +64,101 @@ interface HeaderProps {
   executeCommand: (cmd: string) => void;
   activeScreen: ScreenType;
   setScreen: (screen: ScreenType) => void;
+  goBack?: () => void;
+  goForward?: () => void;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
 }
 
 const SCREENS: ScreenType[] = ['HOME', 'DES', 'SRCH', 'ENTITY', 'SSI', 'TRADE', 'LIFE', 'SETTLE', 'SWIFT', 'BREAK', 'PORT', 'HELP'];
 
-export default function Header({ executeCommand, activeScreen, setScreen }: HeaderProps) {
+export default function Header({ 
+  executeCommand, 
+  activeScreen, 
+  setScreen, 
+  goBack, 
+  goForward, 
+  canGoBack, 
+  canGoForward 
+}: HeaderProps) {
   const [cmd, setCmd] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<{cmd: string, desc: string}[]>([]);
   
-  const allSearchable = [...ALL_COMMANDS, ...INPUT_SUGGESTIONS];
+  useEffect(() => {
+    if (!cmd.includes(' ')) {
+      setDynamicSuggestions([]);
+      return;
+    }
+    
+    const parts = cmd.split(' ');
+    const baseCmd = parts[0].toUpperCase();
+    const param = parts.slice(1).join(' ');
+    
+    if (param.length < 2) {
+      setDynamicSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        let results: {cmd: string, desc: string}[] = [];
+        if (baseCmd === 'ENTITY') {
+          const res = await bloombergApi.searchEntity(param);
+          if (res.success && res.data) {
+            results = res.data.slice(0, 5).map((e: any) => ({
+              cmd: `${baseCmd} ${e.entityCode}`,
+              desc: `${e.entityName} - ${e.currency}`
+            }));
+          }
+        } else if (baseCmd === 'SRCH' || baseCmd === 'DES' || baseCmd === 'ISIN') {
+          const res = await bloombergApi.searchSecurity(param);
+          if (res.success && res.data) {
+            results = res.data.slice(0, 5).map((s: any) => ({
+              cmd: `${baseCmd} ${s.isin || s.underlyer}`,
+              desc: `${s.companyName || s.underlyer} - ${s.productType || s.product}`
+            }));
+          }
+        } else if (baseCmd === 'FX') {
+          const res = await bloombergApi.searchSecurity(param, 'FX');
+          if (res.success && res.data) {
+            results = res.data.slice(0, 5).map((s: any) => ({
+              cmd: `${baseCmd} ${s.underlyer}`,
+              desc: `${s.underlyer} - ${s.productType}`
+            }));
+          }
+        } else if (baseCmd === 'PROD') {
+          const res = await bloombergApi.getProducts();
+          if (res.success && res.data) {
+            const filtered = res.data.filter((p: any) => 
+              p.product.toUpperCase().includes(param.toUpperCase()) || 
+              p.productType.toUpperCase().includes(param.toUpperCase())
+            );
+            results = filtered.slice(0, 5).map((p: any) => ({
+              cmd: `${baseCmd} ${p.productType.toUpperCase()}`,
+              desc: `${p.product} - ${p.productType}`
+            }));
+          }
+        } else if (baseCmd === 'RELS') {
+          const res = await bloombergApi.getRelated(param);
+          if (res.success && res.data) {
+            results = res.data.slice(0, 5).map((r: any) => ({
+              cmd: `${baseCmd} ${r.entity}`,
+              desc: `${r.entity} - ${r.relation}`
+            }));
+          }
+        }
+        setDynamicSuggestions(results);
+      } catch (e) {
+        // Ignore fetch errors during typing
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [cmd]);
+  
+  const allSearchable = [...ALL_COMMANDS, ...INPUT_SUGGESTIONS, ...dynamicSuggestions];
   
   const filteredCommands = cmd 
     ? allSearchable.filter(c => 
@@ -154,17 +238,31 @@ export default function Header({ executeCommand, activeScreen, setScreen }: Head
       {/* Top Bar */}
       <div className="bb-top-bar">
         <div className="bb-tab">
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '14px' }}>B</span>
-            <span>Bloomberg Intelligence</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>SGB</span>
+            <span>Terminal</span>
           </span>
-          <span className="bb-tab-close">×</span>
         </div>
-        <div className="bb-tab-add">+</div>
         <div className="bb-top-right">
-          <span style={{ fontSize: '16px' }}>⌕</span>
-          <span>≡ Options</span>
-          <div style={{ width: '20px', height: '20px', backgroundColor: '#999', borderRadius: '50%' }}></div>
+          <span 
+            style={{ fontSize: '16px', cursor: 'pointer' }} 
+            onClick={() => executeCommand('SEARCH')}
+            title="Global Search"
+          >
+            ⌕
+          </span>
+          <span 
+            style={{ cursor: 'pointer' }} 
+            onClick={() => executeCommand('HELP')}
+            title="Help & Options"
+          >
+            ≡ Options
+          </span>
+          <div 
+            style={{ width: '20px', height: '20px', backgroundColor: '#999', borderRadius: '50%', cursor: 'pointer' }}
+            onClick={() => executeCommand('ABOUT')}
+            title="About Terminal"
+          ></div>
         </div>
       </div>
 
@@ -184,16 +282,45 @@ export default function Header({ executeCommand, activeScreen, setScreen }: Head
       {/* Path/Info Row */}
       <div className="bb-info-row">
         <div className="bb-path">
-          <span className="bb-arrow">{"< >"}</span>
-          <span className="bb-ticker">RYMNZ 2.55 12/18/2026 Corp ▼</span>
+          <span className="bb-arrow">
+            <span 
+              style={{ cursor: canGoBack ? 'pointer' : 'default', opacity: canGoBack ? 1 : 0.5, marginRight: '8px' }} 
+              onClick={canGoBack ? goBack : undefined}
+              title="Go Back"
+            >
+              {"<"}
+            </span>
+            <span 
+              style={{ cursor: canGoForward ? 'pointer' : 'default', opacity: canGoForward ? 1 : 0.5 }} 
+              onClick={canGoForward ? goForward : undefined}
+              title="Go Forward"
+            >
+              {">"}
+            </span>
+          </span>
+          <span 
+            className="bb-ticker" 
+            style={{ cursor: 'pointer' }}
+            onClick={() => executeCommand('RECENT')}
+            title="View Recent Commands"
+          >
+            {activeScreen} ▼
+          </span>
           <span className="bb-divider">|</span>
-          <span className="bb-menu-text">BI</span>
+          <span className="bb-menu-text">
+            {ALL_COMMANDS.find(c => c.cmd === activeScreen)?.desc || 'Global Operations'}
+          </span>
           <span className="bb-divider">|</span>
-          <span className="bb-menu-text">Related Functions Menu ▼</span>
+          <span 
+            className="bb-menu-text" 
+            style={{ cursor: 'pointer' }}
+            onClick={() => executeCommand('HELP')}
+            title="Open Help Menu"
+          >
+            Related Functions Menu ▼
+          </span>
         </div>
         <div className="bb-info-right">
-          <span className="bb-message-icon">✉ Message</span>
-          <span className="bb-help-icon">?</span>
         </div>
       </div>
 

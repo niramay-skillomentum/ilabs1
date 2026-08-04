@@ -16,7 +16,13 @@ async function fetchJson(endpoint: string) {
 
 export const bloombergApi = {
   // Security
-  searchSecurity: (q: string) => fetchJson(`/security/search?q=${encodeURIComponent(q)}`),
+  getProducts: () => fetchJson(`/security/products`),
+  getRelated: (q: string) => fetchJson(`/security/related?q=${encodeURIComponent(q)}`),
+  searchSecurity: (q: string, product?: string) => {
+    let url = `/security/search?q=${encodeURIComponent(q)}`;
+    if (product) url += `&product=${encodeURIComponent(product)}`;
+    return fetchJson(url);
+  },
   getSecurity: (id: string) => fetchJson(`/security/${encodeURIComponent(id)}`),
   
   // Entity
@@ -26,8 +32,27 @@ export const bloombergApi = {
   // Trade
   getTrade: (tradeRef: string) => fetchJson(`/trade/${encodeURIComponent(tradeRef)}`),
   getTradeHistory: (tradeRef: string) => fetchJson(`/audit/${encodeURIComponent(tradeRef)}`),
-  getAllTrades: () => fetchJson(`/trade/all`),
+  getAllTrades: (opts?: { desk?: string; assignedOnly?: boolean; statusPattern?: string }) => {
+    let url = `/trade/all`;
+    const params: string[] = [];
+    if (opts?.desk) params.push(`desk=${encodeURIComponent(opts.desk)}`);
+    if (opts?.assignedOnly) params.push(`assignedOnly=true`);
+    if (opts?.statusPattern) params.push(`statusPattern=${encodeURIComponent(opts.statusPattern)}`);
+    if (params.length) url += `?${params.join('&')}`;
+    return fetchJson(url);
+  },
   getReconciliationItems: () => fetchJson(`/reconciliation/items`),
+  getPortfolio: (opts?: { desk?: string; assignedOnly?: boolean }) => {
+    let url = `/trade/portfolio`;
+    const params: string[] = [];
+    if (opts?.desk) params.push(`desk=${encodeURIComponent(opts.desk)}`);
+    if (opts?.assignedOnly) params.push(`assignedOnly=true`);
+    if (params.length) url += `?${params.join('&')}`;
+    return fetchJson(url);
+  },
+
+  // Queue
+  getMyQueue: () => fetchJson(`/queue/my`),
 
   // SSI
   getSSI: (id: string) => fetchJson(`/ssi/${encodeURIComponent(id)}`), // assuming this endpoint exists or will adapt

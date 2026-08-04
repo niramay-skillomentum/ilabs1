@@ -5,18 +5,36 @@ export default function ConfirmationMonitorScreen({ parameter }: { parameter?: s
   const filter = parameter ? parameter.toUpperCase() : '';
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [currentDesk, setCurrentDesk] = useState<string>('');
+  const [deskChecked, setDeskChecked] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError('');
       try {
-        const res = await bloombergApi.getAllTrades();
+        let queueRes;
+        try {
+          queueRes = await bloombergApi.getMyQueue();
+        } catch (e) {
+          setError('No active desk session found. Please generate a queue first.');
+          setLoading(false);
+          return;
+        }
+
+        if (queueRes && queueRes.success && queueRes.desk) {
+          setCurrentDesk(queueRes.desk);
+        }
+        setDeskChecked(true);
+
+        const res = await bloombergApi.getAllTrades({ desk: 'CONFIRMATION', assignedOnly: true });
         if (res.success && res.trades) {
-          // Show all active trades or those relevant to confirmation
           setTrades(res.trades);
         }
       } catch (err) {
         console.error("Failed to fetch trades:", err);
+        setError('Error fetching confirmations from the server.');
       } finally {
         setLoading(false);
       }
@@ -30,11 +48,28 @@ export default function ConfirmationMonitorScreen({ parameter }: { parameter?: s
     f.currency?.includes(filter)
   ) : trades;
 
+  if (deskChecked && currentDesk && currentDesk !== 'CONFIRMATION') {
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>CONF {parameter || ''}</span></div>
+        </div>
+        <div style={{ color: 'var(--bb-alert)', fontSize: '18px', marginTop: '32px', fontWeight: 'bold' }}>
+          ACCESS DENIED
+        </div>
+        <div style={{ color: '#ff9900', marginTop: '16px', fontSize: '14px', lineHeight: '1.6' }}>
+          Currently you are logged in at the <strong>{currentDesk} Desk</strong>.<br/><br/>
+          To access this command, you must be logged in at the <strong>Confirmation Desk</strong>.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '16px' }}>
       <div className="bb-screen-header">
         <div className="bb-screen-title" style={{ marginBottom: '16px', color: '#ff9900' }}>
-          14. CONFIRMATION MONITOR (CONF)
+          CONFIRMATION MONITOR (CONF)
         </div>
         <div className="bb-command-echo" style={{ marginBottom: '16px' }}>
           Command &gt; <span>CONF {parameter || ''}</span>
@@ -45,44 +80,50 @@ export default function ConfirmationMonitorScreen({ parameter }: { parameter?: s
         <div style={{ padding: '8px 12px', fontWeight: 'bold', borderBottom: '1px solid #444', color: '#ff9900' }}>
           CONFIRMATIONS DASHBOARD
         </div>
-        <table className="bb-results-table bb-results-table-bordered">
-          <thead>
-            <tr>
-              <th>Trade ID</th>
-              <th>CPTY</th>
-              <th style={{ textAlign: 'right' }}>Amount</th>
-              <th>CCY</th>
-              <th>Status</th>
-              <th>Method</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: '16px' }}>Loading...</td></tr>
-            ) : filtered.length > 0 ? (
-              filtered.map((f, i) => (
-                <tr key={i}>
-                  <td style={{ color: 'var(--bb-text-primary)', textDecoration: 'underline', cursor: 'pointer' }}>{f.tradeRef}</td>
-                  <td>{f.counterparty}</td>
-                  <td style={{ textAlign: 'right' }}>{f.amount != null ? f.amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</td>
-                  <td>{f.currency}</td>
-                  <td style={{ 
-                    color: f.currentStatus?.includes('DISCREPANCY') || f.currentStatus?.includes('UNMATCHED') ? 'red' : 
-                           f.currentStatus?.includes('MATCHED') ? '#33cc33' : 'white',
-                    fontWeight: 'bold' 
-                  }}>{f.currentStatus}</td>
-                  <td>{f.settlementType || 'N/A'}</td>
-                  <td>{f.nextDesk || 'None'}</td>
-                </tr>
-              ))
-            ) : (
+        {error ? (
+          <div style={{ padding: '24px', color: 'var(--bb-alert)', fontSize: '14px' }}>
+            {error}
+          </div>
+        ) : (
+          <table className="bb-results-table bb-results-table-bordered">
+            <thead>
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '16px' }}>No confirmations found matching {filter}</td>
+                <th>Trade ID</th>
+                <th>CPTY</th>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+                <th>CCY</th>
+                <th>Status</th>
+                <th>Method</th>
+                <th>Action</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '16px' }}>Loading...</td></tr>
+              ) : filtered.length > 0 ? (
+                filtered.map((f, i) => (
+                  <tr key={i}>
+                    <td style={{ color: 'var(--bb-text-primary)', textDecoration: 'underline', cursor: 'pointer' }}>{f.tradeRef}</td>
+                    <td>{f.counterparty}</td>
+                    <td style={{ textAlign: 'right' }}>{f.amount != null ? f.amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</td>
+                    <td>{f.currency}</td>
+                    <td style={{ 
+                      color: f.currentStatus?.includes('DISCREPANCY') || f.currentStatus?.includes('UNMATCHED') ? 'red' : 
+                             f.currentStatus?.includes('MATCHED') ? '#33cc33' : 'white',
+                      fontWeight: 'bold' 
+                    }}>{f.currentStatus}</td>
+                    <td>{f.settlementType || 'N/A'}</td>
+                    <td>{f.nextDesk || 'None'}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px' }}>No confirmations found matching {filter}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
       <div style={{ 
           display: 'flex', 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { bloombergApi } from '../services/api';
 
 interface Props {
@@ -27,11 +27,15 @@ export default function GlobalSearchScreen({ parameter }: Props) {
   const [hasSearched, setHasSearched] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (parameter) {
       setQuery(parameter);
       performSearch(parameter);
+    } else {
+      // Auto-focus the search input when the screen loads with no parameter
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [parameter]);
 
@@ -69,15 +73,21 @@ export default function GlobalSearchScreen({ parameter }: Props) {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      if (showDropdown && filteredSuggestions.length > 0) {
-        e.preventDefault();
-        const safeIndex = Math.min(Math.max(selectedIndex, 0), filteredSuggestions.length - 1);
+      e.preventDefault();
+      // If user actively navigated suggestions with arrows, pick the suggestion
+      if (showDropdown && filteredSuggestions.length > 0 && selectedIndex > 0) {
+        const safeIndex = Math.min(selectedIndex, filteredSuggestions.length - 1);
         const selected = filteredSuggestions[safeIndex]?.keyword;
         if (selected) {
           setQuery(selected);
           performSearch(selected);
+          setShowDropdown(false);
+          return;
         }
       }
+      // Otherwise, search what the user typed
+      setShowDropdown(false);
+      performSearch(query);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIndex(prev => Math.min(prev + 1, filteredSuggestions.length - 1));
@@ -126,6 +136,7 @@ export default function GlobalSearchScreen({ parameter }: Props) {
 
         <form onSubmit={handleSearch} style={{ display: 'flex', gap: '8px', position: 'relative' }}>
           <input 
+            ref={inputRef}
             type="text" 
             className="bb-filter-input" 
             placeholder="Enter keyword (e.g., Apple, SBG, USD)..." 

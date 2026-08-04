@@ -1,63 +1,108 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { bloombergApi } from '../services/api';
 
 export default function WorkQueueScreen() {
-  const mockTasks = [
-    { id: 'TSK-1001', type: 'SSI_APPROVAL', ref: 'SSI-BNYM-EUR-8832', priority: 'HIGH', status: 'PENDING', owner: 'J. SMITH' },
-    { id: 'TSK-1002', type: 'TRADE_EXCP', ref: 'TRD0001256', priority: 'HIGH', status: 'INVESTIGATING', owner: 'ME' },
-    { id: 'TSK-1003', type: 'FEE_DISPUTE', ref: 'BRK-8923', priority: 'MEDIUM', status: 'PENDING', owner: 'A. JONES' },
-    { id: 'TSK-1004', type: 'UNMATCHED', ref: 'TRD0000912', priority: 'CRITICAL', status: 'UNASSIGNED', owner: '' },
-    { id: 'TSK-1005', type: 'SWIFT_NACK', ref: 'MSG-339210', priority: 'HIGH', status: 'PENDING', owner: 'ME' },
-  ];
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [desk, setDesk] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchQueue = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await bloombergApi.getMyQueue();
+        if (res.success) {
+          setTasks(res.trades || []);
+          setDesk(res.desk || '');
+        } else {
+          setError(res.error || 'No active queue found. Please generate a queue for your desk.');
+        }
+      } catch (err: any) {
+        setError('No active queue found. Please generate a queue for your desk.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQueue();
+  }, []);
 
   return (
     <div style={{ padding: '16px' }}>
       <div className="bb-screen-header">
-        <div className="bb-command-echo">Command &gt; <span>QUEUE</span></div>
-      </div>
-      
-      <div className="bb-screen-title" style={{ marginBottom: '16px' }}>
-        OPERATIONS WORK QUEUE
+        <div className="bb-screen-title" style={{ marginBottom: '16px', color: '#ff9900' }}>
+          OPERATIONS WORK QUEUE
+        </div>
+        <div className="bb-command-echo" style={{ marginBottom: '16px' }}>
+          Command &gt; <span>QUEUE</span>
+        </div>
       </div>
 
-      <div className="bb-panel" style={{ padding: 0 }}>
-        <table className="bb-results-table">
-          <thead>
-            <tr>
-              <th>Task ID</th>
-              <th>Task Type</th>
-              <th>Reference</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Owner</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockTasks.map((t, i) => (
-              <tr key={i}>
-                <td style={{ color: 'var(--bb-text-primary)' }}>{t.id}</td>
-                <td>{t.type}</td>
-                <td style={{ textDecoration: 'underline', cursor: 'pointer' }}>{t.ref}</td>
-                <td style={{ 
-                  color: t.priority === 'CRITICAL' ? 'red' : t.priority === 'HIGH' ? 'var(--bb-text-primary)' : 'var(--bb-text-tertiary)',
-                  fontWeight: t.priority === 'CRITICAL' ? 'bold' : 'normal'
-                }}>
-                  {t.priority}
-                </td>
-                <td>{t.status}</td>
-                <td style={{ color: t.owner === 'ME' ? 'var(--bb-text-primary)' : 'inherit', fontWeight: t.owner === 'ME' ? 'bold' : 'normal' }}>
-                  {t.owner || '-'}
-                </td>
-                <td>
-                  <button className="bb-btn-outline" style={{ padding: '2px 8px', fontSize: '11px' }}>
-                    {t.owner === 'ME' ? 'WORK' : 'CLAIM'}
-                  </button>
-                </td>
+      {desk && (
+        <div style={{ marginBottom: '16px', fontSize: '13px', color: '#00ccff' }}>
+          Active Session: <span style={{ fontWeight: 'bold', color: '#ff9900' }}>{desk}</span>
+        </div>
+      )}
+
+      {loading && <div style={{ padding: '16px', color: 'var(--bb-text-secondary)' }}>Loading your queue...</div>}
+      {error && <div style={{ padding: '16px', color: 'var(--bb-alert)' }}>{error}</div>}
+
+      {!loading && !error && (
+        <div className="bb-panel" style={{ padding: 0 }}>
+          <table className="bb-results-table bb-results-table-bordered">
+            <thead style={{ backgroundColor: '#111' }}>
+              <tr>
+                <th>Trade Ref</th>
+                <th>Status</th>
+                <th>Counterparty</th>
+                <th>Direction</th>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+                <th>CCY</th>
+                <th>Owner</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {tasks.length > 0 ? (
+                tasks.map((t, i) => (
+                  <tr key={i}>
+                    <td style={{ color: 'var(--bb-text-primary)', textDecoration: 'underline', cursor: 'pointer' }}>{t.tradeRef}</td>
+                    <td>{t.currentStatus || 'PENDING'}</td>
+                    <td>{t.counterparty || 'N/A'}</td>
+                    <td>{t.direction || 'BUY'}</td>
+                    <td style={{ textAlign: 'right' }}>{t.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td>{t.currency || 'USD'}</td>
+                    <td style={{ color: 'var(--bb-text-primary)', fontWeight: 'bold' }}>
+                      ME
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px', color: '#888' }}>
+                    Your queue is currently empty.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      
+      {!loading && !error && (
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          marginTop: '32px', 
+          paddingTop: '8px', 
+          borderTop: '1px solid #444',
+          fontSize: '12px', 
+          color: '#888' 
+        }}>
+          <div style={{ color: '#00ccff', fontWeight: 'bold' }}>MSG: Queue loaded ({tasks.length} items)</div>
+          <div>Server: SGB-OPS-01 &nbsp;&nbsp;&nbsp; ENV: UAT</div>
+        </div>
+      )}
     </div>
   );
 }

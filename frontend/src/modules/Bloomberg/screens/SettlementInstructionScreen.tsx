@@ -37,7 +37,16 @@ export default function SettlementInstructionScreen({ parameter, command }: Prop
   }, [parameter]);
 
   if (!parameter) {
-    return <div style={{ padding: '24px' }}>Please specify an SSI identifier (e.g. SSI HSBC).</div>;
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>SSI</span></div>
+        </div>
+        <div style={{ padding: '32px', color: 'var(--bb-alert)', fontSize: '16px', textAlign: 'center' }}>
+          Please specify an SSI identifier (e.g. SSI HSBC).
+        </div>
+      </div>
+    );
   }
 
   if (loading) return <div style={{ padding: '24px' }}>Loading {parameter}...</div>;

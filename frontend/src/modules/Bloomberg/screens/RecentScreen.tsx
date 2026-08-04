@@ -27,19 +27,9 @@ export default function RecentScreen({ parameter }: { parameter: string | null }
         </div>
       </div>
 
-      {/* Imitating the Bloomberg header tabs from the screenshot */}
+      {/* Header tabs showing only the active recent session */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', borderBottom: '1px solid var(--bb-border)', paddingBottom: '8px' }}>
         <span style={{ color: 'var(--bb-orange)', fontWeight: 'bold' }}>RECENT</span>
-        <span style={{ color: 'var(--bb-text-secondary)' }}>|</span>
-        <span style={{ color: 'var(--bb-text-primary)' }}>Utility</span>
-        <span style={{ color: 'var(--bb-text-secondary)' }}>|</span>
-        <span style={{ color: 'var(--bb-text-primary)' }}>Recent Searches</span>
-        <span style={{ color: 'var(--bb-text-secondary)' }}>|</span>
-        <span style={{ color: 'var(--bb-text-primary)' }}>History</span>
-        <span style={{ color: 'var(--bb-text-secondary)' }}>|</span>
-        <span style={{ color: 'var(--bb-text-primary)' }}>Productivity</span>
-        <span style={{ color: 'var(--bb-text-secondary)' }}>|</span>
-        <span style={{ color: 'var(--bb-text-primary)' }}>Internal</span>
       </div>
 
       <table className="bb-results-table bb-results-table-bordered">

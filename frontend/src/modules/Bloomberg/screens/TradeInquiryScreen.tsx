@@ -11,7 +11,8 @@ interface Props {
 export default function TradeInquiryScreen({ parameter, startTab }: Props) {
   let initialTab = 1;
   if (startTab) {
-    if (startTab === 'LIFE' || startTab === 'HIST') initialTab = 4;
+    if (startTab === 'LIFE') initialTab = 4;
+    if (startTab === 'HIST') initialTab = 6;
     if (startTab === 'SETTLE' || startTab === 'CONF') initialTab = 3;
   }
 
@@ -22,13 +23,66 @@ export default function TradeInquiryScreen({ parameter, startTab }: Props) {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(initialTab);
 
+  const [allTrades, setAllTrades] = useState<any[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [allError, setAllError] = useState('');
+  
+  const [currentDesk, setCurrentDesk] = useState<string>('');
+
   useEffect(() => {
-    if (startTab === 'LIFE' || startTab === 'HIST') setActiveTab(4);
+    if (startTab === 'LIFE') setActiveTab(4);
+    else if (startTab === 'HIST') setActiveTab(6);
     else if (startTab === 'SETTLE' || startTab === 'CONF') setActiveTab(3);
     else setActiveTab(1);
   }, [startTab]);
+
   useEffect(() => {
-    if (!parameter) return;
+    // Determine active desk for access control
+    let localDesk = '';
+    bloombergApi.getMyQueue().then(res => {
+      if (res.success && res.desk) {
+        localDesk = res.desk;
+        setCurrentDesk(res.desk);
+      }
+    }).catch(console.error);
+
+    if (!parameter) {
+      if (startTab === 'LIFE' || startTab === 'HIST') return; // Handled below
+
+      const fetchAllTrades = async () => {
+        setLoadingAll(true);
+        setAllError('');
+        try {
+          // Ensure we have desk before querying. 
+          // getMyQueue throws if no queue is active (400 response).
+          let activeDesk;
+          try {
+            const queueRes = await bloombergApi.getMyQueue();
+            activeDesk = queueRes.success ? queueRes.desk : undefined;
+          } catch (e) {
+            // No active queue
+            setAllError('No active desk session found. Please generate a queue first.');
+            setLoadingAll(false);
+            return;
+          }
+          
+          if (activeDesk) setCurrentDesk(activeDesk);
+          
+          const res = await bloombergApi.getAllTrades({ desk: activeDesk });
+          if (res.success && res.trades) {
+            setAllTrades(res.trades);
+          } else {
+            setAllError('Failed to load trades from the backend.');
+          }
+        } catch (err) {
+          setAllError('Error fetching trades. The server may be unreachable.');
+        } finally {
+          setLoadingAll(false);
+        }
+      };
+      fetchAllTrades();
+      return;
+    }
 
     const fetchData = async () => {
       setLoading(true);
@@ -59,10 +113,126 @@ export default function TradeInquiryScreen({ parameter, startTab }: Props) {
     };
 
     fetchData();
-  }, [parameter]);
+  }, [parameter, startTab]);
+
+  if (startTab === 'SETTLE' && currentDesk && currentDesk !== 'SETTLEMENT') {
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>{startTab} {parameter || ''}</span></div>
+        </div>
+        <div style={{ color: 'var(--bb-alert)', fontSize: '18px', marginTop: '32px', fontWeight: 'bold' }}>
+          ACCESS DENIED
+        </div>
+        <div style={{ color: '#ff9900', marginTop: '16px', fontSize: '14px', lineHeight: '1.6' }}>
+          Currently you are logged in at the <strong>{currentDesk} Desk</strong>.<br/><br/>
+          To access this command, you must be logged in at the <strong>Settlement Desk</strong>.
+        </div>
+      </div>
+    );
+  }
+
+  if (!parameter && (startTab === 'LIFE' || startTab === 'HIST')) {
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>{startTab}</span></div>
+        </div>
+        <div style={{ padding: '32px', color: 'var(--bb-alert)', fontSize: '16px', textAlign: 'center' }}>
+          Please specify a Trade ID (e.g. {startTab} TRD0001256).
+        </div>
+      </div>
+    );
+  }
 
   if (!parameter) {
-    return <div style={{ padding: '24px' }}>Please specify a Trade ID (e.g. TRD TRD0001256).</div>;
+    if (loadingAll) return <div style={{ padding: '24px' }}>Loading trades...</div>;
+    if (allError) return <div style={{ padding: '24px', color: 'var(--bb-alert)' }}>{allError}</div>;
+    
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>{startTab || 'TRADE'}</span></div>
+        </div>
+        <div className="bb-screen-title" style={{ marginBottom: '16px' }}>
+          TRADE BLOTTER
+        </div>
+        <div className="bb-panel" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="bb-results-table bb-results-table-bordered">
+            <thead>
+              <tr>
+                <th>Select</th>
+                <th>Trade Ref</th>
+                <th>Status</th>
+                <th>Next Desk</th>
+                <th>Age</th>
+                <th>Trade Date</th>
+                <th>Value Date</th>
+                <th>CP Group</th>
+                <th>Counterparty</th>
+                <th>Entity</th>
+                <th>Region</th>
+                <th>Product</th>
+                <th>Product Type</th>
+                <th>Trade Type</th>
+                <th>Underlyer</th>
+                <th>Settlement Mode</th>
+                <th>Direction</th>
+                <th>Currency</th>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allTrades.map((t, i) => {
+                const tDate = t.tradeDate ? new Date(t.tradeDate) : new Date();
+                const vDate = t.valueDate ? new Date(t.valueDate) : null;
+                const pad = (n: number) => n.toString().padStart(2, '0');
+                const tDateStr = `${tDate.getFullYear()}-${pad(tDate.getMonth()+1)}-${pad(tDate.getDate())}`;
+                const vDateStr = vDate ? `${vDate.getFullYear()}-${pad(vDate.getMonth()+1)}-${pad(vDate.getDate())}` : 'N/A';
+                
+                const ageDays = Math.floor((new Date().getTime() - tDate.getTime()) / (1000 * 3600 * 24));
+                
+                let nextDesk = 'N/A';
+                if (t.status.includes('CONFIRMATION')) nextDesk = 'CONFIRMATION';
+                else if (t.status.includes('SETTLEMENT') || t.status.includes('AMEND') || t.status.includes('APPROVAL')) nextDesk = 'SETTLEMENT';
+                else if (t.status.includes('MO_')) nextDesk = 'MIDDLE OFFICE';
+                else if (t.status === 'NEW' || t.status === 'PENDING_FO_RESPONSE') nextDesk = 'FRONT OFFICE';
+                else if (t.status.includes('RECON_') || t.status === 'UNMATCHED_BY_USER') nextDesk = 'RECONCILIATION';
+
+                return (
+                  <tr key={i}>
+                    <td></td>
+                    <td style={{ color: 'var(--bb-text-primary)' }}>{t.tradeRef}</td>
+                    <td>{t.status}</td>
+                    <td>{nextDesk}</td>
+                    <td>{ageDays > 0 ? ageDays : 0}</td>
+                    <td>{tDateStr}</td>
+                    <td>{vDateStr}</td>
+                    <td>{t.counterparty || 'N/A'}</td>
+                    <td>{t.counterparty || 'N/A'}</td>
+                    <td>{t.entity || 'N/A'}</td>
+                    <td>AMER</td>
+                    <td>Fixed Income</td>
+                    <td>Treasury Note</td>
+                    <td>{t.tradeType || 'N/A'}</td>
+                    <td>{t.currency || 'USD'}</td>
+                    <td>ELECTRONIC</td>
+                    <td>{t.direction || 'BUY'}</td>
+                    <td>{t.currency || 'USD'}</td>
+                    <td style={{ textAlign: 'right' }}>{t.amount?.toLocaleString(undefined, {minimumFractionDigits: 0})}</td>
+                  </tr>
+                );
+              })}
+              {allTrades.length === 0 && (
+                <tr>
+                  <td colSpan={19} style={{ textAlign: 'center', padding: '16px' }}>No trades found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   if (loading) return <div style={{ padding: '24px' }}>Loading {parameter}...</div>;
@@ -150,7 +320,7 @@ export default function TradeInquiryScreen({ parameter, startTab }: Props) {
       {startTab === 'SETTLE' && (
         <>
           <div className="bb-screen-title" style={{ marginBottom: '16px', color: '#ff9900' }}>
-            12. SETTLEMENT SCREEN (SETTLE)
+            SETTLEMENT SCREEN (SETTLE)
           </div>
           <div className="bb-command-echo" style={{ marginBottom: '16px' }}>
             Command &gt; <span>SETTLE {parameter || ''}</span>
@@ -165,195 +335,242 @@ export default function TradeInquiryScreen({ parameter, startTab }: Props) {
         </div>
       )}
 
-      {(!startTab || startTab === 'TRADE') && (
-        <div className="bb-subnav">
-          <div className={`bb-subnav-item ${activeTab === 1 ? 'active' : ''}`} onClick={() => setActiveTab(1)}>
-            <span className="num">1)</span> Trade Details
-          </div>
-          <div className={`bb-subnav-item ${activeTab === 2 ? 'active' : ''}`} onClick={() => setActiveTab(2)}>
-            <span className="num">2)</span> Parties
-          </div>
-          <div className={`bb-subnav-item ${activeTab === 3 ? 'active' : ''}`} onClick={() => setActiveTab(3)}>
-            <span className="num">3)</span> Settlement
-          </div>
-          <div className={`bb-subnav-item ${activeTab === 4 ? 'active' : ''}`} onClick={() => setActiveTab(4)}>
-            <span className="num">4)</span> Lifecycle
-          </div>
-          <div className={`bb-subnav-item ${activeTab === 5 ? 'active' : ''}`} onClick={() => setActiveTab(5)}>
-            <span className="num">5)</span> SWIFT
-          </div>
-        </div>
-      )}
-
-      {activeTab === 1 && (
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <div style={{ flex: 1 }}>
-            <table className="bb-results-table bb-results-table-bordered">
-              <tbody>
-                <tr><td className="bb-field-label">Security</td><td className="bb-field-value">{data.underlyer || 'N/A'}</td></tr>
-                <tr><td className="bb-field-label">Trade Value</td><td className="bb-field-value">{data.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})} {data.currency}</td></tr>
-                <tr><td className="bb-field-label">Trade Date</td><td className="bb-field-value">{tDateStr}</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div style={{ flex: 1 }}>
-            <table className="bb-results-table bb-results-table-bordered">
-              <tbody>
-                <tr><td className="bb-field-label">Settlement Date</td><td className="bb-field-value">{sDateStr}</td></tr>
-                <tr><td className="bb-field-label">Currency</td><td className="bb-field-value">{data.currency}</td></tr>
-                <tr><td className="bb-field-label">Settlement Method</td><td className="bb-field-value">{data.settlementType || 'N/A'}</td></tr>
-                <tr><td className="bb-field-label">Created By</td><td className="bb-field-value">{data.originType || (data.isAutoGenerated ? 'AUTO_GENERATED' : 'SYSTEM')}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 2 && (
-        <div style={{ display: 'flex', gap: '24px' }}>
-          <div style={{ flex: 1 }}>
-            <table className="bb-results-table bb-results-table-bordered">
-              <tbody>
-                <tr><td className="bb-field-label">Counterparty</td><td className="bb-field-value">{data.counterparty}</td></tr>
-                <tr><td className="bb-field-label">Counterparty Group</td><td className="bb-field-value">{data.counterpartyGroup || 'N/A'}</td></tr>
-                <tr><td className="bb-field-label">Entity</td><td className="bb-field-value">{data.entity}</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div style={{ flex: 1 }}>
-            <table className="bb-results-table bb-results-table-bordered">
-              <tbody>
-                <tr><td className="bb-field-label">Direction</td><td className="bb-field-value">{data.direction}</td></tr>
-                <tr><td className="bb-field-label">Product / Type</td><td className="bb-field-value">{data.product} / {data.productType}</td></tr>
-                <tr><td className="bb-field-label">Trade Type</td><td className="bb-field-value">{data.tradeType}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 3 && (
-        <div className="bb-data-grid bb-data-grid-2col">
-          <div>
-             <table className="bb-results-table bb-results-table-bordered">
-              <tbody>
-                <tr><td className="bb-field-label">Trade ID</td><td className="bb-field-value">{data.tradeRef || parameter.toUpperCase()}</td></tr>
-                <tr><td className="bb-field-label">Settlement Date</td><td className="bb-field-value">{sDateStr}</td></tr>
-                <tr><td className="bb-field-label">Settlement Status</td><td className="bb-field-value">{data.currentStatus}</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div>
-            <table className="bb-results-table bb-results-table-bordered">
-              <tbody>
-                <tr><td colSpan={2} style={{ color: '#00ccff', paddingBottom: '8px' }}>Cash Movement</td></tr>
-                <tr>
-                  <td className="bb-field-label">Debit</td>
-                  <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'BUY' ? `${data.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})} ${data.currency}` : '-'}</td>
-                </tr>
-                <tr>
-                  <td className="bb-field-label">Credit</td>
-                  <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'SELL' ? `${data.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})} ${data.currency}` : '-'}</td>
-                </tr>
-                
-                <tr><td colSpan={2} style={{ color: '#00ccff', paddingBottom: '8px', paddingTop: '16px' }}>Security Movement</td></tr>
-                <tr>
-                  <td className="bb-field-label">Debit</td>
-                  <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'SELL' ? `${data.underlyer || 'N/A'}` : '-'}</td>
-                </tr>
-                <tr>
-                  <td className="bb-field-label">Credit</td>
-                  <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'BUY' ? `${data.underlyer || 'N/A'}` : '-'}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 4 && (
-        <div style={{ padding: '8px 16px' }}>
-          
-          <div style={{ position: 'relative', margin: '48px 24px 24px 24px' }}>
-            <div style={{ position: 'absolute', top: '16px', left: '50px', right: '50px', height: '2px', display: 'flex', zIndex: 1 }}>
-              <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 1 ? '#33cc33' : '#333' }}></div>
-              <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 2 ? '#33cc33' : '#333' }}></div>
-              <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 3 ? '#33cc33' : '#333' }}></div>
-              <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 4 ? '#33cc33' : '#333' }}></div>
+      {(!startTab || startTab === 'TRADE' || startTab === 'TRD' || activeTab === 1) && (
+        <div style={{ marginBottom: (!startTab || startTab === 'TRADE' || startTab === 'TRD') ? '32px' : '0' }}>
+          {(!startTab || startTab === 'TRADE' || startTab === 'TRD') && <div className="bb-screen-title" style={{ color: '#00ccff', borderBottom: '1px solid #333', paddingBottom: '8px', marginBottom: '16px', fontSize: '14px' }}>1) TRADE DETAILS</div>}
+          <div style={{ display: 'flex', gap: '24px' }}>
+            <div style={{ flex: 1 }}>
+              <table className="bb-results-table bb-results-table-bordered">
+                <tbody>
+                  <tr><td className="bb-field-label">Security</td><td className="bb-field-value">{data.underlyer || 'N/A'}</td></tr>
+                  <tr><td className="bb-field-label">Trade Value</td><td className="bb-field-value">{data.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})} {data.currency}</td></tr>
+                  <tr><td className="bb-field-label">Trade Date</td><td className="bb-field-value">{tDateStr}</td></tr>
+                </tbody>
+              </table>
             </div>
+            <div style={{ flex: 1 }}>
+              <table className="bb-results-table bb-results-table-bordered">
+                <tbody>
+                  <tr><td className="bb-field-label">Settlement Date</td><td className="bb-field-value">{sDateStr}</td></tr>
+                  <tr><td className="bb-field-label">Currency</td><td className="bb-field-value">{data.currency}</td></tr>
+                  <tr><td className="bb-field-label">Settlement Method</td><td className="bb-field-value">{data.settlementType || 'N/A'}</td></tr>
+                  <tr><td className="bb-field-label">Created By</td><td className="bb-field-value">{data.originType || (data.isAutoGenerated ? 'AUTO_GENERATED' : 'SYSTEM')}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(!startTab || startTab === 'TRADE' || startTab === 'TRD' || activeTab === 2) && (
+        <div style={{ marginBottom: (!startTab || startTab === 'TRADE' || startTab === 'TRD') ? '32px' : '0' }}>
+          {(!startTab || startTab === 'TRADE' || startTab === 'TRD') && <div className="bb-screen-title" style={{ color: '#00ccff', borderBottom: '1px solid #333', paddingBottom: '8px', marginBottom: '16px', fontSize: '14px' }}>2) PARTIES</div>}
+          <div style={{ display: 'flex', gap: '24px' }}>
+            <div style={{ flex: 1 }}>
+              <table className="bb-results-table bb-results-table-bordered">
+                <tbody>
+                  <tr><td className="bb-field-label">Counterparty</td><td className="bb-field-value">{data.counterparty}</td></tr>
+                  <tr><td className="bb-field-label">Counterparty Group</td><td className="bb-field-value">{data.counterpartyGroup || 'N/A'}</td></tr>
+                  <tr><td className="bb-field-label">Entity</td><td className="bb-field-value">{data.entity}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style={{ flex: 1 }}>
+              <table className="bb-results-table bb-results-table-bordered">
+                <tbody>
+                  <tr><td className="bb-field-label">Direction</td><td className="bb-field-value">{data.direction}</td></tr>
+                  <tr><td className="bb-field-label">Product / Type</td><td className="bb-field-value">{data.product} / {data.productType}</td></tr>
+                  <tr><td className="bb-field-label">Trade Type</td><td className="bb-field-value">{data.tradeType}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(activeTab === 3) && (
+        <div style={{ marginBottom: '0' }}>
+          <div className="bb-data-grid bb-data-grid-2col">
+            <div>
+               <table className="bb-results-table bb-results-table-bordered">
+                <tbody>
+                  <tr><td className="bb-field-label">Trade ID</td><td className="bb-field-value">{data.tradeRef || parameter.toUpperCase()}</td></tr>
+                  <tr><td className="bb-field-label">Settlement Date</td><td className="bb-field-value">{sDateStr}</td></tr>
+                  <tr><td className="bb-field-label">Settlement Status</td><td className="bb-field-value">{data.currentStatus}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <table className="bb-results-table bb-results-table-bordered">
+                <tbody>
+                  <tr><td colSpan={2} style={{ color: '#00ccff', paddingBottom: '8px' }}>Cash Movement</td></tr>
+                  <tr>
+                    <td className="bb-field-label">Debit</td>
+                    <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'BUY' ? `${data.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})} ${data.currency}` : '-'}</td>
+                  </tr>
+                  <tr>
+                    <td className="bb-field-label">Credit</td>
+                    <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'SELL' ? `${data.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})} ${data.currency}` : '-'}</td>
+                  </tr>
+                  
+                  <tr><td colSpan={2} style={{ color: '#00ccff', paddingBottom: '8px', paddingTop: '16px' }}>Security Movement</td></tr>
+                  <tr>
+                    <td className="bb-field-label">Debit</td>
+                    <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'SELL' ? `${data.underlyer || 'N/A'}` : '-'}</td>
+                  </tr>
+                  <tr>
+                    <td className="bb-field-label">Credit</td>
+                    <td className="bb-field-value" style={{textAlign: 'right'}}>{data.direction === 'BUY' ? `${data.underlyer || 'N/A'}` : '-'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(activeTab === 4) && (
+        <div style={{ marginBottom: '0' }}>
+          <div style={{ padding: '8px 16px' }}>
             
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              {renderNode(1, 'Booked', tDateStr, getLogicalStage(data?.currentStatus))}
-              {renderNode(2, 'Confirmed', getLogicalStage(data?.currentStatus) >= 2 ? tDateStr.split(' ')[0] : '--:--', getLogicalStage(data?.currentStatus))}
-              {renderNode(3, 'Matched', getLogicalStage(data?.currentStatus) >= 3 ? tDateStr : '--:--', getLogicalStage(data?.currentStatus))}
-              {renderNode(4, 'Settled', getLogicalStage(data?.currentStatus) >= 4 ? sDateStr : '--:--', getLogicalStage(data?.currentStatus))}
-              {renderNode(5, 'Closed', getLogicalStage(data?.currentStatus) >= 5 ? sDateStr : '--:--', getLogicalStage(data?.currentStatus))}
+            <div style={{ position: 'relative', margin: '48px 24px 24px 24px' }}>
+              <div style={{ position: 'absolute', top: '16px', left: '50px', right: '50px', height: '2px', display: 'flex', zIndex: 1 }}>
+                <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 1 ? '#33cc33' : '#333' }}></div>
+                <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 2 ? '#33cc33' : '#333' }}></div>
+                <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 3 ? '#33cc33' : '#333' }}></div>
+                <div style={{ flex: 1, backgroundColor: getLogicalStage(data?.currentStatus) > 4 ? '#33cc33' : '#333' }}></div>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                {renderNode(1, 'Booked', tDateStr, getLogicalStage(data?.currentStatus))}
+                {renderNode(2, 'Confirmed', getLogicalStage(data?.currentStatus) >= 2 ? tDateStr.split(' ')[0] : '--:--', getLogicalStage(data?.currentStatus))}
+                {renderNode(3, 'Matched', getLogicalStage(data?.currentStatus) >= 3 ? tDateStr : '--:--', getLogicalStage(data?.currentStatus))}
+                {renderNode(4, 'Settled', getLogicalStage(data?.currentStatus) >= 4 ? sDateStr : '--:--', getLogicalStage(data?.currentStatus))}
+                {renderNode(5, 'Closed', getLogicalStage(data?.currentStatus) >= 5 ? sDateStr : '--:--', getLogicalStage(data?.currentStatus))}
+              </div>
             </div>
-          </div>
 
-          <div style={{ 
-            display: 'flex', 
-            border: '1px solid #333', 
-            backgroundColor: '#0a0a0a', 
-            marginTop: '64px',
-            padding: '16px'
-          }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #333' }}>
-              <span style={{ color: '#aaa', marginRight: '16px' }}>Current Stage</span>
-              <span style={{ color: '#ff9900', fontWeight: 'bold' }}>{data.currentStatus || 'UNKNOWN'}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: '16px', textAlign: 'center' }}>
-              <span style={{ color: '#aaa', marginRight: '16px' }}>Allowed Next Stages</span>
-              <span style={{ color: '#fff' }}>{allowedTransitions.length > 0 ? allowedTransitions.join(', ') : 'None'}</span>
+            <div style={{ 
+              display: 'flex', 
+              border: '1px solid #333', 
+              backgroundColor: '#0a0a0a', 
+              marginTop: '64px',
+              padding: '16px'
+            }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #333' }}>
+                <span style={{ color: '#aaa', marginRight: '16px' }}>Current Stage</span>
+                <span style={{ color: '#ff9900', fontWeight: 'bold' }}>{data.currentStatus || 'UNKNOWN'}</span>
+              </div>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: '16px', textAlign: 'center' }}>
+                <span style={{ color: '#aaa', marginRight: '16px' }}>Allowed Next Stages</span>
+                <span style={{ color: '#fff' }}>{allowedTransitions.length > 0 ? allowedTransitions.join(', ') : 'None'}</span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {startTab === 'HIST' && (
-        <div style={{ marginTop: '16px' }}>
-          <table className="bb-results-table bb-results-table-bordered">
-            <thead>
-              <tr>
-                <th>Date / Time</th>
-                <th>Action</th>
-                <th>Desk</th>
-                <th>User</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historyData.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '16px' }}>No lifecycle history found.</td></tr>
-              ) : (
-                historyData.map((item, idx) => {
-                  const d = new Date(item.timestamp);
-                  const dateStr = `${d.getDate().toString().padStart(2, '0')}-${d.toLocaleString('default', { month: 'short' })}-${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-                  return (
-                    <tr key={idx}>
-                      <td>{dateStr}</td>
-                      <td>{item.action}</td>
-                      <td>{item.desk || 'SYSTEM'}</td>
-                      <td>{item.userId || 'SYSTEM'}</td>
-                      <td>{item.details}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {startTab === 'HIST' && (() => {
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        xml += `<AuditTrail tradeRef="${data.tradeRef || parameter?.toUpperCase()}" generatedAt="${new Date().toISOString()}">\n`;
+        xml += `  <TradeInfo>\n`;
+        xml += `    <TradeRef>${data.tradeRef || parameter?.toUpperCase()}</TradeRef>\n`;
+        xml += `    <Product>${data.product || 'N/A'}</Product>\n`;
+        xml += `    <ProductType>${data.productType || 'N/A'}</ProductType>\n`;
+        xml += `    <TradeType>${data.tradeType || 'N/A'}</TradeType>\n`;
+        xml += `    <Underlyer>${data.underlyer || 'N/A'}</Underlyer>\n`;
+        xml += `    <Direction>${data.direction || 'BUY'}</Direction>\n`;
+        xml += `    <Currency>${data.currency || 'USD'}</Currency>\n`;
+        xml += `    <Amount>${data.amount || 0}</Amount>\n`;
+        xml += `    <Counterparty>${data.counterparty || 'N/A'}</Counterparty>\n`;
+        xml += `    <Entity>${data.entity || 'N/A'}</Entity>\n`;
+        xml += `    <TradeDate>${data.tradeDate || new Date().toISOString()}</TradeDate>\n`;
+        xml += `    <ValueDate>${data.valueDate || data.settlementDate || new Date().toISOString()}</ValueDate>\n`;
+        xml += `    <CurrentStatus>${data.currentStatus || 'UNKNOWN'}</CurrentStatus>\n`;
+        xml += `  </TradeInfo>\n`;
+        xml += `  <Events>\n`;
+        historyData.forEach((item, idx) => {
+          xml += `    <Event>\n`;
+          xml += `      <EventId>EVT_${data.tradeRef || parameter?.toUpperCase()}_${(idx + 1).toString().padStart(3, '0')}</EventId>\n`;
+          xml += `      <Timestamp>${new Date(item.timestamp).toISOString()}</Timestamp>\n`;
+          xml += `      <Actor>${item.userId || item.desk || 'SYSTEM'}</Actor>\n`;
+          xml += `      <Action>${item.action}</Action>\n`;
+          xml += `      <Details>${item.details}</Details>\n`;
+          
+          let resultingStatus = item.action;
+          if (item.action.includes('CAPTURED')) resultingStatus = 'NEW';
+          else if (item.action.includes('VALIDATED') && item.desk === 'COMPLIANCE') resultingStatus = 'COMPLIANCE_CLEARED';
+          else if (item.action.includes('ASSESSED') && item.desk === 'RISK') resultingStatus = 'RISK_CLEARED';
+          else if (item.action.includes('VALIDATED')) resultingStatus = 'BOOKING_VALIDATED';
+          else if (item.action.includes('ROUTED')) resultingStatus = 'MO_PENDING';
+          
+          xml += `      <ResultingStatus>${resultingStatus}</ResultingStatus>\n`;
+          xml += `    </Event>\n`;
+        });
+        xml += `  </Events>\n`;
+        xml += `</AuditTrail>`;
+
+        return (
+          <div style={{ marginTop: '16px', backgroundColor: '#f8f9fa', color: '#333', padding: '16px', borderRadius: '4px', fontFamily: 'Arial, sans-serif' }}>
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 'normal', color: '#1f2937' }}>Audit Trail</h2>
+            <div style={{ 
+              backgroundColor: '#1e293b', 
+              padding: '16px', 
+              color: '#e2e8f0', 
+              fontFamily: 'Consolas, monospace', 
+              whiteSpace: 'pre-wrap', 
+              overflowX: 'auto', 
+              fontSize: '13px',
+              lineHeight: '1.4',
+              borderRadius: '4px',
+              maxHeight: '250px',
+              overflowY: 'auto',
+              marginBottom: '24px'
+            }}>
+              {xml}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {historyData.map((item, idx) => {
+                const d = new Date(item.timestamp);
+                const dateStr = `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}, ${d.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit', second:'2-digit'})}`;
+                return (
+                  <div key={idx} style={{ 
+                    borderLeft: '4px solid #3b82f6', 
+                    paddingLeft: '12px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '4px' 
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                      <span>{item.userId || item.desk || 'system@skillomentum.com'}</span>
+                      <span>{dateStr}</span>
+                    </div>
+                    <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#0f172a', marginTop: '2px' }}>{item.action}</div>
+                    <div style={{ fontSize: '13px', color: '#475569' }}>{item.details}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: '32px', textAlign: 'left', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <span style={{ cursor: 'pointer', color: '#1f2937', fontSize: '14px' }}>Close</span>
+            </div>
+          </div>
+        );
+      })()}
 
 
 
       {(activeTab === 5) && (
-        <div style={{ color: '#666', fontStyle: 'italic', padding: '24px' }}>
-          This sub-view is not currently populated with trade data. Please return to 1) Trade Details.
+        <div style={{ marginBottom: '0' }}>
+          <div style={{ color: '#666', fontStyle: 'italic', padding: '24px' }}>
+            This section is not currently populated with trade data. 
+          </div>
         </div>
       )}
 
-      {(!startTab || startTab === 'TRADE') && (
+      {(!startTab || startTab === 'TRADE' || startTab === 'TRD') && (
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 

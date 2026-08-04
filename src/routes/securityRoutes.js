@@ -5,6 +5,68 @@ const Security = require("../models/Security");
 // Search securities
 router.get("/search", async (req, res) => {
   try {
+    const { q, product } = req.query;
+    
+    let query = {};
+    
+    if (q) {
+      const regex = new RegExp(q, "i");
+      query = {
+        $or: [
+          { companyName: regex },
+          { isin: regex },
+          { underlyer: regex },
+          { securityDescription: regex }
+        ]
+      };
+    }
+    
+    if (product) {
+      query.product = product;
+    }
+
+    if (Object.keys(query).length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Search by companyName, isin, underlyer, or securityDescription
+    const securities = await Security.find(query).limit(100).lean();
+
+    res.json({ success: true, data: securities });
+  } catch (error) {
+    console.error("Error searching securities:", error);
+    res.status(500).json({ success: false, error: "Failed to search securities" });
+  }
+});
+
+const tradeGenerator = require("../engine/tradeGenerator");
+
+// Get product taxonomy
+router.get("/products", async (req, res) => {
+  try {
+    const taxonomy = tradeGenerator.PRODUCT_TAXONOMY;
+    const products = [];
+    for (const [product, details] of Object.entries(taxonomy)) {
+      for (const productType of details.productTypes) {
+        products.push({
+          product,
+          productType,
+          tradeType: details.tradeTypeMap[productType]
+        });
+      }
+    }
+    res.json({ success: true, data: products });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch products" });
+  }
+});
+
+const Entity = require("../models/Entity");
+
+// Get related entities & assets
+router.get("/related", async (req, res) => {
+  try {
     const { q } = req.query;
     if (!q) {
       return res.json({ success: true, data: [] });
@@ -12,20 +74,37 @@ router.get("/search", async (req, res) => {
 
     const regex = new RegExp(q, "i");
     
-    // Search by companyName, isin, underlyer, or securityDescription
-    const securities = await Security.find({
-      $or: [
-        { companyName: regex },
-        { isin: regex },
-        { underlyer: regex },
-        { securityDescription: regex }
-      ]
-    }).limit(20).lean();
+    const [entities, securities] = await Promise.all([
+      Entity.find({
+        $or: [{ entityName: regex }, { entityCode: regex }]
+      }).limit(10).lean(),
+      Security.find({
+        $or: [{ companyName: regex }, { isin: regex }, { underlyer: regex }]
+      }).limit(20).lean()
+    ]);
 
-    res.json({ success: true, data: securities });
+    const related = [];
+    
+    for (const ent of entities) {
+      related.push({
+        entity: ent.entityName,
+        type: 'Internal Entity',
+        relation: ent.region || 'Branch'
+      });
+    }
+
+    for (const sec of securities) {
+      related.push({
+        entity: sec.isin || sec.underlyer,
+        type: 'Linked Asset',
+        relation: sec.productType || sec.product
+      });
+    }
+
+    res.json({ success: true, data: related });
   } catch (error) {
-    console.error("Error searching securities:", error);
-    res.status(500).json({ success: false, error: "Failed to search securities" });
+    console.error("Error fetching related:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch related data" });
   }
 });
 

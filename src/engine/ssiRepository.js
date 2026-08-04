@@ -221,7 +221,15 @@ async function getSSIsByCounterpartyGroup(groupName, currency = null) {
     accountNumber: ssi.accountNumber ? String(ssi.accountNumber) : "",
     settlementType: deriveSettlementType(ssi),
     agentBank: ssi.agentBank,
-    agentSwiftCode: ssi.agentSwiftCode
+    agentSwiftCode: ssi.agentSwiftCode,
+    accountAtAgent: ssi.accountAtAgent,
+    counterpartyType: ssi.counterpartyType,
+    typeCode: ssi.typeCode,
+    registeredCountry: ssi.registeredCountry,
+    ssiOnAlert: ssi.ssiOnAlert,
+    alertAcronym: ssi.alertAcronym,
+    alertCode: ssi.alertCode,
+    country: ssi.country
   }));
 }
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-export type ScreenType = 'HOME' | 'DES' | 'SRCH' | 'ENTITY' | 'SSI' | 'TRADE' | 'TRD' | 'TGEN' | 'LIFE' | 'SETTLE' | 'SWIFT' | 'BREAK' | 'BRK' | 'PORT' | 'HELP' | 'ISIN' | 'RELS' | 'CPTY' | 'BIC' | 'ACC' | 'AGENT' | 'CUT' | 'HOL' | 'FX' | 'PROD' | 'HIST' | 'FAIL' | 'CONF' | 'QUEUE' | 'MT103' | 'MT202' | 'MT202COV' | 'FIELDS' | 'FIELD' | 'SEARCH' | 'RECENT' | 'NEWS' | 'ABOUT';
+export type ScreenType = 'HOME' | 'DES' | 'SRCH' | 'ENTITY' | 'SSI' | 'TRADE' | 'TRD' | 'LIFE' | 'SETTLE' | 'SWIFT' | 'BREAK' | 'BRK' | 'PORT' | 'HELP' | 'ISIN' | 'RELS' | 'CPTY' | 'BIC' | 'AGENT' | 'CUT' | 'HOL' | 'FX' | 'PROD' | 'HIST' | 'FAIL' | 'CONF' | 'QUEUE' | 'MT103' | 'MT202' | 'MT202COV' | 'FIELDS' | 'FIELD' | 'SEARCH' | 'RECENT' | 'NEWS' | 'ABOUT' | 'UNKNOWN';
 
 export interface CommandState {
   screen: ScreenType;
@@ -8,7 +8,31 @@ export interface CommandState {
 }
 
 export function useCommandEngine() {
-  const [state, setState] = useState<CommandState>({ screen: 'HOME', parameter: null });
+  const [histState, setHistState] = useState({
+    history: [{ screen: 'HOME', parameter: null } as CommandState],
+    index: 0
+  });
+
+  const state = histState.history[histState.index];
+
+  const updateState = useCallback((newState: CommandState) => {
+    setHistState(prev => {
+      const newHistory = prev.history.slice(0, prev.index + 1);
+      newHistory.push(newState);
+      return { history: newHistory, index: newHistory.length - 1 };
+    });
+  }, []);
+
+  const goBack = useCallback(() => {
+    setHistState(prev => ({ ...prev, index: Math.max(0, prev.index - 1) }));
+  }, []);
+
+  const goForward = useCallback(() => {
+    setHistState(prev => ({ ...prev, index: Math.min(prev.history.length - 1, prev.index + 1) }));
+  }, []);
+
+  const canGoBack = histState.index > 0;
+  const canGoForward = histState.index < histState.history.length - 1;
 
   const executeCommand = useCallback((cmdRaw: string) => {
     const cmd = cmdRaw.trim().toUpperCase();
@@ -27,7 +51,6 @@ export function useCommandEngine() {
       case 'SSI':
       case 'TRADE':
       case 'TRD':
-      case 'TGEN':
       case 'LIFE':
       case 'SETTLE':
       case 'SWIFT':
@@ -39,7 +62,6 @@ export function useCommandEngine() {
       case 'RELS':
       case 'CPTY':
       case 'BIC':
-      case 'ACC':
       case 'AGENT':
       case 'CUT':
       case 'HOL':
@@ -53,19 +75,18 @@ export function useCommandEngine() {
       case 'MT202':
       case 'MT202COV':
       case 'FIELDS':
+      case 'FIELD':
       case 'SEARCH':
       case 'RECENT':
       case 'NEWS':
       case 'ABOUT':
-        setState({ screen: commandBase as ScreenType, parameter });
+        updateState({ screen: commandBase as ScreenType, parameter });
         break;
       default:
-        // Attempt to guess if it's just a ticker, etc., or show help
-        // For now, if unrecognized, fallback to search
-        setState({ screen: 'SRCH', parameter: cmd });
+        updateState({ screen: 'UNKNOWN', parameter: commandBase });
         break;
     }
-  }, []);
+  }, [updateState]);
 
-  return { state, executeCommand, setScreen: setState };
+  return { state, executeCommand, setScreen: updateState, goBack, goForward, canGoBack, canGoForward };
 }

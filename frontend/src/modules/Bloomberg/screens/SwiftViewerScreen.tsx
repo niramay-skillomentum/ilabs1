@@ -53,7 +53,16 @@ export default function SwiftViewerScreen({ parameter, command }: Props) {
   }, [parameter]);
 
   if (!parameter) {
-    return <div style={{ padding: '24px' }}>Please specify a Trade ID (e.g. SWIFT TRD0001256).</div>;
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>{command || 'SWIFT'}</span></div>
+        </div>
+        <div style={{ padding: '32px', color: 'var(--bb-alert)', fontSize: '16px', textAlign: 'center' }}>
+          Please specify a Trade ID (e.g. {command || 'SWIFT'} TRD0001256).
+        </div>
+      </div>
+    );
   }
 
   if (error) {
@@ -61,7 +70,7 @@ export default function SwiftViewerScreen({ parameter, command }: Props) {
       <div style={{ padding: '16px' }}>
         <div className="bb-screen-header">
           <div className="bb-screen-title" style={{ marginBottom: '16px', color: '#ff9900' }}>
-            13. SWIFT VIEWER ({command || 'SWIFT'})
+            SWIFT VIEWER ({command || 'SWIFT'})
           </div>
           <div className="bb-command-echo" style={{ marginBottom: '16px' }}>
             Command &gt; <span>{(command || 'SWIFT').toUpperCase()} {parameter?.toUpperCase()}</span>
@@ -96,7 +105,7 @@ export default function SwiftViewerScreen({ parameter, command }: Props) {
     <div style={{ padding: '16px' }}>
       <div className="bb-screen-header">
         <div className="bb-screen-title" style={{ marginBottom: '16px', color: '#ff9900' }}>
-          13. SWIFT VIEWER ({command || 'SWIFT'})
+          SWIFT VIEWER ({command || 'SWIFT'})
         </div>
         <div className="bb-command-echo" style={{ marginBottom: '16px' }}>
           Command &gt; <span>{(command || 'SWIFT').toUpperCase()} {parameter.toUpperCase()}</span>

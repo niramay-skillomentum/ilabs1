@@ -16,8 +16,7 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
   // Standard Filters
   const [keywordFilter, setKeywordFilter] = useState(command === 'SRCH' ? parameter || '' : '');
   const [isinFilter, setIsinFilter] = useState(command === 'ISIN' ? parameter || '' : '');
-  const [assetClass, setAssetClass] = useState('All');
-  const [country, setCountry] = useState('All');
+  const [product, setProduct] = useState('All');
 
   useEffect(() => {
     if (command === 'SRCH') {
@@ -30,18 +29,21 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
   useEffect(() => {
     if (!parameter && (command === 'SRCH' || command === 'RELS')) return;
 
-    // For PROD and FX, we might not need a parameter strictly, but we'll simulate data
-    if (command === 'FX' || command === 'PROD' || command === 'RELS') {
-      // Don't hit the DB for these placeholders, just render mock data
-      setData([{ mock: true }]);
-      return;
-    }
+
 
     const fetchData = async () => {
       setLoading(true);
       setError('');
       try {
-        const res = await bloombergApi.searchSecurity(parameter!);
+        let res;
+        if (command === 'PROD') {
+          res = await bloombergApi.getProducts();
+        } else if (command === 'RELS') {
+          res = await bloombergApi.getRelated(parameter || '');
+        } else {
+          const productFilter = command === 'FX' ? 'FX' : undefined;
+          res = await bloombergApi.searchSecurity(parameter || '', productFilter);
+        }
         if (res.success && res.data) {
           setData(res.data);
         } else {
@@ -65,23 +67,30 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
   const filteredData = data.filter(sec => {
     if (sec.mock) return true;
     
-    if (keywordFilter && 
-        !sec.companyName?.toUpperCase().includes(keywordFilter.toUpperCase()) && 
-        !sec.underlyer?.toUpperCase().includes(keywordFilter.toUpperCase())) {
-      return false;
+    if (keywordFilter) {
+      if (command === 'PROD') {
+        if (!sec.product?.toUpperCase().includes(keywordFilter.toUpperCase()) && 
+            !sec.productType?.toUpperCase().includes(keywordFilter.toUpperCase())) {
+          return false;
+        }
+      } else if (command === 'RELS') {
+        if (!sec.entity?.toUpperCase().includes(keywordFilter.toUpperCase()) && 
+            !sec.type?.toUpperCase().includes(keywordFilter.toUpperCase())) {
+          return false;
+        }
+      } else {
+        if (!sec.companyName?.toUpperCase().includes(keywordFilter.toUpperCase()) && 
+            !sec.underlyer?.toUpperCase().includes(keywordFilter.toUpperCase())) {
+          return false;
+        }
+      }
     }
     
     if (isinFilter && !sec.isin?.toUpperCase().includes(isinFilter.toUpperCase())) {
       return false;
     }
     
-    if (assetClass !== 'All') {
-      const isBond = assetClass === 'Bond' && sec.product === 'Fixed Income';
-      const isEq = assetClass === 'Equity' && sec.product === 'Equity';
-      if (!isBond && !isEq && sec.product !== assetClass) return false;
-    }
-    
-    if (country !== 'All' && sec.issuingCountry !== country) {
+    if (product !== 'All' && sec.product !== product) {
       return false;
     }
     
@@ -129,12 +138,6 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
 
   // --- RENDER FX RESULTS ---
   const renderFX = () => {
-    const pairs = [
-      { underlyer: 'FX EUR/USD', productType: 'FX Spot', tradeType: 'OTC', currency: 'USD' },
-      { underlyer: 'FX GBP/USD', productType: 'FX Forward', tradeType: 'OTC', currency: 'USD' },
-      { underlyer: 'FX USD/JPY', productType: 'FX Spot', tradeType: 'OTC', currency: 'JPY' },
-      { underlyer: 'FX USD/CHF', productType: 'FX Spot', tradeType: 'OTC', currency: 'CHF' },
-    ];
     return (
       <>
         <div className="bb-sidebar-title" style={{ borderBottom: 'none' }}>
@@ -150,7 +153,7 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
             </tr>
           </thead>
           <tbody>
-            {pairs.map((p, i) => (
+            {filteredData.map((p, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 'bold' }}>{p.underlyer}</td>
                 <td style={{ color: 'var(--bb-text-primary)' }}>{p.productType}</td>
@@ -166,14 +169,6 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
 
   // --- RENDER PROD RESULTS ---
   const renderPROD = () => {
-    const products = [
-      { product: 'Equity', productType: 'Equity', tradeType: 'Exchange' },
-      { product: 'Fixed Income', productType: 'Corporate Bond', tradeType: 'OTC' },
-      { product: 'Fixed Income', productType: 'Government Bond', tradeType: 'OTC' },
-      { product: 'Derivatives', productType: 'Options', tradeType: 'Listed' },
-      { product: 'FX', productType: 'FX Spot', tradeType: 'OTC' },
-      { product: 'FX', productType: 'Forward', tradeType: 'OTC' },
-    ];
     return (
       <>
         <div className="bb-sidebar-title" style={{ borderBottom: 'none' }}>
@@ -188,7 +183,7 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
             </tr>
           </thead>
           <tbody>
-            {products.map((p, i) => (
+            {filteredData.map((p, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 'bold' }}>{p.product}</td>
                 <td style={{ color: 'var(--bb-text-primary)' }}>{p.productType}</td>
@@ -203,12 +198,6 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
 
   // --- RENDER RELS RESULTS ---
   const renderRELS = () => {
-    const rels = [
-      { entity: 'Apple Inc', type: 'Parent Entity', relation: 'Direct' },
-      { entity: 'Apple Operations Int.', type: 'Child Entity', relation: 'Subsidiary' },
-      { entity: 'US0378331005', type: 'Linked Asset', relation: 'Common Stock' },
-      { entity: 'US037833AL42', type: 'Linked Asset', relation: 'Corporate Bond' },
-    ];
     return (
       <>
         <div className="bb-sidebar-title" style={{ borderBottom: 'none' }}>
@@ -223,7 +212,7 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
             </tr>
           </thead>
           <tbody>
-            {rels.map((r, i) => (
+            {filteredData.map((r, i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 'bold' }}>{r.entity}</td>
                 <td style={{ color: 'var(--bb-text-primary)' }}>{r.type}</td>
@@ -261,19 +250,13 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
                     <input type="text" className="bb-filter-input" value={isinFilter} onChange={e => setIsinFilter(e.target.value)} />
                   </div>
                   <div className="bb-filter-group">
-                    <label className="bb-filter-label">Asset Class</label>
-                    <select className="bb-filter-input" value={assetClass} onChange={e => setAssetClass(e.target.value)}>
+                    <label className="bb-filter-label">Product</label>
+                    <select className="bb-filter-input" value={product} onChange={e => setProduct(e.target.value)}>
                       <option>All</option>
                       <option>Equity</option>
-                      <option>Bond</option>
-                    </select>
-                  </div>
-                  <div className="bb-filter-group">
-                    <label className="bb-filter-label">Country</label>
-                    <select className="bb-filter-input" value={country} onChange={e => setCountry(e.target.value)}>
-                      <option>All</option>
-                      <option>United States</option>
-                      <option>United Kingdom</option>
+                      <option>Derivative</option>
+                      <option>Fixed Income</option>
+                      <option>FX</option>
                     </select>
                   </div>
                 </>
@@ -283,8 +266,7 @@ export default function SecuritySearchScreen({ parameter, command = 'SRCH' }: Pr
                 <button className="bb-btn-outline" onClick={() => {
                   setKeywordFilter(command === 'SRCH' ? parameter || '' : '');
                   setIsinFilter(command === 'ISIN' ? parameter || '' : '');
-                  setAssetClass('All');
-                  setCountry('All');
+                  setProduct('All');
                 }}>RESET</button>
               </div>
             </div>

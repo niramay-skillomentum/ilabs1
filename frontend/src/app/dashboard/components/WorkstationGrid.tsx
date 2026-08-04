@@ -14,14 +14,13 @@ export const WorkstationGrid: React.FC<WorkstationGridProps> = ({ onHover, onSel
       <SectionHeader title="Select Your Workstation" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto mt-6">
         {workstationConfig.map((workstation) => {
-          const isWide = workstation.id === 'reporting';
           return (
             <WorkstationCard 
               key={workstation.id}
               workstation={workstation}
               onHover={onHover}
               onSelect={onSelect}
-              isWide={isWide}
+              isWide={false}
             />
           );
         })}

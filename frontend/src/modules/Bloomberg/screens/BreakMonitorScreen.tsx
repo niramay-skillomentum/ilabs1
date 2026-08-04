@@ -5,14 +5,30 @@ export default function BreakMonitorScreen({ parameter }: { parameter?: string }
   const filter = parameter ? parameter.toUpperCase() : '';
   const [breaks, setBreaks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentDesk, setCurrentDesk] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await bloombergApi.getReconciliationItems();
-        if (res.success && res.items) {
-          setBreaks(res.items);
+        // 1. Determine the user's currently logged-in desk
+        const queueRes = await bloombergApi.getMyQueue();
+        const desk = queueRes.success ? queueRes.desk : '';
+        setCurrentDesk(desk);
+
+        if (!desk) {
+          setBreaks([]);
+          return;
+        }
+
+        // 2. Fetch only break trades on the user's desk, assigned to them
+        const res = await bloombergApi.getAllTrades({
+          desk,
+          assignedOnly: true,
+          statusPattern: `${desk}_BREAK`
+        });
+        if (res.success && res.trades) {
+          setBreaks(res.trades);
         }
       } catch (err) {
         console.error("Failed to fetch breaks:", err);
@@ -24,9 +40,9 @@ export default function BreakMonitorScreen({ parameter }: { parameter?: string }
   }, []);
 
   const filtered = filter ? breaks.filter(b => 
-    (b.itemRef1 || '').includes(filter) || 
-    b.itemId.includes(filter) || 
-    b.source.includes(filter)
+    (b.tradeRef || '').includes(filter) || 
+    (b.counterparty || '').includes(filter) || 
+    (b.currency || '').includes(filter)
   ) : breaks;
 
   return (
@@ -39,22 +55,28 @@ export default function BreakMonitorScreen({ parameter }: { parameter?: string }
         OPERATIONAL BREAK MONITOR (BRK)
       </div>
 
+      {currentDesk && (
+        <div style={{ marginBottom: '12px', fontSize: '13px', color: '#00ccff' }}>
+          Desk: <span style={{ fontWeight: 'bold', color: '#ff9900' }}>{currentDesk}</span>
+        </div>
+      )}
+
       <div className="bb-panel" style={{ padding: 0 }}>
         <div style={{ padding: '8px 12px', fontWeight: 'bold', borderBottom: '1px solid #444' }}>
-          BREAKS ({filtered.length})
+          OPEN BREAKS ({filtered.length})
         </div>
         <table className="bb-results-table bb-results-table-bordered">
           <thead>
             <tr>
-              <th>Break ID</th>
               <th>Trade ID</th>
-              <th>Source</th>
-              <th>Break Type</th>
-              <th>CCY</th>
+              <th>CPTY</th>
               <th style={{ textAlign: 'right' }}>Amount</th>
-              <th>Desk</th>
+              <th>CCY</th>
+              <th>Trade Date</th>
+              <th>Value Date</th>
               <th>Status</th>
-              <th>Assigned To</th>
+              <th>Direction</th>
+              <th>Settlement</th>
             </tr>
           </thead>
           <tbody>
@@ -63,20 +85,22 @@ export default function BreakMonitorScreen({ parameter }: { parameter?: string }
             ) : filtered.length > 0 ? (
               filtered.map((b, i) => (
                 <tr key={i}>
-                  <td style={{ color: 'var(--bb-text-primary)' }}>{b.itemId}</td>
-                  <td style={{ textDecoration: 'underline', cursor: 'pointer' }}>{b.itemRef1 || '-'}</td>
-                  <td>{b.source}</td>
-                  <td>{b.itemType || '-'}</td>
-                  <td>{b.currency || '-'}</td>
+                  <td style={{ color: 'var(--bb-text-primary)', textDecoration: 'underline', cursor: 'pointer' }}>{b.tradeRef}</td>
+                  <td>{b.counterparty}</td>
                   <td style={{ textAlign: 'right' }}>{b.amount != null ? b.amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</td>
-                  <td>{b.reconDesk || '-'}</td>
-                  <td style={{ color: b.status === 'Outstanding' ? 'red' : 'var(--bb-text-primary)' }}>{b.status}</td>
-                  <td>{b.assignedTo || 'Unassigned'}</td>
+                  <td>{b.currency || '-'}</td>
+                  <td>{b.tradeDate ? new Date(b.tradeDate).toISOString().split('T')[0] : '-'}</td>
+                  <td>{b.valueDate ? new Date(b.valueDate).toISOString().split('T')[0] : '-'}</td>
+                  <td style={{ color: 'red', fontWeight: 'bold' }}>{b.currentStatus}</td>
+                  <td>{b.direction || '-'}</td>
+                  <td>{b.settlementType || '-'}</td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: '16px' }}>No breaks found matching {filter}</td>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '16px' }}>
+                  {!currentDesk ? 'No active desk session found. Generate a queue first.' : `No open breaks found${filter ? ` matching ${filter}` : ''}`}
+                </td>
               </tr>
             )}
           </tbody>
@@ -88,3 +112,4 @@ export default function BreakMonitorScreen({ parameter }: { parameter?: string }
     </div>
   );
 }
+

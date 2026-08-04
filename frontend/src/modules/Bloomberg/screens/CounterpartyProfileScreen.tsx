@@ -38,7 +38,16 @@ export default function CounterpartyProfileScreen({ parameter, command = 'CPTY' 
   }, [parameter]);
 
   if (!parameter) {
-    return <div style={{ padding: '24px' }}>Please specify a counterparty name (e.g. CPTY BNYM).</div>;
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>{command}</span></div>
+        </div>
+        <div style={{ padding: '32px', color: 'var(--bb-alert)', fontSize: '16px', textAlign: 'center' }}>
+          Please specify a Counterparty ID (e.g. {command} BNYM).
+        </div>
+      </div>
+    );
   }
 
   if (loading) return <div style={{ padding: '24px' }}>Loading {parameter}...</div>;

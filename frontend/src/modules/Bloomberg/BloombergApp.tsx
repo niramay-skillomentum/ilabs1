@@ -8,7 +8,7 @@ import Footer from './components/Footer';
 import './styles/bloomberg.css';
 
 export default function BloombergApp() {
-  const { state, executeCommand, setScreen } = useCommandEngine();
+  const { state, executeCommand, setScreen, goBack, goForward, canGoBack, canGoForward } = useCommandEngine();
   
   return (
     <div className="bloomberg-terminal">
@@ -16,6 +16,10 @@ export default function BloombergApp() {
         executeCommand={executeCommand}
         activeScreen={state.screen}
         setScreen={(screen) => setScreen({ screen, parameter: null })}
+        goBack={goBack}
+        goForward={goForward}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
       />
       <Workspace state={state} />
       <Footer />

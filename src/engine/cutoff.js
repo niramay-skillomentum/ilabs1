@@ -11,7 +11,9 @@ const CURRENCY_CUTOFF = {
   AUD: "14:30",
   NZD: "13:30",
   SEK: "16:00",
-  NOK: "16:00"
+  NOK: "16:00",
+  ZAR: "14:30",
+  HKD: "14:00"
 }
 
 

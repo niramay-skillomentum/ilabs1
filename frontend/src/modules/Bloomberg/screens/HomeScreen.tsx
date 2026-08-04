@@ -23,7 +23,6 @@ export default function HomeScreen() {
   const opsCommands = [
     { cmd: 'TRADE', input: 'TRADE TRD0001256', desc: 'Trade Inquiry', output: 'Trade ID, Status, Security, Qty, Value Date' },
     { cmd: 'TRD', input: 'TRD TRD0001256', desc: 'Trade Inquiry (Alias)', output: 'Trade ID, Status, Security, Qty, Value Date' },
-    { cmd: 'TGEN', input: 'TGEN', desc: 'Trade Generator', output: 'Security, Buyer/Seller, Qty, Price, Dates' },
     { cmd: 'LIFE', input: 'LIFE TRD0001256', desc: 'Trade Lifecycle', output: 'Visual timeline: Booked, Confirmed, Matched' },
     { cmd: 'HIST', input: 'HIST TRD0001256', desc: 'Trade History', output: 'Audit trail of trade modifications' },
     { cmd: 'SETTLE', input: 'SETTLE TRD0001256', desc: 'Settlement Screen', output: 'Cash Movement (Dr/Cr), Security Movement' },

@@ -12,15 +12,19 @@ export default function HelpCenterScreen({ parameter }: { parameter?: string }) 
   ];
 
   const paramNormalized = (parameter || '').toUpperCase().trim();
-  const activeTopic = topics.find(t => 
+  const matchedTopic = topics.find(t => 
     t.id.toString() === paramNormalized || 
     t.title.toUpperCase() === paramNormalized
-  ) || topics[0]; // Default to Commands
+  );
+  // Only default to topic 1 when NO parameter is provided;
+  // if a parameter was given but didn't match, show an error.
+  const isInvalidParam = paramNormalized !== '' && !matchedTopic;
+  const activeTopic = matchedTopic || topics[0];
 
   const renderTopicContent = () => {
     if (activeTopic.id === 1) {
       const referenceCmds = ['DES', 'ISIN', 'SRCH', 'FX', 'PROD', 'RELS', 'ENTITY', 'ACC', 'CPTY', 'AGENT', 'SSI', 'BIC', 'CUT', 'HOL'];
-      const opsCmds = ['TRADE', 'TRD', 'TGEN', 'LIFE', 'HIST', 'SETTLE', 'FAIL', 'CONF', 'SWIFT', 'MT103', 'MT202', 'MT202COV', 'FIELDS', 'FIELD', 'QUEUE', 'BREAK', 'BRK', 'PORT', 'HELP'];
+      const opsCmds = ['TRADE', 'TRD', 'LIFE', 'HIST', 'SETTLE', 'FAIL', 'CONF', 'SWIFT', 'MT103', 'MT202', 'MT202COV', 'FIELDS', 'FIELD', 'QUEUE', 'BREAK', 'BRK', 'PORT', 'HELP'];
       const generalCmds = ['HOME', 'SEARCH', 'RECENT', 'NEWS', 'ABOUT'];
 
       const renderCategory = (title: string, cmds: string[]) => {
@@ -118,10 +122,7 @@ export default function HelpCenterScreen({ parameter }: { parameter?: string }) 
               <strong style={{ color: '#00ccff' }}>Q: How do I view a SWIFT message?</strong>
               <div style={{ marginTop: '4px' }}>A: Run the SWIFT command followed by the Trade ID (e.g. <code>SWIFT TRD0001256</code>)</div>
             </div>
-            <div>
-              <strong style={{ color: '#00ccff' }}>Q: How do I generate new trades for testing?</strong>
-              <div style={{ marginTop: '4px' }}>A: Use the Trade Generator tool by running <code>TGEN</code></div>
-            </div>
+
             <div>
               <strong style={{ color: '#00ccff' }}>Q: Where can I see trades that failed to settle?</strong>
               <div style={{ marginTop: '4px' }}>A: Run the <code>FAIL</code> command to open the failed trades monitor.</div>
@@ -138,13 +139,31 @@ export default function HelpCenterScreen({ parameter }: { parameter?: string }) 
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="bb-screen-header">
         <div className="bb-screen-title" style={{ marginBottom: '16px', color: '#ff9900' }}>
-          16. OPERATIONS HELP (HELP)
+          OPERATIONS HELP (HELP)
         </div>
         <div className="bb-command-echo" style={{ marginBottom: '16px' }}>
           Command &gt; <span>HELP {parameter || ''}</span>
         </div>
       </div>
 
+      {isInvalidParam ? (
+        <div style={{ flex: 1, border: '1px solid #444', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ color: 'red', fontSize: '18px', fontWeight: 'bold' }}>INVALID TOPIC</div>
+          <div style={{ color: '#ccc', fontSize: '14px', textAlign: 'center', lineHeight: '1.6' }}>
+            <span style={{ color: '#ff9900', fontWeight: 'bold' }}>HELP {parameter}</span> is not a valid help topic.<br/>
+            Valid topics are <span style={{ color: '#00ccff' }}>1</span> through <span style={{ color: '#00ccff' }}>{topics.length}</span>, or use a topic name.
+          </div>
+          <div style={{ marginTop: '16px', fontSize: '13px', color: '#888' }}>
+            <div style={{ marginBottom: '8px', color: '#00ccff', fontWeight: 'bold' }}>Available Topics:</div>
+            {topics.map(t => (
+              <div key={t.id} style={{ display: 'flex', gap: '12px', marginBottom: '4px' }}>
+                <span style={{ color: '#ff9900', width: '20px' }}>{t.id}</span>
+                <span style={{ color: '#ccc' }}>{t.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: '16px', flex: 1 }}>
         {/* Left Column - Topics */}
         <div style={{ flex: '0 0 300px', border: '1px solid #333' }}>
@@ -176,6 +195,7 @@ export default function HelpCenterScreen({ parameter }: { parameter?: string }) 
           {renderTopicContent()}
         </div>
       </div>
+      )}
 
       {/* Footer */}
       <div style={{ 

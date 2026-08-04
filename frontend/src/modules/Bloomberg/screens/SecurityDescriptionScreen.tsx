@@ -37,7 +37,16 @@ export default function SecurityDescriptionScreen({ parameter }: Props) {
   }, [parameter]);
 
   if (!parameter) {
-    return <div style={{ padding: '24px' }}>Please specify a security identifier (e.g. DES APPLE).</div>;
+    return (
+      <div style={{ padding: '16px' }}>
+        <div className="bb-screen-header">
+          <div className="bb-command-echo">Command &gt; <span>DES</span></div>
+        </div>
+        <div style={{ padding: '32px', color: 'var(--bb-alert)', fontSize: '16px', textAlign: 'center' }}>
+          Please specify a Security ID (e.g. DES APPLE).
+        </div>
+      </div>
+    );
   }
 
   if (loading) return <div style={{ padding: '24px' }}>Loading {parameter}...</div>;

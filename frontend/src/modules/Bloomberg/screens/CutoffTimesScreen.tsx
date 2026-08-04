@@ -13,7 +13,9 @@ export default function CutoffTimesScreen({ parameter, command }: { parameter?: 
     { ccy: 'AUD', time: '14:30 ET' },
     { ccy: 'NZD', time: '13:30 ET' },
     { ccy: 'SEK', time: '16:00 ET' },
-    { ccy: 'NOK', time: '16:00 ET' }
+    { ccy: 'NOK', time: '16:00 ET' },
+    { ccy: 'ZAR', time: '14:30 ET' },
+    { ccy: 'HKD', time: '14:00 ET' }
   ];
 
   const filtered = currencyFilter ? cutoffData.filter(c => c.ccy.includes(currencyFilter)) : cutoffData;
