@@ -57,6 +57,10 @@ function calculateDbAllocation(availablePool) {
 // BREAK DETECTION
 // ============================
 function isBreakTrade(trade, desk) {
+  if (trade.currentStatus === "SETTLEMENT_BREAK" || trade.cutoffMissedReason != null) {
+    return true;
+  }
+
   if (desk === "CONFIRMATION") {
     const truthEngine = require("./truthEngine");
     return truthEngine.getConfirmationMismatches(trade).length > 0;
@@ -192,11 +196,13 @@ class QueueComposer {
           return t;
         })
         .filter(t => {
-          // Exclude trades stuck at missed cut-off age
-          if (t.cutoffMissedReason === "Missed Value Date"
-              && t.cutoffMissedAtAge != null
-              && t.age <= t.cutoffMissedAtAge) {
-            return false;
+          // Reassignment rule for Settlement Break / missed cutoff trades:
+          // Must NOT be assigned again at the same trade age at which cutoff was missed.
+          // Eligible ONLY when Trade Age > Age at which cutoff was missed.
+          if ((t.currentStatus === "SETTLEMENT_BREAK" || t.cutoffMissedReason != null) && t.cutoffMissedAtAge != null) {
+            if (t.age <= t.cutoffMissedAtAge) {
+              return false;
+            }
           }
           return t.age <= maxAllowedAge;
         });
@@ -350,6 +356,7 @@ class QueueComposer {
 
     return {
       trades: queue,
+      sessionStart,
       sessionExpiry
     };
   }

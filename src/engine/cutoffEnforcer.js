@@ -6,6 +6,7 @@
 // ======================================
 
 const Trade = require("../models/Trade");
+const Queue = require("../models/Queue");
 const LifecycleEngine = require("./lifecycle");
 const auditEngine = require("./auditEngine");
 const cutoffEngine = require("./cutoff");
@@ -49,7 +50,7 @@ async function handleMissedCutoff(trade, userId, isAutomated = true) {
   const currency = trade.currency;
   const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(currency);
   const region = cutoffEngine.getRegionForCurrency(currency);
-  const simTime = simulationClock.getFormattedTime();
+  const simTime = simulationClock.getFormattedTime(trade.assignedTo || userId);
 
   // Transition to SETTLEMENT_BREAK if not already there
   if (trade.currentStatus !== "SETTLEMENT_BREAK") {
@@ -97,7 +98,7 @@ async function handleMissedCutoff(trade, userId, isAutomated = true) {
 // ======================================
 // BACKGROUND POLLER
 // Finds all settlement-active trades whose currency cut-off
-// has been breached and auto-transitions them.
+// has been breached in active user sessions and auto-transitions them.
 // ======================================
 
 async function checkAndEnforceCutoffs() {
@@ -105,19 +106,30 @@ async function checkAndEnforceCutoffs() {
   isProcessing = true;
 
   try {
-    // Find all trades in settlement workflow states
-    const trades = await Trade.find({
-      currentStatus: { $in: SETTLEMENT_ACTIVE_STATES },
-      cutoffMissedReason: { $eq: null } // Not already marked as missed
-    });
+    // Only process trades for active user sessions to protect unassigned database pool trades
+    const activeQueues = await Queue.find({ isActive: true, sessionStart: { $ne: null } });
+    if (!activeQueues.length) return;
 
-    for (const trade of trades) {
-      try {
-        if (cutoffEngine.isCutOffBreached(trade.currency)) {
-          await handleMissedCutoff(trade, trade.assignedTo || "System", true);
+    for (const queue of activeQueues) {
+      const userId = queue.userId;
+      if (!userId) continue;
+
+      simulationClock.setUserSessionStart(userId, queue.sessionStart);
+
+      const trades = await Trade.find({
+        assignedTo: userId,
+        currentStatus: { $in: SETTLEMENT_ACTIVE_STATES },
+        cutoffMissedReason: { $eq: null }
+      });
+
+      for (const trade of trades) {
+        try {
+          if (cutoffEngine.isCutOffBreached(trade.currency, userId)) {
+            await handleMissedCutoff(trade, userId, true);
+          }
+        } catch (err) {
+          console.warn(`[CutoffEnforcer] Error processing trade ${trade.tradeRef}:`, err.message);
         }
-      } catch (err) {
-        console.warn(`[CutoffEnforcer] Error processing trade ${trade.tradeRef}:`, err.message);
       }
     }
   } catch (err) {

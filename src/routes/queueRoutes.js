@@ -19,7 +19,7 @@ router.post("/generate", authenticateToken, async (req, res) => {
 
     const result = await queueComposer.buildQueue(desk, userId);
 
-    simulationClock.setSessionStart(result.sessionStart);
+    simulationClock.setSessionStart(result.sessionStart, userId);
     simulationClock.start();
 
     res.json({
@@ -69,7 +69,7 @@ router.get("/my", authenticateToken, async (req, res) => {
     // Touch session to track activity
     await queueComposer.touchSession(userId);
 
-    simulationClock.setSessionStart(activeQueue.sessionStart);
+    simulationClock.setSessionStart(activeQueue.sessionStart, userId);
     simulationClock.start();
 
     res.json({
