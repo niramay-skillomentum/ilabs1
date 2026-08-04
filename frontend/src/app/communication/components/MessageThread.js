@@ -60,7 +60,7 @@ const ThreadEmail = memo(function ThreadEmail({
                   const pToLabel = getRecipientLabel(pMsg.sender, trade, desk, channel, userId, userId);
                   
                   // Append dummy email for To if it doesn't have one, just to match the visual format
-                  const pToEmail = pToLabel.includes("Counterparty") ? "cpty@external.com" : pToLabel.toLowerCase().replace(/\s+/g, ".") + "@sgb.com";
+                  const pToEmail = pToLabel.includes("<") ? pToLabel.split("<")[1].replace(">", "") : pToLabel.toLowerCase().replace(/\s+/g, ".") + "@skillomentum.com";
                   
                   return (
                     <div key={i} className="qh-item">
@@ -90,14 +90,30 @@ export default function MessageThread({
   userId, desk, channel, getRecipientLabel, formatDateFull, isResolving, readOnly, openSendSSIModal
 }) {
   const threadRef = useRef(null);
+  const prevTradeRef = useRef(null);
+  const prevMessagesLenRef = useRef(0);
   const [allCollapsed, setAllCollapsed] = useState(false);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Smart auto-scroll: only scroll on initial load, switching conversations, or when near bottom
   useEffect(() => {
-    if (threadRef.current) {
+    if (!threadRef.current || !currentMessages) return;
+
+    const isNewConversation = prevTradeRef.current !== selectedTradeRef;
+    const isNewMessageAdded = currentMessages.length > prevMessagesLenRef.current;
+
+    if (isNewConversation || prevMessagesLenRef.current === 0) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    } else if (isNewMessageAdded) {
+      const { scrollTop, scrollHeight, clientHeight } = threadRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      if (isNearBottom) {
+        threadRef.current.scrollTop = threadRef.current.scrollHeight;
+      }
     }
-  }, [currentMessages]);
+
+    prevTradeRef.current = selectedTradeRef;
+    prevMessagesLenRef.current = currentMessages.length;
+  }, [currentMessages, selectedTradeRef]);
 
   if (!selectedTradeRef || !currentTrade) {
     return (

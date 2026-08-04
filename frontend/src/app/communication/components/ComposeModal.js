@@ -2,7 +2,8 @@ export default function ComposeModal({
   composeModalOpen, setComposeModalOpen, userId, getSenderInfo, currentTrade,
   composeTo, composeToDisabled, handleComposeToChange, composeTrade,
   handleComposeTradeChange, composeTrades, formatAmount, composeSubject,
-  setComposeSubject, composeBody, setComposeBody, sendCompose, isSendingCompose
+  setComposeSubject, composeBody, setComposeBody, sendCompose, isSendingCompose,
+  recipientOptions = []
 }) {
   if (!composeModalOpen) return null;
   return (
@@ -20,10 +21,25 @@ export default function ComposeModal({
           </div>
           <div className="compose-field-row">
             <span className="compose-label">To:</span>
-            <select className="compose-value" value={composeTo} disabled={composeToDisabled}
+            <select className="compose-value" value={composeTo} disabled={false}
               onChange={e => handleComposeToChange(e.target.value)}>
-              <option value="FO">Front Office Trading Desk &lt;fo.trading@sgb.com&gt;</option>
-              <option value="COUNTERPARTY">Counterparty Operations</option>
+              <option value="">-- Select Destination Mailbox --</option>
+              {recipientOptions && recipientOptions.length > 0 ? (
+                recipientOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="fo-operations-americas@skillomentum.com">Front Office Operations (Americas) &lt;fo-operations-americas@skillomentum.com&gt;</option>
+                  <option value="fo-operations-emea@skillomentum.com">Front Office Operations (EMEA) &lt;fo-operations-emea@skillomentum.com&gt;</option>
+                  <option value="fo-operations-apac@skillomentum.com">Front Office Operations (APAC) &lt;fo-operations-apac@skillomentum.com&gt;</option>
+                  <option value="operations@citi.com">Counterparty Operations &lt;operations@citi.com&gt;</option>
+                  <option value="operations@jpmorgan.com">Counterparty Operations &lt;operations@jpmorgan.com&gt;</option>
+                  <option value="operations@hsbc.com">Counterparty Operations &lt;operations@hsbc.com&gt;</option>
+                </>
+              )}
             </select>
           </div>
           <div className="compose-field-row">

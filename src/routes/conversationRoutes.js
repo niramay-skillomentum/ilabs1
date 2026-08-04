@@ -8,10 +8,45 @@ const aiParser = require("../engine/aiParser");
 const auditEngine = require("../engine/auditEngine");
 const LifecycleEngine = require("../engine/lifecycle");
 const { resolveMailStatus } = require("../engine/mailStatusResolver");
+const mailRoutingEngine = require("../engine/mailRoutingEngine");
 const { authenticateToken } = require("../middleware/auth");
 
+// ======================================
+// GET /api/conversation/expected-recipient
+// Retrieves configured operations email or regional FO mailbox
+// ======================================
+router.get("/expected-recipient", authenticateToken, async (req, res) => {
+  try {
+    const { desk, tradeRef, counterparty, workstationRegion } = req.query;
+    const result = await mailRoutingEngine.getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion });
+    res.json(result);
+  } catch (err) {
+    console.error("Expected recipient calculation error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post("/send", authenticateToken, async (req, res) => {
-  const { tradeRef, sender, message, desk } = req.body;
+  const { tradeRef, sender, message, desk, recipient } = req.body;
+
+  if (recipient && recipient !== "FO" && recipient !== "COUNTERPARTY") {
+    const validation = await mailRoutingEngine.validateRecipient({
+      desk,
+      tradeRef,
+      recipientEmail: recipient
+    });
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: "Recipient email validation failed",
+        validationError: true,
+        errorType: validation.errorType,
+        title: validation.title,
+        message: validation.message,
+        expectedEmail: validation.expectedEmail
+      });
+    }
+  }
 
   const subject = `Trade ${tradeRef} - Break Investigation`;
 
