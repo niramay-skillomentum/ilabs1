@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { loadUserId, getToken, authHeaders } from "../../lib/auth";
 import { io } from "socket.io-client";
 import toast from "react-hot-toast";
+import { GuidedTourProvider, useGuidedTour, reconciliationDeskTourSteps } from "../../components/guided-tour";
 
 // ============ Helpers ============
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -248,7 +249,7 @@ const RECON_STYLE = `
 `;
 
 // ============ Component ============
-export default function ReconciliationDeskPage() {
+function ReconciliationDeskContent() {
   const router = useRouter();
   const [userId, setUserId] = useState(null);
   const [items, setItems] = useState([]);
@@ -256,6 +257,16 @@ export default function ReconciliationDeskPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingLabel, setLoadingLabel] = useState("Preparing Reconciliation Desk...");
   const [isMatching, setIsMatching] = useState(false);
+
+  const { startTour, isActive, nextStep } = useGuidedTour();
+  const autoStarted = useRef(false);
+
+  useEffect(() => {
+    if (!isLoading && !localStorage.getItem("guidedTour.reconciliationDesk.completed") && !autoStarted.current) {
+      autoStarted.current = true;
+      setTimeout(() => startTour("reconciliationDesk", reconciliationDeskTourSteps), 1000);
+    }
+  }, [isLoading, startTour]);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState(null);
@@ -541,17 +552,24 @@ export default function ReconciliationDeskPage() {
           <div className="topbar-subtitle">Enterprise Cash Settlement Reconciliation</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn primary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px" }}>
+          <button
+            className="btn"
+            style={{ background: "#f8fafc", color: "#0f172a", border: "1px solid #cbd5e1", marginRight: "10px", padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
+            onClick={() => startTour("reconciliationDesk", reconciliationDeskTourSteps)}
+          >
+            ❔ Restart Tour
+          </button>
+          <button id="tour-gcms-btn" className="btn primary" onClick={() => router.push("/gcms")} style={{ marginRight: "10px" }}>
             GCMS
           </button>
-          <button className="btn secondary" onClick={() => router.push("/dashboard")}>
+          <button id="tour-dashboard-btn" className="btn secondary" onClick={() => router.push("/dashboard")}>
               ← Dashboard
           </button>
         </div>
       </div>
 
       {/* Match Tray — user selects one Ledger + one Statement, then matches, or multiple to move */}
-      <div className="match-tray">
+      <div id="tour-match-tray" className="match-tray">
         <span style={{ fontSize: 13, fontWeight: 700 }}>Action Menu</span>
         <span className={`tray-chip ${selectedLedger ? "filled-ledger" : ""}`}>
           Ledger: {selectedLedger || "—"}
@@ -585,7 +603,7 @@ export default function ReconciliationDeskPage() {
 
 
       {/* Filter Bar */}
-      <div className="filter-bar">
+      <div id="tour-filter-bar" className="filter-bar">
         <span className="filter-label">Status:</span>
         <button className={`filter-btn ${!statusFilter ? "active" : ""}`} onClick={() => setStatusFilter(null)}>All</button>
         <button className={`filter-btn ${statusFilter === "Outstanding" ? "active" : ""}`} onClick={() => setStatusFilter(statusFilter === "Outstanding" ? null : "Outstanding")}>Outstanding</button>
@@ -679,7 +697,7 @@ export default function ReconciliationDeskPage() {
 
         <span style={{ margin: "0 8px", borderLeft: "1px solid #cbd5e1", height: 20 }} />
 
-        <button className="btn primary" style={{ fontSize: 11, padding: "5px 12px", marginLeft: "10px" }} onClick={() => setIsApplyPopupOpen(true)}>
+        <button id="tour-apply-trade-btn" className="btn primary" style={{ fontSize: 11, padding: "5px 12px", marginLeft: "10px" }} onClick={() => setIsApplyPopupOpen(true)}>
           Apply Trade ID
         </button>
       </div>
@@ -692,7 +710,7 @@ export default function ReconciliationDeskPage() {
             <p>The reconciliation desk allocation is empty. Try reloading the desk.</p>
           </div>
         ) : (
-          <div className="table-container">
+          <div id="tour-queue-table" className="table-container">
             <table>
               <thead>
                 <tr>
@@ -944,5 +962,13 @@ export default function ReconciliationDeskPage() {
       )}
 
     </div>
+  );
+}
+
+export default function ReconciliationDeskPage() {
+  return (
+    <GuidedTourProvider>
+      <ReconciliationDeskContent />
+    </GuidedTourProvider>
   );
 }

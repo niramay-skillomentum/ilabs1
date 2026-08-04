@@ -4,3 +4,6 @@ export * from './TourTooltip';
 export * from './tours/middleOfficeTour';
 export * from './tours/confirmationDeskTour';
 export * from './tours/settlementDeskTour';
+export * from './tours/reconciliationDeskTour';
+export * from './tours/stccTour';
+export * from './tours/gcmsTour';

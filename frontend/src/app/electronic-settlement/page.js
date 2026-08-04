@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import { loadUserId, getToken, authHeaders } from "../../lib/auth";
 import toast from "react-hot-toast";
 import "./page.css";
+import { GuidedTourProvider, useGuidedTour, stccTourSteps } from "../../components/guided-tour";
 
 // ============ Helpers ============
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -33,6 +34,9 @@ const COMPARISON_FIELDS = [
 function ElectronicSettlementComponent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const { startTour, isActive, nextStep } = useGuidedTour();
+  const autoStarted = useRef(false);
 
   const [userId, setUserId] = useState(null);
   const [trades, setTrades] = useState([]);
@@ -84,6 +88,13 @@ function ElectronicSettlementComponent() {
   }, []);
 
   // ============ Init ============
+  useEffect(() => {
+    if (!isLoading && !localStorage.getItem("guidedTour.stcc.completed") && !autoStarted.current) {
+      autoStarted.current = true;
+      setTimeout(() => startTour("stcc", stccTourSteps), 1000);
+    }
+  }, [isLoading, startTour]);
+
   useEffect(() => {
     const uid = loadUserId();
     if (!uid || !getToken()) {
@@ -253,7 +264,14 @@ function ElectronicSettlementComponent() {
             <div className="stcc-logo-divider"></div>
             <span className="stcc-logo-subtitle">INSTITUTIONAL TRADE PROCESSING</span>
           </div>
-          <div className="stcc-header-icons">
+          <div className="stcc-header-icons" style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => startTour("stcc", stccTourSteps)}
+              className="stcc-back-btn"
+              style={{ background: "#f8fafc", color: "#0f172a", borderColor: "#cbd5e1" }}
+            >
+              ❔ Restart Tour
+            </button>
             <button onClick={() => window.close()} className="stcc-back-btn">
               ← Back to Workstation
             </button>
@@ -370,6 +388,7 @@ function ElectronicSettlementComponent() {
             ) : (
               <>
                 <button
+                  id="tour-stcc-settle"
                   className="stcc-action-btn settle"
                   disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling || cutoffsReached.includes(selectedTrade?.currency)}
                   onClick={handleSettle}
@@ -378,6 +397,7 @@ function ElectronicSettlementComponent() {
                   {isSettling ? "Settling..." : "⬆ Settle"}
                 </button>
                 <button
+                  id="tour-stcc-edit"
                   className="stcc-action-btn"
                   disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED" || cutoffsReached.includes(selectedTrade?.currency)}
                   onClick={handleOpenComparison}
@@ -566,8 +586,10 @@ function ElectronicSettlementComponent() {
 
 export default function ElectronicSettlementPage() {
   return (
-    <Suspense fallback={<div className="stcc-loading"><div className="stcc-loading-spinner"></div>Loading...</div>}>
-      <ElectronicSettlementComponent />
-    </Suspense>
+    <GuidedTourProvider>
+      <Suspense fallback={<div className="stcc-loading"><div className="stcc-loading-spinner"></div>Loading...</div>}>
+        <ElectronicSettlementComponent />
+      </Suspense>
+    </GuidedTourProvider>
   );
 }

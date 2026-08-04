@@ -1,12 +1,23 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadFullName, authHeaders } from '../../lib/auth';
+import { GuidedTourProvider, useGuidedTour, gcmsTourSteps } from "../../components/guided-tour";
 
-export default function GCMSPage() {
+function GCMSContent() {
   const router = useRouter();
   const [userName, setUserName] = useState("SIM_OPS_01");
+
+  const { startTour, isActive, nextStep } = useGuidedTour();
+  const autoStarted = useRef(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem("guidedTour.gcms.completed") && !autoStarted.current) {
+      autoStarted.current = true;
+      setTimeout(() => startTour("gcms", gcmsTourSteps), 1000);
+    }
+  }, [startTour]);
   
   const [processedData, setProcessedData] = useState([]);
   const [activeRowId, setActiveRowId] = useState(null);
@@ -113,7 +124,16 @@ export default function GCMSPage() {
       </div>
 
       <div className="gcms-toolbar">
-        <button className="btn secondary" onClick={() => router.push('/reconciliation-desk')}>← Back to Dashboard</button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button id="tour-gcms-back-btn" className="btn secondary" onClick={() => router.push('/reconciliation-desk')}>← Back to Dashboard</button>
+          <button
+            className="btn"
+            style={{ background: "#f8fafc", color: "#0f172a", border: "1px solid #cbd5e1", padding: "4px 12px", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
+            onClick={() => startTour("gcms", gcmsTourSteps)}
+          >
+            ❔ Restart Tour
+          </button>
+        </div>
         <div>Module: SWIFT Message Center</div>
       </div>
 
@@ -134,7 +154,7 @@ export default function GCMSPage() {
 
         <div className="gcms-main">
           {/* ZONE 1: FILTER */}
-          <div className="gcms-panel">
+          <div id="tour-gcms-filters" className="gcms-panel">
             <div className="panel-header">Search Criteria</div>
             <div className="filter-grid">
               <div className="filter-group">
@@ -181,7 +201,7 @@ export default function GCMSPage() {
           </div>
 
           {/* ZONE 2 & 3 CONTAINER */}
-          <div className="gcms-panel" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+          <div id="tour-gcms-ledger" className="gcms-panel" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
             <div className="panel-header" style={{display: 'flex', justifyContent: 'space-between'}}>
               <span>Message Ledger</span>
               <span style={{color: '#64748b', fontSize: 11}}>Viewing 1-{processedData.length} of {processedData.length} Records</span>
@@ -241,7 +261,7 @@ export default function GCMSPage() {
 
             {/* ZONE 3: INSPECTOR */}
             {isInspectorOpen && (
-              <div className="inspector-panel">
+              <div id="tour-gcms-inspector" className="inspector-panel">
                 <div className="inspector-header">
                   <span>SWIFT PAYEE INSPECTOR</span>
                   <div>
@@ -273,5 +293,13 @@ export default function GCMSPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function GCMSPage() {
+  return (
+    <GuidedTourProvider>
+      <GCMSContent />
+    </GuidedTourProvider>
   );
 }
