@@ -97,10 +97,10 @@ function getRegionForCurrency(currency) {
 // Get minutes until cutoff
 // Returns negative if already breached
 // ---------------------------------
-function getMinutesUntilCutoff(currency) {
+function getMinutesUntilCutoff(currency, userId = null) {
   if (!CURRENCY_CUTOFF[currency]) return null
 
-  const simTime = simulationClock.getTime()
+  const simTime = simulationClock.getTime(userId)
   const currentMinutes = simTime.getHours() * 60 + simTime.getMinutes()
   const cutoffMins = getCutoffMinutes(currency)
 
@@ -112,13 +112,13 @@ function getMinutesUntilCutoff(currency) {
 // Check if Cutoff Breached
 // Uses simulation clock local time
 // ---------------------------------
-function isCutOffBreached(currency) {
+function isCutOffBreached(currency, userId = null) {
   if (!CURRENCY_CUTOFF[currency]) {
     // Unknown currencies are not restricted
     return false
   }
 
-  const simTime = simulationClock.getTime()
+  const simTime = simulationClock.getTime(userId)
   const currentMinutes = simTime.getHours() * 60 + simTime.getMinutes()
   const cutoffMins = getCutoffMinutes(currency)
 
@@ -130,12 +130,12 @@ function isCutOffBreached(currency) {
 // Get cutoff status for all currencies
 // Returns object with breached/remaining info
 // ---------------------------------
-function getAllCutoffStatuses() {
+function getAllCutoffStatuses(userId = null) {
   const statuses = {}
 
   for (const [currency, timeStr] of Object.entries(CURRENCY_CUTOFF)) {
-    const breached = isCutOffBreached(currency)
-    const minutesLeft = getMinutesUntilCutoff(currency)
+    const breached = isCutOffBreached(currency, userId)
+    const minutesLeft = getMinutesUntilCutoff(currency, userId)
 
     statuses[currency] = {
       time: timeStr,
