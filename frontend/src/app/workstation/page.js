@@ -942,26 +942,26 @@ function WorkstationComponent() {
               {isGeneratingQueue ? "Generating..." : "Generate Queue"}
             </button>
             <button className="btn primary" onClick={refreshQueue} disabled={isRefreshingQueue} style={{ margin: 0 }}>
-              {isRefreshingQueue ? "Refreshing..." : "Refresh"}
+              {isRefreshingQueue ? "Refreshing..." : "Refresh Queue"}
             </button>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             {selectedTrade?.currentStatus === "SETTLED" && (
-              <button className="btn primary" onClick={viewSwift} disabled={isLoadingSwift}>
+              <button className="btn tertiary" onClick={viewSwift} disabled={isLoadingSwift}>
                 {isLoadingSwift ? "Loading..." : "📄 View SWIFT ↗"}
               </button>
             )}
-            <button className="btn primary" onClick={viewTruth} disabled={!selectedTrade}>👁️ View Truth ↗</button>
-            {desk === "SETTLEMENT" && <button id="tour-stcc-btn" className="btn primary" onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement ↗</button>}
-            {desk === "SETTLEMENT" && <button id="tour-ssi-db-btn" className="btn primary" onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database ↗</button>}
-            {desk === "MO" && <button id="tour-termsheet" className="btn primary" onClick={openTermsheet}>📄 View Termsheet ↗</button>}
+            <button className="btn tertiary" onClick={viewTruth} disabled={!selectedTrade}>👁️ View Truth ↗</button>
+            {desk === "SETTLEMENT" && <button id="tour-stcc-btn" className="btn tertiary" onClick={() => window.open("/electronic-settlement?desk=SETTLEMENT", "_blank")}>🏦 STCC Electronic Settlement ↗</button>}
+            {desk === "SETTLEMENT" && <button id="tour-ssi-db-btn" className="btn tertiary" onClick={() => window.open("/ssi-database?desk=" + desk, "_blank")}>SSI Database ↗</button>}
+            {desk === "MO" && <button id="tour-termsheet" className="btn tertiary" onClick={openTermsheet}>📄 View Termsheet ↗</button>}
             {desk === "SETTLEMENT" && (
-              <button id="tour-system-mailbox" className="btn primary"
+              <button id="tour-system-mailbox" className="btn tertiary"
                 onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
                 🖥️ System Mailbox ↗
               </button>
             )}
-            <button id="tour-mailbox" className="btn primary" onClick={() => openMailboxGeneral()}>📧 Mailbox ↗</button>
+            <button id="tour-mailbox" className="btn tertiary" onClick={() => openMailboxGeneral()}>📧 Mailbox ↗</button>
           </div>
         </div>
 
@@ -992,72 +992,100 @@ function WorkstationComponent() {
           </table>
         </div>
 
-        <div className="action-bar" style={{ flexWrap: 'nowrap', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
-            {(() => {
-              const isElectronic = selectedTrade?.settlementType === "ELECTRONIC" && desk === "SETTLEMENT";
-              return (
-                <>
-                  {desk === "MO" && (
-                    <>
-                      <button id="tour-mo-validate" className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
-                      <button id="tour-mo-break" className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
-                      <button id="tour-send-fo" className="btn primary" onClick={sendToFO}>Send to FO</button>
-                    </>
-                  )}
-                  {desk === "CONFIRMATION" && (
-                    <>
-                      <button id="tour-confirm-trade" className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
-                      <button id="tour-confirm-break" className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
-                      <button id="tour-send-cpty" className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
-                      <button id="tour-escalate-fo" className="btn primary" onClick={() => {
-                        if (!selectedTrade) return toast.error("Select a trade first");
-                        if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
-                        const mailParams = new URLSearchParams({ desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO" });
-                        window.open("/communication?" + mailParams.toString(), "mailbox_tab");
-                      }}>Escalate to FO</button>
-                    </>
-                  )}
-                  {desk === "SETTLEMENT" && (
-                    <>
-                      <button
-                        id="tour-mail-cpty"
-                        className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))) ? 'disabled' : ''}`}
-                        disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))}
-                        title={isElectronic ? 'Must use STCC dashboard' : (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)` : '')}
-                        onClick={startSettlementCptyFlow}
-                      >Mail CPTY</button>
-                      <button
-                        id="tour-settlement-approve"
-                        className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)) ? 'disabled' : ''}`}
-                        disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)}
-                        title={
-                          isElectronic ? 'Must use STCC dashboard' :
-                          (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)
-                            ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)`
-                            : (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''))
-                        }
-                        onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
-                      >Approve Settlement</button>
-                      <button id="tour-settlement-break" className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
-                      <button className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_SEND_BACK_TO_MO')}>Send to MO</button>
-                    </>
-                  )}
-                </>
-              );
-            })()}
-            <button id="tour-audit" className="btn primary" style={{marginLeft: "8px"}} onClick={openAudit}>Audit</button>
-            <button className="btn primary" onClick={downloadCSV}>Download Excel</button>
+        <div className="action-bar" style={{ display: 'flex', flexWrap: 'nowrap', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', gap: '16px' }}>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <div style={{ height: '1px', background: '#cbd5e1', flex: 1, minWidth: '20px' }}></div>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>TRADE ACTIONS</span>
+              <div style={{ height: '1px', background: '#cbd5e1', flex: 1, minWidth: '20px' }}></div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {(() => {
+                const isElectronic = selectedTrade?.settlementType === "ELECTRONIC" && desk === "SETTLEMENT";
+                return (
+                  <>
+                    {desk === "MO" && (
+                      <>
+                        <button id="tour-mo-validate" className="btn primary" onClick={() => handleOpenAction('MO_VALIDATE_PASS')}>MO Validate</button>
+                        <button id="tour-mo-break" className="btn primary" onClick={() => handleOpenAction('MO_RAISE_BREAK')}>MO Raise Break</button>
+                        <button id="tour-send-fo" className="btn primary" onClick={sendToFO}>Send to FO</button>
+                      </>
+                    )}
+                    {desk === "CONFIRMATION" && (
+                      <>
+                        <button id="tour-confirm-trade" className="btn primary" onClick={() => handleOpenAction('CONFIRM_TRADE')}>Confirm Trade</button>
+                        <button id="tour-confirm-break" className="btn primary" onClick={() => handleOpenAction('CONFIRM_RAISE_BREAK')}>Confirmation Break</button>
+                        <button id="tour-send-cpty" className="btn primary" onClick={startCptyFlow}>Send to CPTY</button>
+                        <button id="tour-escalate-fo" className="btn primary" onClick={() => {
+                          if (!selectedTrade) return toast.error("Select a trade first");
+                          if (!allowed['CONFIRM_ESCALATE_TO_FO'] || !allowed['CONFIRM_ESCALATE_TO_FO'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+                          const mailParams = new URLSearchParams({ desk, tradeRef: selectedTrade.tradeRef, channel: "FO", composeFor: selectedTrade.tradeRef, composeTo: "FO" });
+                          window.open("/communication?" + mailParams.toString(), "mailbox_tab");
+                        }}>Escalate to FO</button>
+                      </>
+                    )}
+                    {desk === "SETTLEMENT" && (
+                      <>
+                        <button
+                          id="tour-settlement-approve"
+                          className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)) ? 'disabled' : ''}`}
+                          disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)) || (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged)}
+                          title={
+                            isElectronic ? 'Must use STCC dashboard' :
+                            (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency)
+                              ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)`
+                              : (selectedTrade?.direction === 'SELL' && selectedTrade?.settlementType === 'BILATERAL' && !selectedTrade?.cptySSIAcknowledged ? 'Cannot approve: Counterparty has not acknowledged the SSI' : ''))
+                          }
+                          onClick={() => handleOpenAction('SETTLEMENT_APPROVE')}
+                        >Approve Settlement</button>
+                        <button id="tour-settlement-break" className={`btn primary ${isElectronic ? 'disabled' : ''}`} disabled={isElectronic} onClick={() => handleOpenAction('SETTLEMENT_RAISE_BREAK')}>Setts Break</button>
+                        <button
+                          id="tour-mail-cpty"
+                          className={`btn primary ${(isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))) ? 'disabled' : ''}`}
+                          disabled={isElectronic || (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) && !(selectedTrade?.cutoffMissedReason === "Missed Value Date" && selectedTrade?.age > selectedTrade?.cutoffMissedAtAge))}
+                          title={isElectronic ? 'Must use STCC dashboard' : (cutoffsReached && cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency} (${CURRENCY_CUTOFF_DISPLAY && CURRENCY_CUTOFF_DISPLAY[selectedTrade?.currency] || ''} EST)` : '')}
+                          onClick={startSettlementCptyFlow}
+                        >Mail CPTY</button>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+
+          <div style={{ width: '1px', background: '#cbd5e1', alignSelf: 'stretch' }}></div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <div style={{ height: '1px', background: '#cbd5e1', flex: 1, minWidth: '20px' }}></div>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>OPERATIONS</span>
+              <div style={{ height: '1px', background: '#cbd5e1', flex: 1, minWidth: '20px' }}></div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button id="tour-audit" className="btn tertiary" onClick={openAudit}>Audit</button>
+              <button className="btn tertiary" onClick={downloadCSV}>Download Excel</button>
+            </div>
           </div>
           
-          <div id="tour-tutorial" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {(desk === "MO" || desk === "CONFIRMATION" || desk === "SETTLEMENT") && (
-              <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour(desk === "MO" ? 'middleOffice' : (desk === "CONFIRMATION" ? 'confirmationDesk' : 'settlementDesk'), desk === "MO" ? getDynamicMoSteps() : (desk === "CONFIRMATION" ? getDynamicConfirmationSteps() : getDynamicSettlementSteps()))}>
-                ❔ Restart Tour
-              </button>
-            )}
-            {desk && <InstructionPanel desk={desk} />}
-            <TutorialPanel desk={desk} />
+          <div style={{ width: '1px', background: '#cbd5e1', alignSelf: 'stretch' }}></div>
+
+          <div id="tour-tutorial" style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <div style={{ height: '1px', background: '#cbd5e1', flex: 1, minWidth: '20px' }}></div>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>LEARNING TOOLS</span>
+              <div style={{ height: '1px', background: '#cbd5e1', flex: 1, minWidth: '20px' }}></div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {(desk === "MO" || desk === "CONFIRMATION" || desk === "SETTLEMENT") && (
+                <button className="btn" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }} onClick={() => startTour(desk === "MO" ? 'middleOffice' : (desk === "CONFIRMATION" ? 'confirmationDesk' : 'settlementDesk'), desk === "MO" ? getDynamicMoSteps() : (desk === "CONFIRMATION" ? getDynamicConfirmationSteps() : getDynamicSettlementSteps()))}>
+                  ❔ Restart Tour
+                </button>
+              )}
+              {desk && <InstructionPanel desk={desk} />}
+              <TutorialPanel desk={desk} />
+            </div>
           </div>
         </div>
       </div>

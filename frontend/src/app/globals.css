@@ -171,3 +171,22 @@ body {
   border-color: #fde68a !important;
   color: #fffbeb !important;
 }
+
+.btn.tertiary {
+  background-color: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.btn.tertiary:focus {
+  outline-color: #cbd5e1;
+}
+.btn.tertiary:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0F172A;
+}
+.btn.tertiary:disabled, .btn.tertiary.disabled {
+  border-color: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  background-color: transparent !important;
+}
