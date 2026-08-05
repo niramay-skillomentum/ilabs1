@@ -125,8 +125,10 @@ class SimulationClock {
       return this.getToday9AM();
     }
     const elapsedMs = new Date() - new Date(start);
+    const maxSimulatedMs = 9 * 60 * 60 * 1000; // 9 hours (09:00 AM to 18:00 PM)
+    const simulatedDelta = Math.min(elapsedMs * this.simSpeed, maxSimulatedMs);
     const currentSimTime = this.getToday9AM();
-    currentSimTime.setTime(currentSimTime.getTime() + elapsedMs * this.simSpeed);
+    currentSimTime.setTime(currentSimTime.getTime() + simulatedDelta);
     return currentSimTime;
   }
 
