@@ -444,12 +444,14 @@ class QueueComposer {
     // ============================
     // GENERATE REMAINING TRADES
     // ============================
+    // If cutoff-missed break trades are not available in DB, DO NOT generate synthetic cutoff breaks.
+    // Instead, assign/generate remaining break trades as Settlement Pending with errors.
     const remClean = targetClean - selectedClean.length;
-    const remCutoff = targetCutoffBreaks - selectedCutoffBreaks.length;
-    const remOther = targetOtherBreaks - selectedOtherBreaks.length;
+    const totalSelectedBreaks = selectedCutoffBreaks.length + selectedOtherBreaks.length;
+    const remBreaks = 10 - totalSelectedBreaks;
 
-    if (remClean > 0 || remCutoff > 0 || remOther > 0) {
-      console.log(`🔧 Generating (SETTLEMENT): ${remClean} clean, ${remCutoff} cutoff breaks, ${remOther} other breaks`);
+    if (remClean > 0 || remBreaks > 0) {
+      console.log(`🔧 Generating (SETTLEMENT): ${remClean} clean, 0 cutoff breaks (from DB only), ${remBreaks} pending breaks with errors`);
 
       const getBilatCount = (selectedList, targetBilat, remCount) => {
         const currBilat = selectedList.filter(t => t.settlementType === "BILATERAL").length;
@@ -457,32 +459,28 @@ class QueueComposer {
       };
 
       const cleanBilat = getBilatCount(selectedClean, targetCleanBilat, remClean);
-      const cutoffBilat = getBilatCount(selectedCutoffBreaks, targetCutoffBilat, remCutoff);
-      const otherBilat = getBilatCount(selectedOtherBreaks, targetOtherBilat, remOther);
+      const currBreakBilat = [...selectedCutoffBreaks, ...selectedOtherBreaks].filter(t => t.settlementType === "BILATERAL").length;
+      const breakBilat = Math.max(0, Math.min(remBreaks, 5 - currBreakBilat));
 
       const generated = await tradeGenerator.generateSettlementTrades({
         cleanSpec: { count: remClean, bilateral: cleanBilat, electronic: remClean - cleanBilat },
-        cutoffBreakSpec: { count: remCutoff, bilateral: cutoffBilat, electronic: remCutoff - cutoffBilat },
-        otherBreakSpec: { count: remOther, bilateral: otherBilat, electronic: remOther - otherBilat },
+        cutoffBreakSpec: { count: 0, bilateral: 0, electronic: 0 }, // Cutoff breaks are strictly DB only
+        otherBreakSpec: { count: remBreaks, bilateral: breakBilat, electronic: remBreaks - breakBilat },
         settlementInitialState
       });
 
       const genClean = [];
-      const genCutoff = [];
       const genOther = [];
       for (const t of generated) {
         const isBreak = isBreakTrade(t, "SETTLEMENT");
         if (!isBreak) {
           genClean.push(t);
-        } else if (t.currentStatus === "SETTLEMENT_BREAK" && t.cutoffMissedReason != null) {
-          genCutoff.push(t);
         } else {
           genOther.push(t);
         }
       }
 
       selectedClean = selectedClean.concat(genClean);
-      selectedCutoffBreaks = selectedCutoffBreaks.concat(genCutoff);
       selectedOtherBreaks = selectedOtherBreaks.concat(genOther);
     }
 

@@ -1132,15 +1132,11 @@ async function generateSettlementTrades({ cleanSpec = {}, cutoffBreakSpec = {}, 
     requests.push({ category: "CUTOFF", hasBreak: true, status: "SETTLEMENT_BREAK", mode: "ELECTRONIC" });
   }
 
-  const otherTotalBilat = otherBreakSpec.bilateral || 0;
-  for (let i = 0; i < otherTotalBilat; i++) {
-    const status = i < Math.ceil(otherTotalBilat * 0.5) ? settlementInitialState : "SETTLEMENT_BREAK";
-    requests.push({ category: "OTHER_BREAK", hasBreak: true, status, mode: "BILATERAL" });
+  for (let i = 0; i < (otherBreakSpec.bilateral || 0); i++) {
+    requests.push({ category: "OTHER_BREAK", hasBreak: true, status: settlementInitialState, mode: "BILATERAL" });
   }
-  const otherTotalElec = otherBreakSpec.electronic || 0;
-  for (let i = 0; i < otherTotalElec; i++) {
-    const status = i < Math.ceil(otherTotalElec * 0.5) ? settlementInitialState : "SETTLEMENT_BREAK";
-    requests.push({ category: "OTHER_BREAK", hasBreak: true, status, mode: "ELECTRONIC" });
+  for (let i = 0; i < (otherBreakSpec.electronic || 0); i++) {
+    requests.push({ category: "OTHER_BREAK", hasBreak: true, status: settlementInitialState, mode: "ELECTRONIC" });
   }
 
   for (const req of requests) {
