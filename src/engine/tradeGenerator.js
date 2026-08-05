@@ -439,6 +439,22 @@ function generateSingleTrade(desk, isMoBreak, forcedStatus = null, hasConfirmati
     product = ssiPairData.product;
     productType = ssiPairData.productType || pick(PRODUCT_TAXONOMY[product]?.productTypes || [product]);
     tradeType = ssiPairData.tradeType || PRODUCT_TAXONOMY[product]?.tradeTypeMap?.[productType] || "OTC";
+  } else if (options && options.targetSettlementMode) {
+    const matchingProducts = PRODUCTS.filter(p => {
+      const tax = PRODUCT_TAXONOMY[p];
+      return tax.productTypes.some(pt => {
+        const tt = tax.tradeTypeMap[pt];
+        return options.targetSettlementMode === "BILATERAL" ? (tt === "OTC") : (tt !== "OTC");
+      });
+    });
+    product = pick(matchingProducts.length ? matchingProducts : PRODUCTS);
+    const tax = PRODUCT_TAXONOMY[product];
+    const matchingTypes = tax.productTypes.filter(pt => {
+      const tt = tax.tradeTypeMap[pt];
+      return options.targetSettlementMode === "BILATERAL" ? (tt === "OTC") : (tt !== "OTC");
+    });
+    productType = pick(matchingTypes.length ? matchingTypes : tax.productTypes);
+    tradeType = tax.tradeTypeMap[productType];
   } else {
     product = pick(PRODUCTS);
     productType = pick(PRODUCT_TAXONOMY[product].productTypes);
@@ -914,17 +930,36 @@ async function _prefetchSSIPairs(totalCount, cleanCount, breakCount) {
  *
  * Also fetches a random entity from the Entity collection.
  */
-async function _resolveReferenceChain(ssiCurrencies, hasBreak, preferredSettlementType = null) {
+async function _resolveReferenceChain(ssiCurrencies, hasBreak, preferredSettlementType = null, targetSettlementMode = null) {
   let pair = null;
   let currency = null;
   let counterparty = null;
   let security = null;
 
   // Pick product and product type from taxonomy
-  const product = pick(PRODUCTS);
-  const taxonomy = PRODUCT_TAXONOMY[product];
-  const productType = pick(taxonomy.productTypes);
-  const tradeType = taxonomy.tradeTypeMap[productType];
+  let product, productType, tradeType;
+  if (targetSettlementMode) {
+    const matchingProducts = PRODUCTS.filter(p => {
+      const tax = PRODUCT_TAXONOMY[p];
+      return tax.productTypes.some(pt => {
+        const tt = tax.tradeTypeMap[pt];
+        return targetSettlementMode === "BILATERAL" ? (tt === "OTC") : (tt !== "OTC");
+      });
+    });
+    product = pick(matchingProducts.length ? matchingProducts : PRODUCTS);
+    const tax = PRODUCT_TAXONOMY[product];
+    const matchingTypes = tax.productTypes.filter(pt => {
+      const tt = tax.tradeTypeMap[pt];
+      return targetSettlementMode === "BILATERAL" ? (tt === "OTC") : (tt !== "OTC");
+    });
+    productType = pick(matchingTypes.length ? matchingTypes : tax.productTypes);
+    tradeType = tax.tradeTypeMap[productType];
+  } else {
+    product = pick(PRODUCTS);
+    const taxonomy = PRODUCT_TAXONOMY[product];
+    productType = pick(taxonomy.productTypes);
+    tradeType = taxonomy.tradeTypeMap[productType];
+  }
 
   // Get entity from reference data
   const entity = await ssiRepository.getRandomEntity();
@@ -1064,11 +1099,90 @@ async function saveGeneratedTrades(trades) {
   }
 }
 
+/**
+ * Generate a batch of trades specifically configured for Settlement Desk queue distribution.
+ * Ensures exact quantities and balanced Bilateral vs Electronic ratios for Clean, Cutoff Breaks, and Other Breaks.
+ */
+async function generateSettlementTrades({ cleanSpec = {}, cutoffBreakSpec = {}, otherBreakSpec = {}, settlementInitialState = "SETTLEMENT_PENDING" }) {
+  const trades = [];
+  const totalCount = (cleanSpec.count || 0) + (cutoffBreakSpec.count || 0) + (otherBreakSpec.count || 0);
+  if (totalCount <= 0) return [];
+
+  const useRefData = await ssiRepository.isReferenceDataAvailable();
+  const ssiCurrencies = useRefData ? await ssiRepository.getAvailableCurrencies() : [];
+
+  let recentAmountsDoc = await SystemConfig.findOne({ key: "RECENT_AMOUNTS" });
+  let recentAmounts = recentAmountsDoc ? (recentAmountsDoc.value || []) : [];
+  const allEntities = await ssiRepository.getAllEntities();
+  const genOptions = { recentAmounts, allEntities };
+
+  const requests = [];
+
+  for (let i = 0; i < (cleanSpec.bilateral || 0); i++) {
+    requests.push({ category: "CLEAN", hasBreak: false, status: settlementInitialState, mode: "BILATERAL" });
+  }
+  for (let i = 0; i < (cleanSpec.electronic || 0); i++) {
+    requests.push({ category: "CLEAN", hasBreak: false, status: settlementInitialState, mode: "ELECTRONIC" });
+  }
+
+  for (let i = 0; i < (cutoffBreakSpec.bilateral || 0); i++) {
+    requests.push({ category: "CUTOFF", hasBreak: true, status: "SETTLEMENT_BREAK", mode: "BILATERAL" });
+  }
+  for (let i = 0; i < (cutoffBreakSpec.electronic || 0); i++) {
+    requests.push({ category: "CUTOFF", hasBreak: true, status: "SETTLEMENT_BREAK", mode: "ELECTRONIC" });
+  }
+
+  const otherTotalBilat = otherBreakSpec.bilateral || 0;
+  for (let i = 0; i < otherTotalBilat; i++) {
+    const status = i < Math.ceil(otherTotalBilat * 0.5) ? settlementInitialState : "SETTLEMENT_BREAK";
+    requests.push({ category: "OTHER_BREAK", hasBreak: true, status, mode: "BILATERAL" });
+  }
+  const otherTotalElec = otherBreakSpec.electronic || 0;
+  for (let i = 0; i < otherTotalElec; i++) {
+    const status = i < Math.ceil(otherTotalElec * 0.5) ? settlementInitialState : "SETTLEMENT_BREAK";
+    requests.push({ category: "OTHER_BREAK", hasBreak: true, status, mode: "ELECTRONIC" });
+  }
+
+  for (const req of requests) {
+    let ssiPairData = null;
+    if (useRefData && ssiCurrencies.length > 0) {
+      ssiPairData = await _resolveReferenceChain(ssiCurrencies, req.hasBreak, pick(["CORRESPONDENT", "DIRECT"]), req.mode);
+    }
+    const opts = { ...genOptions, targetSettlementMode: req.mode };
+    const trade = generateSingleTrade("SETTLEMENT", false, req.status, false, settlementInitialState, req.hasBreak, ssiPairData, opts);
+
+    if (req.category === "CUTOFF") {
+      trade.cutoffMissedReason = "Missed Value Date";
+      trade.cutoffMissedAtAge = Math.max(0, trade.age - 1);
+    }
+
+    const { xml } = generateXmlAudit(trade);
+    trade.auditXml = xml;
+    trades.push(trade);
+  }
+
+  const saved = await saveGeneratedTrades(trades);
+  try { require("./ledgerImporter").importTradesAsLedgerItems(saved); } catch (e) {}
+
+  try {
+    await SystemConfig.findOneAndUpdate(
+      { key: "RECENT_AMOUNTS" },
+      { $set: { value: genOptions.recentAmounts } },
+      { upsert: true, returnDocument: 'after' }
+    );
+  } catch (e) {
+    console.error("[TradeGen] Error saving RECENT_AMOUNTS:", e);
+  }
+
+  return saved;
+}
+
 module.exports = {
   CPTY_SSIS,
   ENTITY_SSIS,
   PRODUCT_TAXONOMY,
   generateTrades,
+  generateSettlementTrades,
   generateSingleTrade,
   generateXmlAudit,
   saveGeneratedTrades,

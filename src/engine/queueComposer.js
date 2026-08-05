@@ -158,6 +158,9 @@ class QueueComposer {
 
     // 3. Calculate graduated allocation
     const dbAllocation = calculateDbAllocation(unassignedCount);
+    if (desk === "SETTLEMENT") {
+      return await this.buildSettlementQueue(userId, unassignedQuery, unassignedCount, dbAllocation, settlementInitialState);
+    }
     const genAllocation = TOTAL_TRADES - dbAllocation;
 
     console.log(`📊 DB Pool: ${unassignedCount} unassigned ${desk} trades`);
@@ -359,6 +362,236 @@ class QueueComposer {
       sessionStart,
       sessionExpiry
     };
+  }
+
+  async buildSettlementQueue(userId, unassignedQuery, unassignedCount, dbAllocation, settlementInitialState) {
+    console.log(`📊 DB Pool: ${unassignedCount} unassigned SETTLEMENT trades`);
+    console.log(`📊 Allocation: ${dbAllocation} from DB + ${TOTAL_TRADES - dbAllocation} generated`);
+
+    // Target distribution for Settlement Desk:
+    // Total: 20 trades (10 Clean, 10 Breaks)
+    // Of the 10 Breaks: 3-4 Cutoff Breaks, remaining (7-6) Other Breaks
+    // Balanced Bilateral vs Electronic ratio (~50% Bilateral across each bucket)
+    const targetClean = 10;
+    const targetCutoffBreaks = Math.random() < 0.5 ? 3 : 4;
+    const targetOtherBreaks = 10 - targetCutoffBreaks;
+
+    const targetCleanBilat = 5;
+    const targetCutoffBilat = Math.round(targetCutoffBreaks / 2);
+    const targetOtherBilat = 5 - targetCutoffBilat;
+
+    let selectedClean = [];
+    let selectedCutoffBreaks = [];
+    let selectedOtherBreaks = [];
+
+    // ============================
+    // ASSIGN FROM DB
+    // ============================
+    if (dbAllocation > 0) {
+      const fetchLimit = Math.min(unassignedCount, dbAllocation * 4);
+      const dbTrades = await Trade.find(unassignedQuery)
+        .sort({ _id: -1 })
+        .limit(fetchLimit)
+        .lean();
+
+      const now = new Date();
+      const freshDbTrades = dbTrades
+        .map(t => {
+          t.age = ageCalculator.calculateAge(t.tradeDate, now, "SETTLEMENT");
+          return t;
+        })
+        .filter(t => {
+          if ((t.currentStatus === "SETTLEMENT_BREAK" || t.cutoffMissedReason != null) && t.cutoffMissedAtAge != null) {
+            if (t.age <= t.cutoffMissedAtAge) {
+              return false;
+            }
+          }
+          return t.age <= 1;
+        });
+
+      const shuffledDbTrades = shuffle(freshDbTrades);
+
+      const dbCleanPool = [];
+      const dbCutoffPool = [];
+      const dbOtherPool = [];
+
+      for (const t of shuffledDbTrades) {
+        const isBreak = isBreakTrade(t, "SETTLEMENT");
+        if (!isBreak) {
+          dbCleanPool.push(t);
+        } else if (t.currentStatus === "SETTLEMENT_BREAK" && t.cutoffMissedReason != null) {
+          dbCutoffPool.push(t);
+        } else {
+          dbOtherPool.push(t);
+        }
+      }
+
+      const dbCleanTarget = Math.min(targetClean, Math.round(targetClean * (dbAllocation / TOTAL_TRADES)));
+      const dbCutoffTarget = Math.min(targetCutoffBreaks, Math.round(targetCutoffBreaks * (dbAllocation / TOTAL_TRADES)));
+      const dbOtherTarget = Math.min(targetOtherBreaks, Math.round(targetOtherBreaks * (dbAllocation / TOTAL_TRADES)));
+
+      const dbCleanBilatTarget = Math.round(dbCleanTarget * (targetCleanBilat / targetClean));
+      const dbCutoffBilatTarget = targetCutoffBreaks > 0 ? Math.round(dbCutoffTarget * (targetCutoffBilat / targetCutoffBreaks)) : 0;
+      const dbOtherBilatTarget = targetOtherBreaks > 0 ? Math.round(dbOtherTarget * (targetOtherBilat / targetOtherBreaks)) : 0;
+
+      selectedClean = this.selectBalancedFromPool(dbCleanPool, dbCleanTarget, dbCleanBilatTarget);
+      selectedCutoffBreaks = this.selectBalancedFromPool(dbCutoffPool, dbCutoffTarget, dbCutoffBilatTarget);
+      selectedOtherBreaks = this.selectBalancedFromPool(dbOtherPool, dbOtherTarget, dbOtherBilatTarget);
+
+      console.log(`📦 From DB (SETTLEMENT): ${selectedClean.length} clean, ${selectedCutoffBreaks.length} cutoff breaks, ${selectedOtherBreaks.length} other breaks`);
+    }
+
+    // ============================
+    // GENERATE REMAINING TRADES
+    // ============================
+    const remClean = targetClean - selectedClean.length;
+    const remCutoff = targetCutoffBreaks - selectedCutoffBreaks.length;
+    const remOther = targetOtherBreaks - selectedOtherBreaks.length;
+
+    if (remClean > 0 || remCutoff > 0 || remOther > 0) {
+      console.log(`🔧 Generating (SETTLEMENT): ${remClean} clean, ${remCutoff} cutoff breaks, ${remOther} other breaks`);
+
+      const getBilatCount = (selectedList, targetBilat, remCount) => {
+        const currBilat = selectedList.filter(t => t.settlementType === "BILATERAL").length;
+        return Math.max(0, Math.min(remCount, targetBilat - currBilat));
+      };
+
+      const cleanBilat = getBilatCount(selectedClean, targetCleanBilat, remClean);
+      const cutoffBilat = getBilatCount(selectedCutoffBreaks, targetCutoffBilat, remCutoff);
+      const otherBilat = getBilatCount(selectedOtherBreaks, targetOtherBilat, remOther);
+
+      const generated = await tradeGenerator.generateSettlementTrades({
+        cleanSpec: { count: remClean, bilateral: cleanBilat, electronic: remClean - cleanBilat },
+        cutoffBreakSpec: { count: remCutoff, bilateral: cutoffBilat, electronic: remCutoff - cutoffBilat },
+        otherBreakSpec: { count: remOther, bilateral: otherBilat, electronic: remOther - otherBilat },
+        settlementInitialState
+      });
+
+      const genClean = [];
+      const genCutoff = [];
+      const genOther = [];
+      for (const t of generated) {
+        const isBreak = isBreakTrade(t, "SETTLEMENT");
+        if (!isBreak) {
+          genClean.push(t);
+        } else if (t.currentStatus === "SETTLEMENT_BREAK" && t.cutoffMissedReason != null) {
+          genCutoff.push(t);
+        } else {
+          genOther.push(t);
+        }
+      }
+
+      selectedClean = selectedClean.concat(genClean);
+      selectedCutoffBreaks = selectedCutoffBreaks.concat(genCutoff);
+      selectedOtherBreaks = selectedOtherBreaks.concat(genOther);
+    }
+
+    // ============================
+    // ASSEMBLE FINAL QUEUE
+    // ============================
+    let queue = [...selectedClean, ...selectedCutoffBreaks, ...selectedOtherBreaks];
+
+    if (queue.length < TOTAL_TRADES) {
+      const shortage = TOTAL_TRADES - queue.length;
+      console.log(`⚠️ Settlement Queue short by ${shortage}. Generating filler trades.`);
+      const fillerBilat = Math.round(shortage / 2);
+      const filler = await tradeGenerator.generateSettlementTrades({
+        otherBreakSpec: { count: shortage, bilateral: fillerBilat, electronic: shortage - fillerBilat },
+        settlementInitialState
+      });
+      queue = queue.concat(filler);
+    }
+
+    queue = queue.slice(0, TOTAL_TRADES);
+    queue = shuffle(queue);
+
+    const ageNow = new Date();
+    queue.forEach(t => {
+      t.age = ageCalculator.calculateAge(t.tradeDate, ageNow, "SETTLEMENT");
+    });
+
+    const tradeRefs = queue.map(t => t.tradeRef);
+    if (queue.length) {
+      await Trade.bulkWrite(
+        queue.map(t => ({
+          updateOne: {
+            filter: { tradeRef: t.tradeRef },
+            update: {
+              $set: { assignedTo: userId, age: t.age },
+              $addToSet: { assignedHistory: userId }
+            }
+          }
+        })),
+        { ordered: false }
+      );
+    }
+
+    const { scheduleProactiveSellSSI } = require("./cptySellSettlementAI");
+    const bilateralSellTrades = queue.filter(t => t.direction === "SELL" && t.settlementType === "BILATERAL");
+    let incorrectTradeId = null;
+    if (bilateralSellTrades.length > 0) {
+      const randomIndex = Math.floor(Math.random() * bilateralSellTrades.length);
+      incorrectTradeId = bilateralSellTrades[randomIndex].tradeRef;
+    }
+    queue.forEach(t => {
+      if (t.direction === "SELL") {
+        const isCorrect = (t.tradeRef !== incorrectTradeId);
+        scheduleProactiveSellSSI(t, isCorrect).catch(e => console.error("Failed to schedule proactive SSI:", e));
+      }
+    });
+
+    const sessionStart = new Date();
+    const sessionExpiry = new Date(sessionStart.getTime() + SESSION_DURATION_MS);
+
+    await Queue.findOneAndUpdate(
+      { userId },
+      {
+        userId,
+        desk: "SETTLEMENT",
+        trades: tradeRefs,
+        sessionStart,
+        sessionExpiry,
+        isActive: true,
+        lastActivity: new Date()
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+    const bilatTotal = queue.filter(t => t.settlementType === "BILATERAL").length;
+    const elecTotal = queue.length - bilatTotal;
+    const cutoffCount = queue.filter(t => t.currentStatus === "SETTLEMENT_BREAK" && t.cutoffMissedReason != null).length;
+    const otherBreakCount = queue.filter(t => isBreakTrade(t, "SETTLEMENT") && !(t.currentStatus === "SETTLEMENT_BREAK" && t.cutoffMissedReason != null)).length;
+    const cleanTotal = queue.filter(t => !isBreakTrade(t, "SETTLEMENT")).length;
+
+    console.log(`✅ SETTLEMENT Queue for ${userId}: ${queue.length} trades (${cleanTotal} clean, ${cutoffCount} cutoff breaks, ${otherBreakCount} other breaks | ${bilatTotal} Bilat / ${elecTotal} Elec)`);
+    console.log(`   Session expires: ${sessionExpiry.toISOString()}`);
+
+    return {
+      trades: queue,
+      sessionStart,
+      sessionExpiry
+    };
+  }
+
+  selectBalancedFromPool(pool, countTarget, targetBilateral) {
+    if (!countTarget || pool.length === 0) return [];
+    const bilateral = pool.filter(t => t.settlementType === "BILATERAL");
+    const electronic = pool.filter(t => t.settlementType !== "BILATERAL");
+
+    let pickedBilat = bilateral.slice(0, targetBilateral);
+    let neededElec = countTarget - pickedBilat.length;
+    let pickedElec = electronic.slice(0, neededElec);
+
+    if (pickedElec.length < neededElec && bilateral.length > pickedBilat.length) {
+      const extraNeeded = neededElec - pickedElec.length;
+      pickedBilat = pickedBilat.concat(bilateral.slice(pickedBilat.length, pickedBilat.length + extraNeeded));
+    }
+    if (pickedBilat.length < targetBilateral && electronic.length > pickedElec.length) {
+      const extraNeeded = countTarget - (pickedBilat.length + pickedElec.length);
+      pickedElec = pickedElec.concat(electronic.slice(pickedElec.length, pickedElec.length + extraNeeded));
+    }
+
+    return [...pickedBilat, ...pickedElec];
   }
 
   /**
