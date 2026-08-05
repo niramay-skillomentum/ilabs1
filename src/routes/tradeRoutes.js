@@ -114,8 +114,8 @@ router.post("/action", authenticateToken, async (req, res) => {
       CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
       CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
 
-      SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
-      SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
+      SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "AMENDED"],
+      SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY"],
       SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
     };
 
@@ -193,6 +193,26 @@ router.post("/action", authenticateToken, async (req, res) => {
     ) {
       return sendLearningResponse(res, 400, "Cannot approve. Counterparty has not acknowledged the SSI.", {
         userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_CPTY_NOT_ACKNOWLEDGED"
+      });
+    }
+
+    // ── Settlement Pending: Block approve and break with learning ──
+    if (action === "SETTLEMENT_APPROVE" && currentStatus === "SETTLEMENT_PENDING") {
+      return sendLearningResponse(res, 400, "You cannot approve a trade directly from Settlement Pending. You must first contact the counterparty to verify their settlement instructions.", {
+        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_APPROVE_FROM_PENDING"
+      });
+    }
+
+    if (action === "SETTLEMENT_RAISE_BREAK" && currentStatus === "SETTLEMENT_PENDING") {
+      return sendLearningResponse(res, 400, "A Settlement Break cannot be raised directly from Settlement Pending. You must first contact the counterparty to verify settlement instructions.", {
+        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_BREAK_FROM_PENDING"
+      });
+    }
+
+    // ── Settlement Mail CPTY: Block if cpty has already mailed ──
+    if (action === "SETTLEMENT_MAIL_CPTY" && sessionTrade.cptyResponseReceived) {
+      return sendLearningResponse(res, 400, "The counterparty has already sent you their settlement details for this trade. You should always check the Mailbox first before reaching out.", {
+        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_CPTY_ALREADY_MAILED"
       });
     }
 

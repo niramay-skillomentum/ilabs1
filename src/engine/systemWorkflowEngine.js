@@ -208,15 +208,15 @@ async function processAmendment(job) {
   await SystemMail.create({
     userId: job.userId,
     tradeRef: trade.tradeRef,
-    from: "System",
+    from: "Static Data Team",
     subject: `Trade Amended Successfully — ${trade.tradeRef}`,
     body,
     action: "AMENDED"
   });
 
   await auditEngine.recordEvent(
-    trade.tradeRef, "System", "SETTLEMENT_AMENDED",
-    `PENDING_AMENDMENT → AMENDED | System applied requested amendment`,
+    trade.tradeRef, "Static Data Team", "SETTLEMENT_AMENDED",
+    `PENDING_AMENDMENT → AMENDED | Static Data Team applied requested amendment`,
     true
   );
 
@@ -261,7 +261,7 @@ async function processVerification(job) {
         `was breached at simulated time ${simTime}. Verification passed but trade moved to SETTLEMENT_BREAK.`;
 
       await auditEngine.recordEvent(
-        trade.tradeRef, "System", "CUTOFF_MISSED",
+        trade.tradeRef, "Static Data Team", "CUTOFF_MISSED",
         auditDetails,
         true
       );
@@ -269,7 +269,7 @@ async function processVerification(job) {
       await SystemMail.create({
         userId: job.userId,
         tradeRef: trade.tradeRef,
-        from: "System",
+        from: "Static Data Team",
         subject: `Settlement Cut-Off Missed — ${trade.tradeRef}`,
         body:
           `Verification was successful for trade ${trade.tradeRef}, however the ` +
@@ -294,7 +294,7 @@ async function processVerification(job) {
     await SystemMail.create({
       userId: job.userId,
       tradeRef: trade.tradeRef,
-      from: "System",
+      from: "Static Data Team",
       subject: `Trade Settled — ${trade.tradeRef}`,
       body:
         `Verification successful for trade ${trade.tradeRef}.\n\n` +
@@ -305,7 +305,7 @@ async function processVerification(job) {
     });
 
     await auditEngine.recordEvent(
-      trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_PASSED",
+      trade.tradeRef, "Static Data Team", "SETTLEMENT_VERIFICATION_PASSED",
       "PENDING_APPROVAL → SETTLED | Automated verification passed — trade settled",
       true
     );
@@ -328,7 +328,7 @@ async function processVerification(job) {
       // Session expired — unassign to general pool
       trade.assignedTo = null;
       await auditEngine.recordEvent(
-        trade.tradeRef, "System", "SETTLEMENT_UNASSIGNED",
+        trade.tradeRef, "Static Data Team", "SETTLEMENT_UNASSIGNED",
         "Session expired — trade returned to general pool with SETTLEMENT_PENDING",
         true
       );
@@ -340,7 +340,7 @@ async function processVerification(job) {
     await SystemMail.create({
       userId: job.userId,
       tradeRef: trade.tradeRef,
-      from: "System",
+      from: "Static Data Team",
       subject: `Settlement Rejected — ${trade.tradeRef}`,
       body:
         `Automated verification failed for trade ${trade.tradeRef}.\n\n` +
@@ -377,7 +377,7 @@ async function processVerification(job) {
     }
 
     await auditEngine.recordEvent(
-      trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_FAILED",
+      trade.tradeRef, "Static Data Team", "SETTLEMENT_VERIFICATION_FAILED",
       `PENDING_APPROVAL → SETTLEMENT_PENDING | ${errors.length} issue(s): ${errors.join("; ")}`,
       true
     );

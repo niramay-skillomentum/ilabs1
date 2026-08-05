@@ -676,7 +676,7 @@ function ReconciliationDeskContent() {
             amountFrom,
             amountTo
           });
-        }}>Execute Query</button>
+        }}>Search Query</button>
 
         <button className="btn secondary" style={{ fontSize: 11, padding: "4px 10px", marginLeft: "10px" }} onClick={() => {
           setStatusFilter(null);

@@ -41,8 +41,8 @@ export default function FolderNav({ channel, currentFolder, switchFolder, inboxD
     return (
       <div className="folder-nav">
         <div className="folder-item active">
-          <span className="folder-icon">🖥️</span>
-          <span>System Inbox</span>
+          <span className="folder-icon">🏢</span>
+          <span>Static Data Team Inbox</span>
         </div>
       </div>
     );
@@ -98,14 +98,14 @@ export default function FolderNav({ channel, currentFolder, switchFolder, inboxD
         <>
           <div className="folder-item folder-group-header">
             <span className="folder-icon"><Icon name="inbox" /></span>
-            <span className="folder-label">System Mails</span>
+            <span className="folder-label">Static Data Team</span>
           </div>
           <div
             className={`folder-item folder-sub ${currentFolder === "system" ? "active" : ""}`}
             onClick={() => switchFolder("system")}
           >
             <span className="folder-indent" />
-            <span className="folder-label">System Inbox</span>
+            <span className="folder-label">Static Data Team Inbox</span>
           </div>
           <div className="folder-divider" />
         </>

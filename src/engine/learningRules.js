@@ -425,6 +425,63 @@ const RULES = {
     learnMoreLink: "/docs/failed-settlement-resolution"
   },
 
+  SETTLEMENT_APPROVE_FROM_PENDING: {
+    code: "SETTLEMENT_APPROVE_FROM_PENDING",
+    title: "Cannot Approve from Settlement Pending",
+    severity: SEVERITY.ERROR,
+    message: "A trade in Settlement Pending cannot be approved directly. You must first contact the counterparty to verify their settlement instructions before proceeding.",
+    whyItMatters: "Settlement requires bilateral agreement on Standing Settlement Instructions (SSI). Both parties must exchange and verify SSI details before settlement can be approved. Approving without this verification risks sending funds to incorrect accounts.",
+    realWorldImpact: [
+      "Funds may be sent to the wrong account",
+      "Settlement failure due to unverified SSI",
+      "Counterparty dispute on settlement terms",
+      "Regulatory breach — bypassing bilateral verification controls"
+    ],
+    correctAction: "1. Click 'Mail CPTY' to contact the counterparty\n2. Verify their Standing Settlement Instructions (SSI)\n3. Wait for their response in the Mailbox\n4. Only then approve the settlement",
+    scorePenalty: 10,
+    xpReward: 5,
+    relatedTopic: "Settlement Workflow",
+    learnMoreLink: "/docs/settlement-workflow"
+  },
+
+  SETTLEMENT_BREAK_FROM_PENDING: {
+    code: "SETTLEMENT_BREAK_FROM_PENDING",
+    title: "Cannot Raise Break from Settlement Pending",
+    severity: SEVERITY.ERROR,
+    message: "A Settlement Break cannot be raised directly from Settlement Pending. You must first contact the counterparty to verify settlement instructions. A break should only be raised when there is a confirmed discrepancy.",
+    whyItMatters: "Raising a break without first contacting the counterparty is premature. There may be no actual discrepancy — the break process should be evidence-based, triggered only after SSI comparison reveals a mismatch.",
+    realWorldImpact: [
+      "Premature break wastes investigation resources",
+      "No evidence to support the break in audit",
+      "Delays settlement processing unnecessarily",
+      "Process violation flagged in compliance review"
+    ],
+    correctAction: "1. Click 'Mail CPTY' to contact the counterparty\n2. Review their SSI details when they respond\n3. Compare against your system records\n4. If discrepancy found, then raise a Settlement Break",
+    scorePenalty: 10,
+    xpReward: 5,
+    relatedTopic: "Settlement Breaks",
+    learnMoreLink: "/docs/settlement-breaks"
+  },
+
+  SETTLEMENT_CPTY_ALREADY_MAILED: {
+    code: "SETTLEMENT_CPTY_ALREADY_MAILED",
+    title: "Counterparty Has Already Mailed",
+    severity: SEVERITY.WARNING,
+    message: "The counterparty has already sent you their settlement details for this trade. You should always check the Mailbox first before reaching out — you may have missed their communication.",
+    whyItMatters: "The counterparty's response contains critical SSI details needed for settlement. Missing their response leads to duplicate communications, delays, and demonstrates a lack of attention to the inbox.",
+    realWorldImpact: [
+      "Duplicate communication with counterparty — unprofessional",
+      "Counterparty may question your operational competence",
+      "Delayed settlement while waiting for a response you already have",
+      "Missed SSI details could lead to settlement failure"
+    ],
+    correctAction: "1. Open the Mailbox to check for counterparty messages\n2. Review the SSI details they have already provided\n3. Compare against your system records\n4. Proceed with approval or raise a break based on your findings",
+    scorePenalty: 5,
+    xpReward: 3,
+    relatedTopic: "Settlement Communication",
+    learnMoreLink: "/docs/settlement-communication"
+  },
+
   // ── RECONCILIATION RULES ──────────────────────
 
   RECON_MISSING_FIELDS: {
@@ -541,7 +598,10 @@ const ERROR_TO_RULE_MAP = {
   "Trade must be APPROVED before settlement.": "SETTLEMENT_NOT_APPROVED",
   "Trade has a missed value date break. You must liaise with the counterparty first.": "SETTLEMENT_MAIL_CPTY_REQUIRED",
   "Select one Ledger and one Statement item.": "RECON_MISSING_PAIR",
-  "Item ID and Trade Reference are required.": "RECON_MISSING_FIELDS"
+  "Item ID and Trade Reference are required.": "RECON_MISSING_FIELDS",
+  "You cannot approve a trade directly from Settlement Pending.": "SETTLEMENT_APPROVE_FROM_PENDING",
+  "A Settlement Break cannot be raised directly from Settlement Pending.": "SETTLEMENT_BREAK_FROM_PENDING",
+  "The counterparty has already sent you their settlement details for this trade.": "SETTLEMENT_CPTY_ALREADY_MAILED"
 };
 
 /**

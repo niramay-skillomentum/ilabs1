@@ -11,7 +11,6 @@ const User = require("../models/User");
 const Queue = require("../models/Queue");
 const Counterparty = require("../models/Counterparty");
 const { authenticateToken } = require("../middleware/auth");
-const mailRoutingEngine = require("../engine/mailRoutingEngine");
 
 // ── Simulated presence from lastActivity ──
 function getPresence(lastActivity) {
@@ -33,7 +32,7 @@ function generateExternalProfile(counterpartyName) {
   const hash = counterpartyName.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return {
     name: counterpartyName + " Operations",
-    email: mailRoutingEngine.getCptyOperationsEmail(counterpartyName),
+    email: `operations@${counterpartyName.toLowerCase().replace(/\s+/g, "")}.com`,
     company: counterpartyName,
     department: EXTERNAL_DEPTS[hash % EXTERNAL_DEPTS.length],
     role: EXTERNAL_ROLES[hash % EXTERNAL_ROLES.length],
@@ -69,7 +68,6 @@ router.get("/:userId", authenticateToken, async (req, res) => {
         }
       });
     }
-
     const user = await User.findOne({ email: userId }).select("-password").lean();
 
     if (!user) {
@@ -162,4 +160,5 @@ router.get("/external/:counterpartyName", authenticateToken, async (req, res) =>
   }
 });
 
+module.exports = router;
 module.exports = router;

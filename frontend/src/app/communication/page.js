@@ -489,7 +489,7 @@ function CommunicationComponent() {
 
   const DESK_LABELS = { SETTLEMENT: "Settlement", CONFIRMATION: "Confirmation", MO: "Middle Office", RECONCILIATION: "Reconciliation" };
   const folderTitle = () => {
-    if (channel === "SYSTEM") return "System Notifications";
+    if (channel === "SYSTEM") return "Static Data Team Notifications";
     if (channel === "FO") return "Front Office Communications";
     if (currentFolder === "inbox") return "Inbox";
     if (currentFolder === "unread") return "Unread";
@@ -498,7 +498,7 @@ function CommunicationComponent() {
       const deskKey = currentFolder.replace("group_", "");
       return `Group Inbox — ${DESK_LABELS[deskKey] || deskKey}`;
     }
-    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items", system: "System Mails" };
+    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items", system: "Static Data Team Mails" };
     return titles[currentFolder] || currentFolder;
   };
 
@@ -796,11 +796,11 @@ function CommunicationComponent() {
       {/* ========== HEADER ========== */}
       <div className="header">
         <div className="header-left">
-          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB Operations Mailbox"}</div>
+          <div className="header-logo">{channel === "SYSTEM" ? "🏢 SGB Static Data Team" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB Operations Mailbox"}</div>
         </div>
         <div className="header-right">
           <div className="header-user">
-            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userName}`}
+            {channel === "SYSTEM" ? `${desk || ""} Desk | Static Data Team Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userName}`}
           </div>
           <div className="header-date">{todayDate}</div>
           <button className="btn secondary" onClick={closeMailbox}>✕ Close</button>

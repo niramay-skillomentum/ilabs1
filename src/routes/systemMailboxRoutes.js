@@ -34,15 +34,15 @@ router.get("/list", authenticateToken, async (req, res) => {
       const thread = byTrade[ref];
       let trade = tradeMap[ref];
       if (!trade) {
-        trade = { tradeRef: ref, counterparty: "System", currency: "N/A", amount: 0, currentStatus: "SYSTEM" };
+        trade = { tradeRef: ref, counterparty: "Static Data Team", currency: "N/A", amount: 0, currentStatus: "SYSTEM" };
       }
       return {
         trade,
         conversation: {
-          subject: thread[0]?.subject || `System — ${ref}`,
+          subject: thread[0]?.subject || `Static Data Team — ${ref}`,
           status: "SYSTEM",
           messages: thread.map(m => ({
-            sender: "System",
+            sender: "Static Data Team",
             body: m.body,
             subject: m.subject,
             timestamp: m.timestamp

@@ -70,8 +70,8 @@ const allowed = {
   CONFIRM_RAISE_AMENDMENT: ["CONFIRMATION_BREAK"],
   CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
   CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
-  SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
-  SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
+  SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "AMENDED"],
+  SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY"],
   SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING", "SETTLEMENT_BREAK"] // SETTLEMENT_BREAK allowed for missed value date
 };
 
@@ -578,6 +578,48 @@ function WorkstationComponent() {
       }
     }
 
+    // SETTLEMENT Desk Simulator Intercepts (Bilateral)
+    if (desk === "SETTLEMENT") {
+      if (action === 'SETTLEMENT_APPROVE' && selectedTrade.currentStatus === 'SETTLEMENT_PENDING') {
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "ERROR",
+          title: "Cannot Approve from Settlement Pending",
+          mentorIntro: "Let's review the bilateral settlement workflow.",
+          message: "A trade in Settlement Pending cannot be approved directly. You must first contact the counterparty to verify their settlement instructions before proceeding.",
+          whyItMatters: "Settlement requires bilateral agreement on Standing Settlement Instructions (SSI). Both parties must exchange and verify SSI details before settlement can be approved. Approving without this verification risks sending funds to incorrect accounts.",
+          realWorldImpact: ["Funds may be sent to the wrong account", "Settlement failure due to unverified SSI", "Counterparty dispute on settlement terms", "Regulatory breach — bypassing bilateral verification controls"],
+          correctAction: "1. Click 'Mail CPTY' to contact the counterparty\n2. Verify their Standing Settlement Instructions (SSI)\n3. Wait for their response in the Mailbox\n4. Only then approve the settlement",
+          scoreImpact: -10,
+          xpReward: 5,
+          repeatCount: 1,
+          desk: "SETTLEMENT",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "SETTLEMENT_APPROVE_FROM_PENDING"
+        });
+        return;
+      }
+      if (action === 'SETTLEMENT_RAISE_BREAK' && selectedTrade.currentStatus === 'SETTLEMENT_PENDING') {
+        showLearningCard({
+          eventId: `local_${Date.now()}`,
+          severity: "ERROR",
+          title: "Cannot Raise Break from Settlement Pending",
+          mentorIntro: "No worries — this is exactly how we learn.",
+          message: "A Settlement Break cannot be raised directly from Settlement Pending. You must first contact the counterparty to verify settlement instructions. A break should only be raised when there is a confirmed discrepancy.",
+          whyItMatters: "Raising a break without first contacting the counterparty is premature. There may be no actual discrepancy — the break process should be evidence-based, triggered only after SSI comparison reveals a mismatch.",
+          realWorldImpact: ["Premature break wastes investigation resources", "No evidence to support the break in audit", "Delays settlement processing unnecessarily", "Process violation flagged in compliance review"],
+          correctAction: "1. Click 'Mail CPTY' to contact the counterparty\n2. Review their SSI details when they respond\n3. Compare against your system records\n4. If discrepancy found, then raise a Settlement Break",
+          scoreImpact: -10,
+          xpReward: 5,
+          repeatCount: 1,
+          desk: "SETTLEMENT",
+          tradeRef: selectedTrade.tradeRef,
+          mistakeCode: "SETTLEMENT_BREAK_FROM_PENDING"
+        });
+        return;
+      }
+    }
+
     if (!allowed[action] || !allowed[action].includes(selectedTrade.currentStatus)) {
       return toast.error("Invalid action for current state");
     }
@@ -648,7 +690,7 @@ function WorkstationComponent() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(`Sent to System for Amendment${selectedSsiId ? ` (SSI: ${selectedSsiId})` : ""}. The trade is now PENDING_AMENDMENT — check the System Mailbox for confirmation.`);
+        toast.success(`Sent to Static Data Team for Amendment${selectedSsiId ? ` (SSI: ${selectedSsiId})` : ""}. The trade is now PENDING_AMENDMENT — check the Static Data Team mailbox for confirmation.`);
         setIsEditingSSI(false);
         setSelectedSsiId("");
         setSsiGroupList([]);
@@ -816,6 +858,26 @@ function WorkstationComponent() {
   const startSettlementCptyFlow = () => {
     if (!selectedTrade) return toast.error("Select trade first");
     if (!allowed['SETTLEMENT_MAIL_CPTY'] || !allowed['SETTLEMENT_MAIL_CPTY'].includes(selectedTrade.currentStatus)) return toast.error("Invalid action for current state");
+    // Check if cpty has already mailed — user should check mailbox first
+    if (selectedTrade.cptyResponseReceived) {
+      showLearningCard({
+        eventId: `local_${Date.now()}`,
+        severity: "WARNING",
+        title: "Counterparty Has Already Mailed",
+        mentorIntro: "Always check the Mailbox before reaching out.",
+        message: "The counterparty has already sent you their settlement details for this trade. You should always check the Mailbox first before reaching out — you may have missed their communication.",
+        whyItMatters: "The counterparty's response contains critical SSI details needed for settlement. Missing their response leads to duplicate communications, delays, and demonstrates a lack of attention to the inbox.",
+        realWorldImpact: ["Duplicate communication with counterparty — unprofessional", "Counterparty may question your operational competence", "Delayed settlement while waiting for a response you already have", "Missed SSI details could lead to settlement failure"],
+        correctAction: "1. Open the Mailbox to check for counterparty messages\n2. Review the SSI details they have already provided\n3. Compare against your system records\n4. Proceed with approval or raise a break based on your findings",
+        scoreImpact: -5,
+        xpReward: 3,
+        repeatCount: 1,
+        desk: "SETTLEMENT",
+        tradeRef: selectedTrade.tradeRef,
+        mistakeCode: "SETTLEMENT_CPTY_ALREADY_MAILED"
+      });
+      return;
+    }
     const mailParams = new URLSearchParams({
       desk, tradeRef: selectedTrade.tradeRef, composeFor: selectedTrade.tradeRef, composeTo: "COUNTERPARTY",
       composeAction: "SETTLEMENT_MAIL_CPTY"
@@ -958,7 +1020,7 @@ function WorkstationComponent() {
             {desk === "SETTLEMENT" && (
               <button id="tour-system-mailbox" className="btn tertiary"
                 onClick={() => window.open(`/communication?channel=SYSTEM&desk=SETTLEMENT${selectedTrade ? `&tradeRef=${encodeURIComponent(selectedTrade.tradeRef)}` : ""}`, "_blank")}>
-                🖥️ System Mailbox ↗
+                🏢 Static Data Team ↗
               </button>
             )}
             <button id="tour-mailbox" className="btn tertiary" onClick={() => openMailboxGeneral()}>📧 Mailbox ↗</button>
@@ -1271,7 +1333,7 @@ function WorkstationComponent() {
                   </div>
                 )}
                 {(popupState.trade.currentStatus === 'SETTLEMENT_BREAK' || popupState.trade.currentStatus === 'REJECTED_REVERIFY') && (
-                  <button className="btn warning" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
+                  <button className="btn warning" onClick={handleSendToSystemAmendment}>Send to Static Data Team for Amendment</button>
                 )}
                 <span style={{ background: isCorrespondent ? '#f59e0b' : '#22c55e', color: 'white', padding: '3px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>
                   {settlType}
@@ -1397,14 +1459,14 @@ function WorkstationComponent() {
                   <button className="btn secondary" onClick={() => setPopupState({ type: null })}>Close</button>
                   {['SETTLEMENT_BREAK', 'REJECTED_REVERIFY'].includes(popupState.trade.currentStatus) && (
                     <button className="btn primary" onClick={handleSendToSystemAmendment} disabled={ssiGroupList.length > 0 && !selectedSsiId}>
-                      Send to System for Amendment
+                      Send to Static Data Team for Amendment
                     </button>
                   )}
                 </>
               ) : (
                 <>
                   <button className="btn secondary" onClick={() => setIsEditingSSI(false)}>Cancel Edit</button>
-                  <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to System for Amendment</button>
+                  <button className="btn primary" onClick={handleSendToSystemAmendment}>Send to Static Data Team for Amendment</button>
                 </>
               )}
             </div>
