@@ -9,7 +9,7 @@ const pendingReplySchema = new mongoose.Schema({
   replyType: { 
     type: String, 
     required: true, 
-    enum: ["CPTY_EMAIL", "FO_EMAIL", "FO_INTERNAL"] 
+    enum: ["CPTY_EMAIL", "FO_EMAIL", "FO_INTERNAL", "FO_EMAIL_LOCAL", "FO_INTERNAL_LOCAL"] 
   },
   sendAt: {
     type: Date,
@@ -20,6 +20,7 @@ const pendingReplySchema = new mongoose.Schema({
   userMessage: { type: String },
   escalationContext: { type: String },
   desk: { type: String }, // To identify which desk triggered this reply
+  entityEmail: { type: String }, // Entity email for MO desk persona routing
   isFinalReply: { type: Boolean, default: false },
   payload: { type: mongoose.Schema.Types.Mixed } // Stores complex response objects like cptyResponse or foResponse
 }, { timestamps: true });

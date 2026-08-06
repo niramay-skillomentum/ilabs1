@@ -218,11 +218,11 @@ function renderTemplate(template, trade, issues = [], isCpty = false) {
 // ======================================
 // MAIN GENERATOR: FO
 // ======================================
-function generateFOResponseOffline(trade, userMessage) {
+function generateFOResponseOffline(trade, userMessage, overridePersonality = null) {
   if (!trade) return null;
 
   const profile = foResponseProfiles.getProfile(trade.counterparty);
-  const personality = profile.personality;
+  const personality = overridePersonality || profile.personality || "FORMAL";
   const intent = classifyQuery(userMessage);
   
   let categoryStr = "GENERIC_INVESTIGATION";
@@ -258,7 +258,6 @@ function generateFOResponseOffline(trade, userMessage) {
       categoryStr = "GENERIC_INVESTIGATION";
     }
   } else {
-    // If we have some intent but it's not handled above, check mismatches proactively
     const mismatches = truthEngine.getMismatchFields(trade);
     if (mismatches.includes("amount")) categoryStr = "AMOUNT_MISMATCH";
     else if (mismatches.includes("valueDate")) categoryStr = "VALUE_DATE_MISMATCH";
@@ -273,17 +272,18 @@ function generateFOResponseOffline(trade, userMessage) {
   const rawTemplate = pickWithVariety(templates, trade.tradeRef);
   const renderedBody = renderTemplate(rawTemplate, trade, issues);
 
-  const generateSignature = () => {
+  let finalBody = renderedBody;
+  if (!overridePersonality) {
     const names = ["Chris Evans", "Sam Patel", "Jordan Lee"];
     const titles = ["Senior Trader", "Desk Head", "Trading Associate"];
-    return `--\n${names[Math.floor(Math.random() * names.length)]}\n${titles[Math.floor(Math.random() * titles.length)]} | Front Office Trading`;
-  };
+    finalBody += `\n\n--\n${names[Math.floor(Math.random() * names.length)]}\n${titles[Math.floor(Math.random() * titles.length)]} | Front Office Trading`;
+  }
 
   return {
     action: "IMMEDIATE_ANSWER",
     category: categoryStr,
     subject: `RE: Trade ${trade.tradeRef} — FO Response`,
-    body: `${renderedBody}\n\n${generateSignature()}`
+    body: finalBody
   };
 }
 

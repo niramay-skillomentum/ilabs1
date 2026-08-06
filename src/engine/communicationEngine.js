@@ -4,6 +4,7 @@ const amendmentEngine = require("./amendmentEngine");
 const truthEngine = require("./truthEngine");
 const foAI = require("./foAI");
 const foResponseProfiles = require("./foResponseProfiles");
+const moFOPersonaProfiles = require("./moFOPersonaProfiles");
 const LifecycleEngine = require("./lifecycle");
 const PendingReply = require("../models/PendingReply");
 
@@ -193,7 +194,7 @@ async function scheduleFOFinalReply(tradeRef, trade, foResponse) {
   console.log("FO SCHEDULING FINAL REPLY:", tradeRef, "Delay:", delay);
   await PendingReply.create({
     tradeRef,
-    replyType: "FO_EMAIL",
+    replyType: "FO_EMAIL_LOCAL",
     isFinalReply: true,
     payload: foResponse,
     sendAt: new Date(Date.now() + delay)
@@ -203,21 +204,27 @@ async function scheduleFOFinalReply(tradeRef, trade, foResponse) {
 /**
  * Schedule an FO reply with delay based on counterparty profile
  */
-async function scheduleFOReply(tradeRef, trade, userMessage) {
+async function scheduleFOReply(tradeRef, trade, userMessage, entityEmail = null) {
+  // Use entity persona delay if an entity email is specified; otherwise fallback to counterparty profile
+  const delay = entityEmail 
+    ? moFOPersonaProfiles.getEntityDelay(entityEmail)
+    : foResponseProfiles.getDelay(trade.counterparty);
 
-  const delay = foResponseProfiles.getDelay(trade.counterparty);
+  const persona = moFOPersonaProfiles.getEntityPersona(entityEmail);
 
   console.log(
     "FO REPLY SCHEDULED:",
     tradeRef,
+    "| Entity:", persona.entityName,
     "| Counterparty:", trade.counterparty,
     "| Delay:", delay + "ms"
   );
 
   await PendingReply.create({
     tradeRef,
-    replyType: "FO_EMAIL",
+    replyType: "FO_EMAIL_LOCAL",
     userMessage,
+    entityEmail,
     sendAt: new Date(Date.now() + delay)
   });
 
@@ -230,12 +237,13 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
   for (let i = 0; i < MAX_PER_TICK; i++) {
     let reply;
     try {
-      reply = await claimNextReply("FO_EMAIL");
+      reply = await claimNextReply("FO_EMAIL_LOCAL");
     } catch (err) {
       console.warn("FO claim error:", err.message);
       break; // DB unavailable — stop this tick, retry next interval
     }
     if (!reply) break; // drained
+    console.log(`⏱️ [FO Engine] Delay expired! Processing FO reply for: ${reply.tradeRef} | Entity: ${reply.entityEmail || 'None'}`);
     try {
       await handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade);
     } catch (err) {
@@ -246,7 +254,10 @@ async function processFOReplies(conversationEngine, getTradeByRef, saveTrade) {
 
 async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade) {
   const trade = await getTradeByRef(reply.tradeRef);
-  if (!trade) return;
+  if (!trade) {
+    console.warn("⚠️ [FO Engine] Trade not found for ref:", reply.tradeRef);
+    return;
+  }
 
   if (reply.isFinalReply) {
     const foResponse = reply.payload;
@@ -291,8 +302,8 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
     console.log("FO FINAL REPLY SENT:", reply.tradeRef);
 
   } else {
-
-    const foResponse = await foAI.generateFOResponse(trade, reply.userMessage);
+    const entityPersona = moFOPersonaProfiles.getEntityPersona(reply.entityEmail);
+    const foResponse = await foAI.generateFOResponse(trade, reply.userMessage, entityPersona);
 
     if (foResponse) {
 
@@ -384,7 +395,7 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
       // Retry LLM later
       await PendingReply.create({
         tradeRef: reply.tradeRef,
-        replyType: "FO_EMAIL",
+        replyType: "FO_EMAIL_LOCAL",
         userMessage: reply.userMessage,
         sendAt: new Date(Date.now() + 5000)
       });

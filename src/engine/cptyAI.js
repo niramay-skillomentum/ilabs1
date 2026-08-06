@@ -1,11 +1,9 @@
 // ======================================
-// CPTY AI PERSONA (HYBRID: GEMINI + OFFLINE FALLBACK)
-// Tries Gemini LLM first for natural responses.
-// Falls back to the offline engine if Gemini is
-// unavailable, rate-limited, or too slow.
+// CPTY AI PERSONA (HYBRID: GEMINI + FALLBACK ENGINE)
+// Uses 4-layer fallback: LLM → Cache → Template → Generic Safe.
 // ======================================
 
-const llmService = require("./llmService");
+const fallbackEngine = require("./fallbackEngine");
 const offlineResponseEngine = require("./offlineResponseEngine");
 const truthEngine = require("./truthEngine");
 
@@ -81,30 +79,30 @@ Respond in this JSON format:
 }
 
 // ======================================
-// MAIN RESPONSE GENERATOR (HYBRID)
+// MAIN RESPONSE GENERATOR (FALLBACK ENGINE)
 // ======================================
 async function generateResponse(parsedIntent, tradeRef, userMessage) {
-
-  // ── ATTEMPT 1: Gemini LLM ──
-  try {
-    const Trade = require("../models/Trade");
-    const trade = await Trade.findOne({ tradeRef });
-    const systemPrompt = buildCPTYSystemPrompt(trade, parsedIntent);
-    const geminiResult = await llmService.generateResponse(systemPrompt, userMessage);
-
-    if (geminiResult && geminiResult.body) {
-      console.log("✅ CPTY Response: Gemini LLM succeeded for", tradeRef);
-      return geminiResult;
-    }
-  } catch (err) {
-    console.warn("⚠️ CPTY Gemini failed, falling back to offline engine:", err.message);
+  const Trade = require("../models/Trade");
+  const trade = await Trade.findOne({ tradeRef });
+  if (!trade) {
+    return offlineResponseEngine.generateCPTYResponseOffline(parsedIntent, tradeRef, userMessage);
   }
 
-  // ── ATTEMPT 2: Offline Engine (guaranteed) ──
-  console.log("🔄 CPTY Response: Using offline engine for", tradeRef);
-  return offlineResponseEngine.generateCPTYResponseOffline(parsedIntent, tradeRef, userMessage);
+  const confirmMismatches = truthEngine.getConfirmationMismatches(trade, "confirmation");
+  const hasIssues = confirmMismatches && confirmMismatches.length > 0;
+
+  return fallbackEngine.generateWithFallback({
+    desk: "CPTY",
+    responder: trade.counterparty || "DEFAULT",
+    trade,
+    userMessage,
+    intent: parsedIntent?.intent || "UNKNOWN",
+    hasIssues,
+    personality: "FORMAL",
+    buildPrompt: () => buildCPTYSystemPrompt(trade, parsedIntent)
+  });
 }
 
 module.exports = {
   generateResponse
-};
+};

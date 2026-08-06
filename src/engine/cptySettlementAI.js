@@ -1,11 +1,11 @@
 // ======================================
-// CPTY AI PERSONA (HYBRID: GEMINI + OFFLINE FALLBACK)
-// Tries Gemini LLM first for natural responses.
-// Falls back to the offline engine if Gemini is
-// unavailable, rate-limited, or too slow.
+// CPTY SETTLEMENT AI PERSONA (HYBRID: GEMINI + FALLBACK ENGINE)
+// Uses 4-layer fallback for BUY trades.
+// SELL trades have special SSI handling.
 // ======================================
 
 const llmService = require("./llmService");
+const fallbackEngine = require("./fallbackEngine");
 const ssiRepository = require("./ssiRepository");
 
 async function getSSIRecord(trade) {
@@ -216,51 +216,17 @@ Respond ONLY in this JSON format (no markdown):
     }
   }
 
-  // ── ATTEMPT 1: Gemini LLM ──
-  try {
-    const systemPrompt = buildCPTYSystemPrompt(trade, parsedIntent, ssiRecord);
-    const geminiResult = await llmService.generateResponse(systemPrompt, userMessage);
-
-    if (geminiResult && geminiResult.body) {
-      console.log("✅ CPTY Response: Gemini LLM succeeded for", tradeRef);
-      return geminiResult;
-    }
-  } catch (err) {
-    console.warn("⚠️ CPTY Gemini failed, falling back to offline engine:", err.message);
-  }
-
-  // ── ATTEMPT 2: Offline Engine (guaranteed) ──
-  console.log("🔄 CPTY Response: Using offline engine for", tradeRef);
-  
-  const hasAlertCodes = ssiRecord && ssiRecord.alertCode && ssiRecord.alertAcronym;
-  let fallbackBody = "";
-
-  if (hasAlertCodes) {
-    fallbackBody = `Thank you for reaching out regarding this trade.\n\nPlease use the following reference codes to look up our standard settlement instructions in your SSI Database:\n\n  Alert Code: ${ssiRecord.alertCode}\n  Acronym Code: ${ssiRecord.alertAcronym}\n\nKindly verify the settlement details on your end using both codes.\n\nBest regards,\nOperations Desk`;
-  } else {
-    const lines = [];
-    if (ssiRecord) {
-      if (ssiRecord.currency) lines.push(`Currency: ${ssiRecord.currency}`);
-      if (ssiRecord.finalBeneficiary) lines.push(`Beneficiary Name: ${ssiRecord.finalBeneficiary}`);
-      if (ssiRecord.accountWithInstitution) lines.push(`Beneficiary Bank: ${ssiRecord.accountWithInstitution}`);
-      if (ssiRecord.swiftBicCode) lines.push(`Beneficiary BIC: ${ssiRecord.swiftBicCode}`);
-      if (ssiRecord.accountNumber) lines.push(`Account Number: ${ssiRecord.accountNumber}`);
-      if (ssiRecord.abaRoutingNumber) lines.push(`ABA Routing Number: ${ssiRecord.abaRoutingNumber}`);
-      if (ssiRecord.agentBank) lines.push(`Intermediary Bank: ${ssiRecord.agentBank}`);
-      if (ssiRecord.agentSwiftCode) lines.push(`Intermediary BIC: ${ssiRecord.agentSwiftCode}`);
-      if (ssiRecord.accountAtAgent) lines.push(`Intermediary Account: ${ssiRecord.accountAtAgent}`);
-      if (ssiRecord.field72) lines.push(`Field 72: ${ssiRecord.field72}`);
-    }
-    const details = lines.length > 0 ? "\n" + lines.join("\n") : "No specific instructions found.";
-    
-    fallbackBody = `Thank you for reaching out regarding this trade.\n\nOur settlement instructions for this transaction are:${details}\n\nPlease verify these raw details against your system records.\n\nBest regards,\nOperations Desk`;
-  }
-
-  return {
-    action: "IMMEDIATE_ANSWER",
-    subject: "RE: Trade Inquiry",
-    body: fallbackBody
-  };
+  // ── BUY TRADE: Use fallback engine ──
+  return fallbackEngine.generateWithFallback({
+    desk: "CPTY_SETTLEMENT",
+    responder: trade?.counterparty || "DEFAULT",
+    trade: trade || { tradeRef },
+    userMessage,
+    intent: parsedIntent?.intent || "SSI_QUERY",
+    hasIssues: false,
+    personality: "FORMAL",
+    buildPrompt: () => buildCPTYSystemPrompt(trade, parsedIntent, ssiRecord)
+  });
 }
 
 module.exports = {

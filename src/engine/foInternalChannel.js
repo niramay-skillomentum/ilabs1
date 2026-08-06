@@ -5,8 +5,9 @@
 // Now backed by MongoDB.
 // ======================================
 
-const foAI = require("./foAI");
+
 const truthEngine = require("./truthEngine");
+const moFOPersonaProfiles = require("./moFOPersonaProfiles");
 const FOCommunication = require("../models/FOCommunication");
 const PendingReply = require("../models/PendingReply");
 const Trade = require("../models/Trade");
@@ -72,14 +73,28 @@ async function sendMessage(tradeRef, sender, message, senderRole = "USER", owner
  * @param {string} userMessage - What the user said
  * @param {string} escalationContext - "CONFIRMATION" or "MO"
  */
-async function scheduleFOInternalReply(tradeRef, trade, userMessage, escalationContext = "CONFIRMATION") {
-  const delay = Math.floor(Math.random() * (8000 - 3000 + 1)) + 3000; // 3-8 seconds
+async function scheduleFOInternalReply(tradeRef, trade, userMessage, escalationContext = "CONFIRMATION", entityEmail = null) {
+  // Entity-aware delay: uses persona profile if entity email is provided,
+  // otherwise falls back to default 3-8s range.
+  const delay = entityEmail
+    ? moFOPersonaProfiles.getEntityDelay(entityEmail)
+    : Math.floor(Math.random() * (8000 - 3000 + 1)) + 3000;
+
+  const persona = moFOPersonaProfiles.getEntityPersona(entityEmail);
+  console.log(
+    "FO INTERNAL REPLY SCHEDULED:",
+    tradeRef,
+    "| Entity:", persona.entityName,
+    "| Personality:", persona.personality,
+    "| Delay:", delay + "ms"
+  );
 
   await PendingReply.create({
     tradeRef,
-    replyType: "FO_INTERNAL",
+    replyType: "FO_INTERNAL_LOCAL",
     userMessage,
     escalationContext,
+    entityEmail,
     sendAt: new Date(Date.now() + delay)
   });
 }
@@ -93,7 +108,7 @@ async function processFOInternalReplies(saveTrade) {
     let reply;
     try {
       reply = await PendingReply.findOneAndDelete(
-        { replyType: "FO_INTERNAL", sendAt: { $lte: new Date() } },
+        { replyType: "FO_INTERNAL_LOCAL", sendAt: { $lte: new Date() } },
         { sort: { sendAt: 1 } }
       ).lean();
     } catch (err) {
@@ -113,6 +128,9 @@ async function handleFoInternalReply(reply, saveTrade) {
     const trade = await Trade.findOne({ tradeRef: reply.tradeRef });
     if (!trade) return;
 
+    // Get entity persona from the stored entityEmail
+    const entityPersona = moFOPersonaProfiles.getEntityPersona(reply.entityEmail);
+
     const foRound = trade.foContactCount || 1;
     const targetDeskTruth = foRound > 1 ? "universal" : "fo";
     const moMismatches = truthEngine.getMismatchFields(trade, targetDeskTruth);
@@ -123,11 +141,11 @@ async function handleFoInternalReply(reply, saveTrade) {
     if (moMismatches.length === 0) {
       // FO sees no issue with their local truth (Round 1) or Universal truth (Round 2)
       foPosition = "FO_SUPPORTS_US";
-      foResponseText = generateFOSupportsUsResponse(trade, targetDeskTruth, reply.deskContext);
+      foResponseText = generateFOSupportsUsResponse(trade, targetDeskTruth, reply.deskContext, entityPersona);
     } else {
       // FO sees an issue, they admit mistake and we should generate pending amendments
       foPosition = "FO_ADMITS_MISTAKE";
-      foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth, reply.deskContext);
+      foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth, reply.deskContext, entityPersona);
     }
 
     // Send FO's response on the internal channel (scoped to the trade owner)
@@ -199,7 +217,7 @@ async function closeChannel(tradeRef) {
 // FO RESPONSE GENERATORS
 // ======================================
 
-function generateFOSupportsUsResponse(trade, truthType = "fo", deskContext = "CONFIRMATION") {
+function generateFOSupportsUsResponse(trade, truthType = "fo", deskContext = "CONFIRMATION", entityPersona = null) {
   const intro = truthType === "universal" ? "After re-checking our execution system and speaking with the trading desk directly (Universal Truth)," : "We've checked our records";
   let responses = [];
   if (deskContext === "MO") {
@@ -217,10 +235,15 @@ function generateFOSupportsUsResponse(trade, truthType = "fo", deskContext = "CO
       `Verified against our execution system — the trade details are correct. Please reject the counterparty's dispute and reconfirm with our current values.`
     ];
   }
-  return responses[Math.floor(Math.random() * responses.length)];
+  let text = responses[Math.floor(Math.random() * responses.length)];
+  // Append entity persona sign-off
+  if (entityPersona) {
+    text += moFOPersonaProfiles.generateSignOff(entityPersona);
+  }
+  return text;
 }
 
-function generateFOSupportsCptyResponse(trade, mismatches, truthType = "fo", deskContext = "CONFIRMATION") {
+function generateFOSupportsCptyResponse(trade, mismatches, truthType = "fo", deskContext = "CONFIRMATION", entityPersona = null) {
   const introMO = truthType === "universal" ? "We ran a deep dive using the universal exchange truth" : "We've reviewed the trade";
   const introCpty = truthType === "universal" ? "We ran a deep dive using the universal exchange truth" : "We've reviewed the trade";
 
@@ -249,10 +272,15 @@ function generateFOSupportsCptyResponse(trade, mismatches, truthType = "fo", des
       `After checking our execution records, we can confirm the counterparty is right. The ${mismatchDesc}. An amendment should be raised to match their expectations.`
     ];
   }
-  return responses[Math.floor(Math.random() * responses.length)];
+  let text = responses[Math.floor(Math.random() * responses.length)];
+  // Append entity persona sign-off
+  if (entityPersona) {
+    text += moFOPersonaProfiles.generateSignOff(entityPersona);
+  }
+  return text;
 }
 
-function generateFOInvestigatingResponse(trade, mismatches, deskContext = "CONFIRMATION") {
+function generateFOInvestigatingResponse(trade, mismatches, deskContext = "CONFIRMATION", entityPersona = null) {
   let responses = [];
   if (deskContext === "MO") {
     responses = [
@@ -267,7 +295,12 @@ function generateFOInvestigatingResponse(trade, mismatches, deskContext = "CONFI
       `We acknowledge the counterparty's claim but need to verify with our trading system. Investigation is underway — expect an update within the hour.`
     ];
   }
-  return responses[Math.floor(Math.random() * responses.length)];
+  let text = responses[Math.floor(Math.random() * responses.length)];
+  // Append entity persona sign-off
+  if (entityPersona) {
+    text += moFOPersonaProfiles.generateSignOff(entityPersona);
+  }
+  return text;
 }
 
 module.exports = {

@@ -106,7 +106,7 @@ router.post("/send", authenticateToken, express.json(), async (req, res) => {
     await foInternalChannel.sendMessage(tradeRef, req.user.userId, message, "USER", trade?.assignedTo);
     
     // Auto schedule an FO reply based on user's new message
-    foInternalChannel.scheduleFOInternalReply(tradeRef, trade, message, deskContext);
+    foInternalChannel.scheduleFOInternalReply(tradeRef, trade, message, deskContext, recipient);
 
     res.json({ success: true });
   } catch (err) {

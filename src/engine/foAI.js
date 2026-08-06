@@ -1,18 +1,18 @@
 // ======================================
-// FO AI PERSONA (HYBRID: GEMINI + OFFLINE FALLBACK)
-// Tries Gemini LLM first for natural responses.
-// Falls back to the offline engine if Gemini is
-// unavailable, rate-limited, or too slow.
+// FO AI PERSONA (HYBRID: GEMINI + FALLBACK ENGINE)
+// Uses 4-layer fallback: LLM → Cache → Template → Generic Safe.
+// Entity-aware: enriches prompt with entity persona when provided.
 // ======================================
 
-const llmService = require("./llmService");
+const fallbackEngine = require("./fallbackEngine");
 const offlineResponseEngine = require("./offlineResponseEngine");
 const truthEngine = require("./truthEngine");
+const moFOPersonaProfiles = require("./moFOPersonaProfiles");
 
 // ======================================
 // GEMINI SYSTEM PROMPT FOR FO
 // ======================================
-function buildFOSystemPrompt(trade) {
+function buildFOSystemPrompt(trade, entityPersona = null) {
   const issues = offlineResponseEngine.analyzeTradeContext(trade);
   const mismatches = truthEngine.getMismatchFields(trade);
 
@@ -21,6 +21,18 @@ You are responding about Trade ${trade.tradeRef}.
 Counterparty: ${trade.counterparty || "Unknown"}
 Currency: ${trade.currency || "USD"}
 `;
+
+  // Entity persona enrichment
+  if (entityPersona && entityPersona.entityCode !== "SBG_UNKNOWN") {
+    const sig = moFOPersonaProfiles.pickSignatory(entityPersona);
+    context += `
+YOU ARE: ${sig.name}, ${sig.title} at ${entityPersona.entityName}
+Department: ${entityPersona.department}
+Region: ${entityPersona.region}
+Communication Style: ${entityPersona.personality}
+Sign all replies EXACTLY as: "${sig.name} | ${sig.title} | ${entityPersona.department} | ${entityPersona.entityName}"
+`;
+  }
 
   if (trade.truths?.mo && trade.booking) {
     context += `\nTrade Truth Data (FO Reference):
@@ -56,7 +68,7 @@ RULES:
 - If the user's query is vague or just a greeting, ask for clarification.
 - Keep responses concise (2-5 sentences).
 - Do NOT invent issues that don't exist in the data above.
-- Sign off with a random human name (e.g., Alex Carter, Sam Reynolds) and your title. Do NOT use placeholders like [Your Name].
+- Sign off with your name and title as specified above. Do NOT use placeholders like [Your Name].
 
 Respond in this JSON format:
 {
@@ -70,29 +82,41 @@ Respond in this JSON format:
 }
 
 // ======================================
-// MAIN RESPONSE GENERATOR (HYBRID)
+// MAIN RESPONSE GENERATOR (FALLBACK ENGINE)
 // ======================================
-async function generateFOResponse(trade, userMessage) {
+// SET THIS TO true TO TEST OFFLINE TEMPLATES (TURNS OFF LLM AI & CACHE)
+const FORCE_OFFLINE = true;
+
+async function generateFOResponse(trade, userMessage, entityPersona = null) {
   if (!trade) return null;
 
-  // ── ATTEMPT 1: Gemini LLM ──
-  try {
-    const systemPrompt = buildFOSystemPrompt(trade);
-    const geminiResult = await llmService.generateResponse(systemPrompt, userMessage);
+  const persona = entityPersona || moFOPersonaProfiles.getEntityPersona(null);
+  const mismatches = truthEngine.getMismatchFields(trade);
 
-    if (geminiResult && geminiResult.body) {
-      console.log("✅ FO Response: Gemini LLM succeeded for", trade.tradeRef);
-      return geminiResult;
+  const res = await fallbackEngine.generateWithFallback({
+    desk: "FO",
+    responder: persona.entityCode || "FO",
+    trade,
+    userMessage,
+    intent: mismatches.length > 0 ? "ERROR_CHECK_WITH_ISSUES" : "CLEAN_TRADE",
+    hasIssues: mismatches.length > 0,
+    personality: persona.personality || "FORMAL",
+    buildPrompt: () => buildFOSystemPrompt(trade, entityPersona),
+    offlineOnly: FORCE_OFFLINE
+  });
+
+  // When forced offline or when using template fallbacks, append the entity sign-off!
+  if (res && res.body && entityPersona && entityPersona.entityCode !== "SBG_UNKNOWN") {
+    const signOff = moFOPersonaProfiles.generateSignOff(entityPersona);
+    if (!res.body.includes(entityPersona.entityName)) {
+      res.body = res.body.trim() + signOff;
     }
-  } catch (err) {
-    console.warn("⚠️ FO Gemini failed, falling back to offline engine:", err.message);
   }
 
-  // ── ATTEMPT 2: Offline Engine (guaranteed) ──
-  console.log("🔄 FO Response: Using offline engine for", trade.tradeRef);
-  return offlineResponseEngine.generateFOResponseOffline(trade, userMessage);
+  return res;
 }
 
 module.exports = {
-  generateFOResponse
+  generateFOResponse,
+  FORCE_OFFLINE
 };

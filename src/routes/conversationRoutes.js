@@ -95,7 +95,8 @@ router.post("/send", authenticateToken, async (req, res) => {
     communicationEngine.scheduleFOReply(
       tradeRef,
       trade,
-      message
+      message,
+      recipient
     );
     auditDetails = "Sent mail to FO";
 
