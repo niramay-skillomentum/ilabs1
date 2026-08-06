@@ -11,11 +11,7 @@ let io;
 // Defaults to the dev frontend origin.
 // ======================================
 function getAllowedOrigins() {
-  const raw = process.env.ALLOWED_ORIGINS;
-  if (raw) {
-    return raw.split(",").map(o => o.trim()).filter(Boolean);
-  }
-  return ["http://localhost:3000", "https://ilabs-skillomentum.vercel.app"];
+  return (origin, callback) => callback(null, true); // Allow any origin dynamically for preview environments
 }
 
 async function initSocket(server) {

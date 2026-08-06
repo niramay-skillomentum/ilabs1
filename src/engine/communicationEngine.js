@@ -49,7 +49,7 @@ async function scheduleReply(tradeRef, subject, body, desk) {
 
   await PendingReply.create({
     tradeRef,
-    replyType: "CPTY_EMAIL",
+    replyType: "CPTY_EMAIL_LOCAL",
     subject,
     body,
     desk,
@@ -63,7 +63,7 @@ async function scheduleCPTYFinalReply(tradeRef, trade, cptyResponse) {
   console.log("CPTY SCHEDULING FINAL REPLY:", tradeRef, "Delay:", delay);
   await PendingReply.create({
     tradeRef,
-    replyType: "CPTY_EMAIL",
+    replyType: "CPTY_EMAIL_LOCAL",
     isFinalReply: true,
     payload: cptyResponse,
     sendAt: new Date(Date.now() + delay)
@@ -74,7 +74,7 @@ async function processReplies(conversationEngine, getTradeByRef, saveTrade) {
   for (let i = 0; i < MAX_PER_TICK; i++) {
     let reply;
     try {
-      reply = await claimNextReply("CPTY_EMAIL");
+      reply = await claimNextReply("CPTY_EMAIL_LOCAL");
     } catch (err) {
       console.warn("CPTY claim error:", err.message);
       break; // DB unavailable — stop this tick, retry next interval
@@ -176,7 +176,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
       // Retry LLM later
       await PendingReply.create({
         tradeRef: reply.tradeRef,
-        replyType: "CPTY_EMAIL",
+        replyType: "CPTY_EMAIL_LOCAL",
         subject: reply.subject,
         body: reply.body,
         sendAt: new Date(Date.now() + 5000)

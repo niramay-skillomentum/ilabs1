@@ -9,7 +9,7 @@ const pendingReplySchema = new mongoose.Schema({
   replyType: { 
     type: String, 
     required: true, 
-    enum: ["CPTY_EMAIL", "FO_EMAIL", "FO_INTERNAL", "FO_EMAIL_LOCAL", "FO_INTERNAL_LOCAL"] 
+    enum: ["CPTY_EMAIL", "FO_EMAIL", "FO_INTERNAL", "FO_EMAIL_LOCAL", "FO_INTERNAL_LOCAL", "CPTY_EMAIL_LOCAL"] 
   },
   sendAt: {
     type: Date,

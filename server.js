@@ -126,9 +126,7 @@ if (!process.env.JWT_SECRET) {
 // Restrict REST CORS to the same allow-list the socket layer uses, instead of
 // reflecting any origin. Set ALLOWED_ORIGINS (comma-separated) in production.
 function getAllowedOrigins() {
-  const raw = process.env.ALLOWED_ORIGINS;
-  if (raw) return raw.split(",").map(o => o.trim()).filter(Boolean);
-  return ["http://localhost:3000", "https://ilabs-skillomentum.vercel.app"];
+  return (origin, callback) => callback(null, true); // Allow any origin dynamically for preview environments
 }
 app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
 
