@@ -10,6 +10,7 @@ const LifecycleEngine = require("../engine/lifecycle");
 const { resolveMailStatus } = require("../engine/mailStatusResolver");
 const mailRoutingEngine = require("../engine/mailRoutingEngine");
 const { authenticateToken } = require("../middleware/auth");
+const amendmentEngine = require("../engine/amendmentEngine");
 
 // ======================================
 // GET /api/conversation/expected-recipient
@@ -162,6 +163,18 @@ router.post("/send", authenticateToken, async (req, res) => {
     auditDetails
   ).catch(e => console.warn("DB audit:", e.message));
 
+  // OPI: Track mail sent for report communication analysis (fire-and-forget)
+  try {
+    const sessionCollector = require("../engine/performance/sessionCollector");
+    sessionCollector.collect("MAIL_SENT", {
+      tradeRef,
+      userId: sender,
+      category: "COMMUNICATION",
+      metadata: { subject: subject || `Trade ${tradeRef}`, bodyLength: (message || "").length, desk: desk || "UNKNOWN" },
+      payload: { body: message, subject: subject || `Trade ${tradeRef}` }
+    });
+  } catch (opiErr) { /* OPI non-blocking */ }
+
   res.json({ success: true, warning: actionWarning || undefined });
 });
 
@@ -176,6 +189,14 @@ router.post("/read", authenticateToken, async (req, res) => {
       { tradeRef },
       { $addToSet: { readBy: userId } }
     );
+
+    // OPI: Track mail read (fire-and-forget)
+    try {
+      require("../engine/performance/sessionCollector").collect("MAIL_READ", {
+        tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL" }
+      });
+    } catch (opiErr) { /* OPI non-blocking */ }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -217,12 +238,7 @@ router.post("/resolve", authenticateToken, async (req, res) => {
 
   // Apply accepted amendments
   if (trade.pendingAmendments) {
-    trade.pendingAmendments.forEach(a => {
-      if (a.status === "ACCEPTED") {
-        trade[a.field] = a.newValue;
-      }
-    });
-    trade.pendingAmendments = [];
+    amendmentEngine.applyAllAccepted(trade, userId);
   }
 
   // Transition to MO_PENDING
@@ -253,6 +269,16 @@ router.post("/resolve", authenticateToken, async (req, res) => {
     "BREAK_RESOLVED",
     "User resolved the break and applied pending amendments"
   ).catch(e => console.warn("DB audit:", e.message));
+
+  // OPI: Track amendment applied + resolve (fire-and-forget)
+  try {
+    const sessionCollector = require("../engine/performance/sessionCollector");
+    sessionCollector.collect("AMENDMENT_APPLIED", {
+      tradeRef: trade.tradeRef, userId,
+      category: "WORKFLOW",
+      metadata: { action: "RESOLVE_AND_RETURN", newStatus: trade.currentStatus }
+    });
+  } catch (opiErr) { /* OPI non-blocking */ }
 });
 
 router.get("/shared", authenticateToken, async (req, res) => {

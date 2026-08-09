@@ -357,6 +357,13 @@ class QueueComposer {
     console.log(`   States: ${stateStr}`);
     console.log(`   Session expires: ${sessionExpiry.toISOString()}`);
 
+    // OPI: Register new performance session (fire-and-forget)
+    try {
+      require("./performance/sessionCollector").registerSession({
+        userId, desk, tradeRefs, sessionStart, sessionExpiry
+      });
+    } catch (e) { /* OPI not loaded — silent */ }
+
     return {
       trades: queue,
       sessionStart,
@@ -563,6 +570,13 @@ class QueueComposer {
 
     console.log(`✅ SETTLEMENT Queue for ${userId}: ${queue.length} trades (${cleanTotal} clean, ${cutoffCount} cutoff breaks, ${otherBreakCount} other breaks | ${bilatTotal} Bilat / ${elecTotal} Elec)`);
     console.log(`   Session expires: ${sessionExpiry.toISOString()}`);
+
+    // OPI: Register new performance session (fire-and-forget)
+    try {
+      require("./performance/sessionCollector").registerSession({
+        userId, desk: "SETTLEMENT", tradeRefs, sessionStart, sessionExpiry
+      });
+    } catch (e) { /* OPI not loaded — silent */ }
 
     return {
       trades: queue,

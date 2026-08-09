@@ -39,6 +39,13 @@ export const Sidebar = () => {
           </div>
           <span className={`text-sm font-medium whitespace-nowrap transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>Dashboard</span>
         </a>
+
+        <a href="/performance" className="group flex items-center gap-3 px-3 py-3 rounded-xl text-[var(--color-text-secondary)] hover:bg-slate-50 hover:text-[var(--color-primary)] transition-colors duration-200">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--color-secondary)] group-hover:text-[var(--color-primary)] transition-colors">
+            <span className="text-base">📊</span>
+          </div>
+          <span className={`text-sm font-medium whitespace-nowrap transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>Performance</span>
+        </a>
       </nav>
     </aside>
   );

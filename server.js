@@ -155,6 +155,7 @@ app.use("/api/swift", require("./src/routes/swiftRoutes"));
 app.use("/api/reconciliation", require("./src/routes/reconciliationRoutes"));
 app.use("/api/user-profile", require("./src/routes/userProfileRoutes"));
 app.use("/api/learning", require("./src/routes/learningRoutes"));
+app.use("/api/performance", require("./src/routes/performanceRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START
@@ -162,6 +163,9 @@ app.use("/api/learning", require("./src/routes/learningRoutes"));
 async function startServer() {
   await connectDB();
   await startAgenda();
+
+  // OPI: Restore active performance sessions from DB
+  try { await require("./src/engine/performance/sessionCollector").restoreActiveSessions(); } catch (e) {}
 
   const server = http.createServer(app);
   await initSocket(server);

@@ -140,6 +140,14 @@ async function processFailure({ userId, tradeRef, desk, action, ruleCode, errorM
     // Socket may not be initialized — silent fail
   }
 
+  // OPI: Forward to session collector (fire-and-forget)
+  try {
+    require("./performance/sessionCollector").collect("LEARNING_EVENT", {
+      tradeRef, userId, desk,
+      metadata: { mistakeCode: rule.code, severity: rule.severity.level, title: rule.title, repeatCount, scorePenalty: rule.scorePenalty }
+    });
+  } catch (e) { /* OPI not loaded — silent */ }
+
   return learningEvent;
 }
 

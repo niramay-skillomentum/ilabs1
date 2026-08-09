@@ -16,6 +16,28 @@ const cutoffEnforcer = require("../engine/cutoffEnforcer");
 const simulationClock = require("../engine/clock");
 const truthEngine = require("../engine/truthEngine");
 const learningEngine = require("../engine/learningEngine");
+const sessionCollector = require("../engine/performance/sessionCollector");
+
+// ── OPI Event Mapping ──
+// Maps trade actions to the PerformanceEvent types that the
+// workflowAnalyzer / decisionAnalyzer expects.
+const ACTION_TO_OPI_EVENTS = {
+  MO_VALIDATE_PASS: ["VALIDATE_TRADE"],
+  MO_RAISE_BREAK: ["BREAK_RAISED"],
+  MO_SEND_TO_FO: ["FO_CONTACTED"],
+  CONFIRM_TRADE: ["VALIDATE_TRADE"],
+  CONFIRM_RAISE_BREAK: ["BREAK_RAISED"],
+  CONFIRM_SEND_TO_CPTY: ["MAIL_SENT"],
+  CONFIRM_REJECT_CLAIM: ["DECISION_MADE"],
+  CONFIRM_REQUEST_EVIDENCE: ["DECISION_MADE"],
+  CONFIRM_ESCALATE_TO_FO: ["FO_ESCALATED"],
+  CONFIRM_APPROVE_AMENDMENT: ["AMENDMENT_APPLIED"],
+  CONFIRM_RESEND: ["MAIL_SENT"],
+  SETTLEMENT_APPROVE: ["TRADE_APPROVED"],
+  SETTLEMENT_RAISE_BREAK: ["BREAK_RAISED"],
+  SETTLEMENT_MAIL_CPTY: ["MAIL_SENT"],
+  SETTLEMENT_SEND_BACK_TO_MO: ["DECISION_MADE"]
+};
 
 // Helper: Send a 400 response enriched with a learning payload.
 // Existing error string is preserved; learning data is added alongside.
@@ -239,12 +261,7 @@ router.post("/action", authenticateToken, async (req, res) => {
 
         // Apply accepted amendments
         if (sessionTrade.pendingAmendments) {
-          sessionTrade.pendingAmendments.forEach(a => {
-            if (a.status === "ACCEPTED") {
-              sessionTrade[a.field] = a.newValue;
-            }
-          });
-          sessionTrade.pendingAmendments = [];
+          amendmentEngine.applyAllAccepted(sessionTrade, userId);
         }
 
         // MO Simulator Logic: Verify if trade is actually clean
@@ -504,6 +521,21 @@ router.post("/action", authenticateToken, async (req, res) => {
             comment || "User sent trade for approval"
           ).catch(e => console.warn("DB audit:", e.message));
           
+          // OPI: Emit approval event
+          try {
+            sessionCollector.collect("TRADE_APPROVED", {
+              tradeRef: sessionTrade.tradeRef, userId, desk: "SETTLEMENT",
+              category: "WORKFLOW",
+              metadata: { action, previousStatus: currentStatus, newStatus: updatedTrade.currentStatus, comment: comment || null }
+            });
+            if (comment && comment.trim()) {
+              sessionCollector.collect("COMMENT_ADDED", {
+                tradeRef: sessionTrade.tradeRef, userId, desk: "SETTLEMENT",
+                category: "WORKFLOW", metadata: { action, comment }
+              });
+            }
+          } catch (opiErr) { /* OPI non-blocking */ }
+          
           const activeQueue = await queueComposer.getActiveQueue(userId);
           const trades = activeQueue ? activeQueue.trades : [];
           res.json({ success: true, queueSize: trades.length, trades });
@@ -599,6 +631,35 @@ router.post("/action", authenticateToken, async (req, res) => {
       action,
       comment || "Action taken on trade"
     ).catch(e => console.warn("DB audit:", e.message));
+
+    // ── OPI: Emit performance events (fire-and-forget) ──
+    try {
+      const opiEvents = ACTION_TO_OPI_EVENTS[action] || [];
+      for (const eventType of opiEvents) {
+        sessionCollector.collect(eventType, {
+          tradeRef: sessionTrade.tradeRef,
+          userId,
+          desk: nextDesk || sessionTrade.nextDesk,
+          category: "WORKFLOW",
+          metadata: {
+            action,
+            previousStatus: currentStatus,
+            newStatus: updatedTrade.currentStatus,
+            comment: comment || null
+          }
+        });
+      }
+      // Always emit COMMENT_ADDED when a comment is present
+      if (comment && comment.trim()) {
+        sessionCollector.collect("COMMENT_ADDED", {
+          tradeRef: sessionTrade.tradeRef,
+          userId,
+          desk: nextDesk || sessionTrade.nextDesk,
+          category: "WORKFLOW",
+          metadata: { action, comment }
+        });
+      }
+    } catch (opiErr) { /* OPI non-blocking */ }
 
   } catch (err) {
     console.error("Trade action error:", err);

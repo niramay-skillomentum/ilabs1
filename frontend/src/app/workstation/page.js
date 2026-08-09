@@ -208,6 +208,17 @@ function WorkstationComponent() {
 
   const [queue, setQueue] = useState([]);
   const [selectedTrade, setSelectedTrade] = useState(null);
+
+  // OPI: Fire-and-forget performance event tracker
+  const trackOPIEvent = useCallback((eventType, tradeRef, metadata = {}) => {
+    try {
+      fetch("/api/performance/track-event", {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ eventType, tradeRef, desk, metadata })
+      }).catch(() => {}); // fire-and-forget
+    } catch (e) { /* silent */ }
+  }, [desk]);
   const [sessionExpiry, setSessionExpiry] = useState(null);
   const [sessionStart, setSessionStart] = useState(null);
 
@@ -404,9 +415,13 @@ function WorkstationComponent() {
       if (isSelectingNew && desk === "SETTLEMENT" && t.settlementType === "ELECTRONIC") {
         setPopupState({ type: "electronic_warning" });
       }
+      // OPI: Track trade opened
+      if (isSelectingNew) {
+        trackOPIEvent("TRADE_OPENED", t.tradeRef, { status: t.currentStatus });
+      }
       return isSelectingNew ? t : null;
     });
-  }, [desk]);
+  }, [desk, trackOPIEvent]);
 
   const logout = useCallback(async () => {
     await fetch("/api/session/logout", { method: "POST", headers: authHeaders(), body: JSON.stringify({}) });
@@ -923,6 +938,8 @@ function WorkstationComponent() {
       selectedTrade.truth ? JSON.stringify(selectedTrade.truth, null, 2) : "No truths object found for this trade.";
     setAuditData({ xml: truthContent, trail: [] });
     setPopupState({ type: "truth" });
+    // OPI: Track booking/truth check
+    trackOPIEvent("CHECK_BOOKING", selectedTrade.tradeRef, { source: "VIEW_TRUTH" });
   };
 
   const viewSSI = useCallback(async (trade) => {
