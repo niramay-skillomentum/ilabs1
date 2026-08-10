@@ -57,7 +57,7 @@ async function scheduleReply(tradeRef, subject, body, desk) {
 
 }
 
-async function scheduleCPTYFinalReply(tradeRef, trade, cptyResponse) {
+async function scheduleCPTYFinalReply(tradeRef, trade, cptyResponse, desk) {
   const delay = cptyResponse.followUpDelayMs || 15000;
   console.log("CPTY SCHEDULING FINAL REPLY:", tradeRef, "Delay:", delay);
   await PendingReply.create({
@@ -65,6 +65,7 @@ async function scheduleCPTYFinalReply(tradeRef, trade, cptyResponse) {
     replyType: "CPTY_EMAIL",
     isFinalReply: true,
     payload: cptyResponse,
+    desk,
     sendAt: new Date(Date.now() + delay)
   });
 }
@@ -150,10 +151,10 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
           "COUNTERPARTY",
           body,
           aiResponse.subject,
-          null, // desk
+          reply.desk, // desk
           true  // skipEmit
         );
-        scheduleCPTYFinalReply(reply.tradeRef, trade, aiResponse);
+        scheduleCPTYFinalReply(reply.tradeRef, trade, aiResponse, reply.desk);
       } else {
 
         if (trade) {
@@ -185,7 +186,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
           "COUNTERPARTY",
           body,
           aiResponse.subject,
-          null, // desk
+          reply.desk, // desk
           true  // skipEmit
         );
       }
@@ -206,7 +207,7 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
 // FO REPLY QUEUE
 // ======================================
 
-async function scheduleFOFinalReply(tradeRef, trade, foResponse) {
+async function scheduleFOFinalReply(tradeRef, trade, foResponse, desk) {
   const delay = foResponse.followUpDelayMs || 15000;
   console.log("FO SCHEDULING FINAL REPLY:", tradeRef, "Delay:", delay);
   await PendingReply.create({
@@ -214,6 +215,7 @@ async function scheduleFOFinalReply(tradeRef, trade, foResponse) {
     replyType: "FO_EMAIL",
     isFinalReply: true,
     payload: foResponse,
+    desk,
     sendAt: new Date(Date.now() + delay)
   });
 }
@@ -221,7 +223,7 @@ async function scheduleFOFinalReply(tradeRef, trade, foResponse) {
 /**
  * Schedule an FO reply with delay based on counterparty profile
  */
-async function scheduleFOReply(tradeRef, trade, userMessage) {
+async function scheduleFOReply(tradeRef, trade, userMessage, desk) {
 
   const delay = foResponseProfiles.getDelay(trade.counterparty);
 
@@ -236,6 +238,7 @@ async function scheduleFOReply(tradeRef, trade, userMessage) {
     tradeRef,
     replyType: "FO_EMAIL",
     userMessage,
+    desk,
     sendAt: new Date(Date.now() + delay)
   });
 
@@ -279,7 +282,7 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
       "FO",
       finalBody,
       foResponse.followUpSubject || "RE: Trade Clarification",
-      null, // desk
+      reply.desk, // desk
       true  // skipEmit
     );
 
@@ -333,12 +336,12 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
         "FO",
         body,
         foResponse.subject,
-        null, // desk
+        reply.desk, // desk
         true  // skipEmit
       );
 
       if (foResponse.action === "HOLDING_MESSAGE") {
-         scheduleFOFinalReply(reply.tradeRef, trade, foResponse);
+         scheduleFOFinalReply(reply.tradeRef, trade, foResponse, reply.desk);
       } else {
          trade.foResponseReceived = true;
 
