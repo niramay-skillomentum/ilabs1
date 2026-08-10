@@ -216,7 +216,7 @@ function CommunicationComponent() {
       });
     } else {
       fetch("/api/conversation/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef, desk })
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
       });
     }
 
@@ -248,7 +248,7 @@ function CommunicationComponent() {
       return;
     }
 
-    const endpoint = ch === "FO" ? `/api/fo-channel/${tradeRef}` : `/api/conversation/${tradeRef}?desk=${encodeURIComponent(desk || "GENERAL")}`;
+    const endpoint = ch === "FO" ? `/api/fo-channel/${tradeRef}` : `/api/conversation/${tradeRef}`;
     fetch(endpoint, { headers: { "Authorization": "Bearer " + getToken() } })
       .then(res => res.json())
       .then(convData => {
@@ -558,7 +558,7 @@ function CommunicationComponent() {
     fetch("/api/conversation/resolve", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: selectedTradeRef, userId, desk })
+      body: JSON.stringify({ tradeRef: selectedTradeRef, userId })
     })
     .then(res => res.json())
     .then(data => {
