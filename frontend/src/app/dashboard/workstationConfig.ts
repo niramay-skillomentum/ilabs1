@@ -168,5 +168,34 @@ export const workstationConfig: Workstation[] = [
     ],
     buttonLabel: "Enter Reporting Operations",
     navigationRoute: "REPORTING"
+  },
+  {
+    id: "bloomberg",
+    title: "Bloomberg Terminal",
+    description: "Access live market data, execute trades, and monitor portfolio performance in real-time.",
+    icon: "Monitor",
+    accentColor: "blue",
+    responsibilities: [
+      "Market Data Analysis",
+      "Trade Execution",
+      "Portfolio Monitoring",
+      "News Analysis",
+      "Security Search"
+    ],
+    exploreItems: [
+      "Real-time Data",
+      "Trade Tickets",
+      "Market News",
+      "Yield Curves",
+      "Security Master"
+    ],
+    experienceItems: [
+      "Data Navigation",
+      "Trade Booking",
+      "Market Surveillance",
+      "Risk Assessment"
+    ],
+    buttonLabel: "Launch Terminal",
+    navigationRoute: "BLOOMBERG"
   }
 ];
