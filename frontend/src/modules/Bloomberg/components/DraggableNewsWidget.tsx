@@ -192,7 +192,6 @@ export default function DraggableNewsWidget() {
               <img 
                 src={item.image_url} 
                 alt="thumbnail" 
-                referrerPolicy="no-referrer"
                 style={{ width: '100%', maxHeight: '120px', objectFit: 'cover', borderRadius: '4px', marginBottom: '8px', border: '1px solid #333' }}
               />
             )}
