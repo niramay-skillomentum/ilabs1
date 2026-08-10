@@ -2,7 +2,8 @@
 // All data endpoints fetch the FULL simulator dataset (no desk/user filtering).
 // Authentication is handled via the X-Bloomberg-Terminal header.
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3002";
+const BASE_URL = `${BACKEND_URL}/api`;
 
 async function fetchJson(endpoint: string) {
   const res = await fetch(`${BASE_URL}${endpoint}`, { 
