@@ -20,13 +20,15 @@
 function analyzeTradeDecisions(trade, tradeEvents, desk) {
   const decisions = [];
 
-  // Determine the ground truth: is this trade a break or clean?
-  const isBreak = determineBreakStatus(trade, desk);
-  const mismatches = getMismatchInfo(trade, desk);
-
   for (const event of tradeEvents) {
+    if (event.eventType === "AUDIT_RECORDED" || event.eventType === "COMMENT_ADDED") continue;
+
     const action = event.metadata?.action || event.eventType;
     if (!isDecisionEvent(action)) continue;
+
+    // Determine the ground truth for this specific action
+    const isBreak = determineBreakStatus(trade, desk, action);
+    const mismatches = getMismatchInfo(trade, desk, action);
 
     const analysis = analyzeDecision(action, trade, isBreak, mismatches, desk, event);
     if (analysis) {
@@ -143,19 +145,35 @@ function analyzeDecision(action, trade, isBreak, mismatches, desk, event) {
 /**
  * Get mismatch information for a trade on a specific desk.
  */
-function getMismatchInfo(trade, desk) {
+function getMismatchInfo(trade, desk, action = "") {
   try {
     const truthEngine = require("../truthEngine");
 
+    // If the action is raising a break, we should check if the trade was ORIGINALLY a break.
+    // Reconstruct the trade by reverting any amendments that might have fixed the break.
+    let tradeToEvaluate = trade;
+    const a = (action || "").toUpperCase();
+    if (a.includes("BREAK")) {
+      tradeToEvaluate = JSON.parse(JSON.stringify(trade));
+      if (tradeToEvaluate.amendmentHistory && tradeToEvaluate.amendmentHistory.length > 0) {
+        // Revert amendments in reverse chronological order
+        const history = [...tradeToEvaluate.amendmentHistory].reverse();
+        for (const am of history) {
+          if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
+          if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+        }
+      }
+    }
+
     if (desk === "MO") {
-      const fields = truthEngine.getMismatchFields(trade, "mo");
-      return fields.map(f => ({ field: f, tradeValue: trade.booking?.[f], truthValue: trade.truths?.mo?.[f] }));
+      const fields = truthEngine.getMismatchFields(tradeToEvaluate, "mo");
+      return fields.map(f => ({ field: f, tradeValue: tradeToEvaluate.booking?.[f], truthValue: tradeToEvaluate.truths?.mo?.[f] }));
     }
     if (desk === "CONFIRMATION") {
-      return truthEngine.getConfirmationMismatches(trade);
+      return truthEngine.getConfirmationMismatches(tradeToEvaluate);
     }
     if (desk === "SETTLEMENT") {
-      return truthEngine.getSettlementMismatches(trade);
+      return truthEngine.getSettlementMismatches(tradeToEvaluate);
     }
   } catch (e) {
     // truthEngine not available
@@ -166,8 +184,8 @@ function getMismatchInfo(trade, desk) {
 /**
  * Determine if a trade is a break based on truth data.
  */
-function determineBreakStatus(trade, desk) {
-  const mismatches = getMismatchInfo(trade, desk);
+function determineBreakStatus(trade, desk, action = "") {
+  const mismatches = getMismatchInfo(trade, desk, action);
   if (mismatches.length > 0) return true;
 
   // Also check status-based breaks

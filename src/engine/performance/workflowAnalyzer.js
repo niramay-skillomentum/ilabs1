@@ -236,12 +236,9 @@ const EVENT_TO_STEP = {
  * @param {string} desk - The desk (MO, CONFIRMATION, SETTLEMENT, RECONCILIATION)
  * @returns {string[]} Expected workflow steps
  */
-function getExpectedWorkflow(trade, desk) {
+function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
   const deskWorkflows = EXPECTED_WORKFLOWS[desk];
   if (!deskWorkflows) return ["OPEN_TRADE"];
-
-  // Determine if it's a break trade
-  const isBreak = determineIsBreak(trade, desk);
 
   if (desk === "SETTLEMENT") {
     if (trade.cutoffMissedReason) return deskWorkflows.CUTOFF_BREAK;
@@ -259,8 +256,8 @@ function getExpectedWorkflow(trade, desk) {
 
   // MO: Handle sub-scenarios based on current status
   if (desk === "MO") {
-    if (trade.currentStatus === "MO_BREAK_OPEN") return deskWorkflows.BREAK_OPEN;
-    if (trade.currentStatus === "PENDING_FO_RESPONSE") return deskWorkflows.PENDING_FO_RESPONSE;
+    if (initialStatus === "MO_BREAK_OPEN") return deskWorkflows.BREAK_OPEN;
+    if (initialStatus === "PENDING_FO_RESPONSE") return deskWorkflows.PENDING_FO_RESPONSE;
     return isBreak ? deskWorkflows.BREAK : deskWorkflows.CLEAN;
   }
 
@@ -271,18 +268,30 @@ function getExpectedWorkflow(trade, desk) {
 /**
  * Determine if a trade is a break trade based on desk and truth data.
  */
-function determineIsBreak(trade, desk) {
+function determineIsBreak(trade, desk, evaluateOriginal = false) {
   try {
     const truthEngine = require("../truthEngine");
+    
+    let tradeToEvaluate = trade;
+    if (evaluateOriginal) {
+      tradeToEvaluate = JSON.parse(JSON.stringify(trade));
+      if (tradeToEvaluate.amendmentHistory && tradeToEvaluate.amendmentHistory.length > 0) {
+        const history = [...tradeToEvaluate.amendmentHistory].reverse();
+        for (const am of history) {
+          if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
+          if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+        }
+      }
+    }
 
     if (desk === "MO") {
-      return truthEngine.getMismatchFields(trade, "mo").length > 0;
+      return truthEngine.getMismatchFields(tradeToEvaluate, "mo").length > 0;
     }
     if (desk === "CONFIRMATION") {
-      return truthEngine.getConfirmationMismatches(trade).length > 0;
+      return truthEngine.getConfirmationMismatches(tradeToEvaluate).length > 0;
     }
     if (desk === "SETTLEMENT") {
-      return truthEngine.getSettlementMismatches(trade).length > 0 ||
+      return truthEngine.getSettlementMismatches(tradeToEvaluate).length > 0 ||
         trade.currentStatus === "SETTLEMENT_BREAK" ||
         trade.cutoffMissedReason != null;
     }
@@ -342,7 +351,14 @@ function extractActualWorkflow(events) {
  * @returns {Object} Workflow analysis result
  */
 function analyzeTrade(trade, tradeEvents, desk) {
-  const expectedWorkflow = getExpectedWorkflow(trade, desk);
+  let initialStatus = trade.currentStatus;
+  const firstActionEvent = tradeEvents.find(e => e.metadata && e.metadata.previousStatus);
+  if (firstActionEvent) {
+    initialStatus = firstActionEvent.metadata.previousStatus;
+  }
+
+  const isBreak = determineIsBreak(trade, desk, true);
+  const expectedWorkflow = getExpectedWorkflow(trade, desk, initialStatus, isBreak);
   const actualWorkflow = extractActualWorkflow(tradeEvents);
 
   // Calculate skipped steps (expected but not performed)
@@ -385,7 +401,7 @@ function analyzeTrade(trade, tradeEvents, desk) {
   return {
     tradeRef: trade.tradeRef,
     desk,
-    isBreak: determineIsBreak(trade, desk),
+    isBreak: isBreak,
     expectedWorkflow,
     actualWorkflow,
     skippedSteps,
