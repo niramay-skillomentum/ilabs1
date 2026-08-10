@@ -12,7 +12,6 @@ import MessageThread from "./components/MessageThread";
 import ComposeModal from "./components/ComposeModal";
 import ReplyModal from "./components/ReplyModal";
 import SendSSIModal from "./components/SendSSIModal";
-import EmailRedirectionWarningModal from "./components/EmailRedirectionWarningModal";
 import { formatDate, formatDateFull, formatAmount, buildSubject, getSenderInfo, getRecipientLabel, getStatusBadge } from "./components/utils";
 
 function CommunicationComponent() {
@@ -40,70 +39,14 @@ function CommunicationComponent() {
 
   const [sendSSIModalOpen, setSendSSIModalOpen] = useState(false);
 
-  const [popupState, setPopupState] = useState({ type: null, isError: false, title: "", message: "" });
-
   // Compose modal state
   const [composeModalOpen, setComposeModalOpen] = useState(false);
-  const [composeTo, setComposeTo] = useState("");
+  const [composeTo, setComposeTo] = useState("FO");
   const [composeToDisabled, setComposeToDisabled] = useState(false);
   const [composeTrade, setComposeTrade] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeTrades, setComposeTrades] = useState([]);
-
-  // Recipient validation states & helper
-  const [warningModalData, setWarningModalData] = useState({ open: false });
-  const [expectedRecipientData, setExpectedRecipientData] = useState(null);
-  const [recipientOptions, setRecipientOptions] = useState([]);
-
-  const fetchExpectedRecipient = useCallback((ref, dsk, ch) => {
-    if (!dsk) return;
-    const tradeParam = ref ? `&tradeRef=${encodeURIComponent(ref)}` : "";
-    const channelParam = ch ? `&channel=${encodeURIComponent(ch)}` : "";
-    fetch(`/api/conversation/expected-recipient?desk=${encodeURIComponent(dsk)}${tradeParam}${channelParam}`, {
-      headers: authHeaders()
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          if (data.expectedEmail) setExpectedRecipientData(data);
-          if (Array.isArray(data.allRecipients) && data.allRecipients.length > 0) {
-            setRecipientOptions(data.allRecipients);
-          } else {
-            const options = [];
-            if (dsk === "MO") {
-              const regions = [
-                { code: "americas", label: "Americas" },
-                { code: "emea", label: "EMEA" },
-                { code: "apac", label: "APAC" }
-              ];
-              regions.forEach(r => {
-                const email = `fo-operations-${r.code}@skillomentum.com`;
-                options.push({ label: `Front Office Operations (${r.label}) <${email}>`, value: email });
-              });
-              options.push({ label: `Counterparty Operations <operations@citi.com>`, value: "operations@citi.com" });
-            } else if (data.expectedEmail) {
-              const target = data.expectedEmail;
-              options.push({ label: `${data.counterparty || "Counterparty"} Operations <${target}>`, value: target });
-              const decoys = [
-                "operations@jpmorgan.com",
-                "operations@hsbc.com",
-                "operations@citi.com",
-                "fo-operations-americas@skillomentum.com"
-              ];
-              decoys.forEach(d => {
-                if (d.toLowerCase() !== target.toLowerCase()) {
-                  const label = d.includes("fo-") ? `Front Office Desk <${d}>` : `External Operations <${d}>`;
-                  options.push({ label, value: d });
-                }
-              });
-            }
-            setRecipientOptions(options);
-          }
-        }
-      })
-      .catch(err => console.error("Failed to fetch expected recipient:", err));
-  }, []);
 
   // Loading states
   const [isSendingReply, setIsSendingReply] = useState(false);
@@ -145,7 +88,7 @@ function CommunicationComponent() {
   const loadPersonalInbox = useCallback((dsk, uid, ch) => {
     const endpoint = ch === "FO"
       ? `/api/fo-channel/list?desk=${encodeURIComponent(dsk)}`
-      : `/api/conversations/personal?userId=${encodeURIComponent(uid)}`;
+      : `/api/conversations/personal?userId=${encodeURIComponent(uid)}&desk=${encodeURIComponent(dsk)}`;
     return fetch(endpoint, { headers: { "Authorization": "Bearer " + getToken() } })
       .then(res => res.json())
       .then(data => {
@@ -202,49 +145,13 @@ function CommunicationComponent() {
   const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll) => {
     setSelectedTradeRef(tradeRef);
     selectedTradeRefRef.current = tradeRef;
-    
-    const uid = loadUserId();
-    
-    // API call to persist read state across sessions
-    if (ch === "SYSTEM" || currentFolderRef.current === "system") {
-      fetch("/api/system-mailbox/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
-      });
-    } else if (ch === "FO") {
-      fetch("/api/fo-channel/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
-      });
-    } else {
-      fetch("/api/conversation/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
-      });
-    }
-
-    // Optimistic UI Update
     const data = currentInboxData || inboxDataRef.current;
-    const newData = data.map(item => {
-      if (item.trade.tradeRef === tradeRef) {
-        if (ch === "SYSTEM" || currentFolderRef.current === "system") {
-          item.conversation.read = true;
-        } else {
-          item.conversation.readBy = item.conversation.readBy || [];
-          if (!item.conversation.readBy.includes(uid)) {
-            item.conversation.readBy.push(uid);
-          }
-        }
-      }
-      return item;
-    });
-    setInboxData(newData);
-    inboxDataRef.current = newData;
-
-    const inboxItem = newData.find(i => i.trade.tradeRef === tradeRef);
+    const inboxItem = data.find(i => i.trade.tradeRef === tradeRef);
     if (inboxItem) setCurrentTrade(inboxItem.trade);
 
     // System mailbox messages are already loaded with the inbox list — no per-thread fetch.
-    if (ch === "SYSTEM" || currentFolderRef.current === "system") {
-      const newMsgs = inboxItem ? inboxItem.conversation.messages : [];
-      setCurrentMessages(prev => JSON.stringify(prev) === JSON.stringify(newMsgs) ? prev : newMsgs);
+    if (ch === "SYSTEM") {
+      setCurrentMessages(inboxItem ? inboxItem.conversation.messages : []);
       return;
     }
 
@@ -262,7 +169,7 @@ function CommunicationComponent() {
         } else {
           msgs = convData.messages || [];
         }
-        setCurrentMessages(prev => JSON.stringify(prev) === JSON.stringify(msgs) ? prev : msgs);
+        setCurrentMessages(msgs);
       });
   }, []);
 
@@ -286,7 +193,8 @@ function CommunicationComponent() {
     setChannel(ch);
     if (tRef) { setSelectedTradeRef(tRef); selectedTradeRefRef.current = tRef; }
 
-    setTodayDate(new Date().toLocaleDateString());
+    const d = new Date();
+    setTodayDate(d.toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }));
 
     // Check for compose mode from workstation
     const composeForTrade = searchParams.get("composeFor");
@@ -309,9 +217,12 @@ function CommunicationComponent() {
           if (data.success && data.trades) {
             setComposeTrades(data.trades);
             setComposeTrade(composeForTrade);
-            setComposeTo("");
-            setComposeToDisabled(false);
-            fetchExpectedRecipient(composeForTrade, dsk, ch);
+            if (composeToRecipient) {
+              setComposeTo(composeToRecipient);
+              setComposeToDisabled(true);
+            } else {
+              setComposeToDisabled(false);
+            }
             // Generate subject + body
             const toLabel = (composeToRecipient || "FO") === "FO" ? "FO Clarification Request" : "Trade Inquiry";
             setComposeSubject(`${composeForTrade} — ${toLabel}`);
@@ -381,22 +292,6 @@ function CommunicationComponent() {
       });
     });
 
-    socket.on("trade_update", (data) => {
-      console.log("Trade update via websocket:", data);
-      const folder = currentFolderRef.current;
-      let refreshPromise = Promise.resolve();
-      if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
-      else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
-      else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
-
-      refreshPromise.then(() => {
-        const currentSel = selectedTradeRefRef.current;
-        if (currentSel === data.tradeRef) {
-          loadConversation(currentSel, ch, null, false);
-        }
-      });
-    });
-
     // Internal System Mailbox notifications
     socket.on("new_system_mail", () => {
       if (ch !== "SYSTEM") return;
@@ -413,15 +308,7 @@ function CommunicationComponent() {
       const folder = currentFolderRef.current;
       let refreshPromise = Promise.resolve();
       if (ch === "SYSTEM") refreshPromise = loadSystemInbox();
-      else if (folder === "system") refreshPromise = loadSystemInbox();
       else if (folder === "inbox") refreshPromise = loadPersonalInbox(dsk, uid, ch);
-      else if (folder === "unread") {
-        refreshPromise = loadPersonalInbox(dsk, uid, ch).then(mapped => {
-          const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== uid && !(item.conversation.readBy || []).includes(uid));
-          setInboxData(unread);
-          inboxDataRef.current = unread;
-        });
-      }
       else if (folder === "group") refreshPromise = loadGroupInbox(dsk);
 
       refreshPromise.then(() => {
@@ -457,49 +344,24 @@ function CommunicationComponent() {
     setIsLoading(true);
 
     if (folder === "inbox") {
-      // Cross-desk personal inbox
       loadPersonalInbox(desk, userId, channel).finally(() => setIsLoading(false));
-    } else if (folder === "unread") {
-      // Load personal inbox then client-filter to unread
-      loadPersonalInbox(desk, userId, channel).then(mapped => {
-        const unread = (mapped || []).filter(item => item.lastMsg && item.lastMsg.sender !== userId && !(item.conversation.readBy || []).includes(userId));
-        setInboxData(unread);
-        inboxDataRef.current = unread;
-      }).finally(() => setIsLoading(false));
-    } else if (folder === "flagged") {
-      // Placeholder — no flagging yet
-      setInboxData([]);
-      setIsLoading(false);
-    } else if (folder === "system") {
-      loadSystemInbox().finally(() => setIsLoading(false));
-    } else if (folder === "group" || folder.startsWith("group_")) {
-      // Group inbox — desk-specific
+    } else if (folder === "group") {
       if (channel === "FO") {
         setInboxData([]);
         setIsLoading(false);
       } else {
-        const groupDesk = folder.startsWith("group_") ? folder.replace("group_", "") : desk;
-        loadGroupInbox(groupDesk).finally(() => setIsLoading(false));
+        loadGroupInbox(desk).finally(() => setIsLoading(false));
       }
     } else {
-      // Placeholder folders (sent, drafts, archive, deleted)
       setInboxData([]);
       setIsLoading(false);
     }
   };
 
-  const DESK_LABELS = { SETTLEMENT: "Settlement", CONFIRMATION: "Confirmation", MO: "Middle Office", RECONCILIATION: "Reconciliation" };
   const folderTitle = () => {
     if (channel === "SYSTEM") return "System Notifications";
     if (channel === "FO") return "Front Office Communications";
-    if (currentFolder === "inbox") return "Inbox";
-    if (currentFolder === "unread") return "Unread";
-    if (currentFolder === "flagged") return "Flagged";
-    if (currentFolder.startsWith("group_")) {
-      const deskKey = currentFolder.replace("group_", "");
-      return `Group Inbox — ${DESK_LABELS[deskKey] || deskKey}`;
-    }
-    const titles = { group: "Group Inbox", sent: "Sent Items", drafts: "Drafts", archive: "Archive", deleted: "Deleted Items", system: "System Mails" };
+    const titles = { inbox: "Inbox", group: "Group Inbox", sent: "Sent", drafts: "Drafts", deleted: "Deleted Items" };
     return titles[currentFolder] || currentFolder;
   };
 
@@ -524,13 +386,8 @@ function CommunicationComponent() {
       return { disabled: true, text: "✅ Resolve & Return to MO", statusText: "✅ Already resolved" };
     }
 
-    const targetDesk = currentTrade.mailStatus?.desk || desk;
-
-    if (targetDesk === "CONFIRMATION") {
-      const isFOConversation = channel === "FO" ||
-                               currentTrade.currentStatus === "LIASING_WITH_FO" ||
-                               (currentMessages && currentMessages.some(m => m.sender === "FO" || (m.sender && m.sender.includes("FO"))));
-      if (isFOConversation) {
+    if (desk === "CONFIRMATION") {
+      if (channel === "FO") {
         if (!currentTrade.foResponseReceived) {
           return { disabled: true, text: "✅ Return to Workstation", statusText: "⏳ Awaiting FO response...", isClose: true };
         }
@@ -591,27 +448,20 @@ function CommunicationComponent() {
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk, channel })
-    }).then(res => res.json()).then((data) => {
+      body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk })
+    }).then(() => {
       setIsSendingReply(false);
       setReplyModalOpen(false);
       setReplyBody("");
-      
-      if (!data.success) {
-        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
-      } else if (data.warning) {
-        setPopupState({ type: "feedback", isError: false, title: "⚠️ Warning", message: data.warning });
-      }
-      
       loadConversation(selectedTradeRef, channel, null, true);
     });
   };
 
   // ========================================
-  // COMPOSE MODAL ACTIONS
+  // COMPOSE MODAL
   // ========================================
   const openNewCompose = () => {
-    setComposeTo("");
+    setComposeTo(desk === "CONFIRMATION" ? "COUNTERPARTY" : "FO");
     setComposeToDisabled(false);
     setComposeBody("");
     setComposeSubject("");
@@ -623,12 +473,11 @@ function CommunicationComponent() {
         if (data.success && data.trades) {
           setComposeTrades(data.trades);
           if (data.trades.length > 0) {
-            const firstRef = data.trades[0].tradeRef;
-            setComposeTrade(firstRef);
-            fetchExpectedRecipient(firstRef, desk, channel);
+            setComposeTrade(data.trades[0].tradeRef);
             const toVal = desk === "CONFIRMATION" ? "COUNTERPARTY" : "FO";
             const toLabel = toVal === "FO" ? "FO Clarification Request" : "Trade Inquiry";
-            setComposeSubject(`${firstRef} — ${toLabel}`);
+            setComposeSubject(`${data.trades[0].tradeRef} — ${toLabel}`);
+            // Generate pre-draft
             if (desk === "CONFIRMATION" && toVal === "COUNTERPARTY") {
               const t = data.trades[0];
               setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${t.tradeRef}\nCounterparty    : ${t.counterparty}\nTrade Date      : ${new Date(t.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(t.valueDate).toLocaleDateString()}\nCurrency        : ${t.currency}\nAmount          : ${formatAmount(t.amount)}\nBuy/Sell        : ${t.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
@@ -641,10 +490,10 @@ function CommunicationComponent() {
 
   const handleComposeTradeChange = (newTradeRef) => {
     setComposeTrade(newTradeRef);
-    fetchExpectedRecipient(newTradeRef, desk, channel);
-    const toLabel = composeTo.includes("fo-") || composeTo === "FO" ? "FO Clarification Request" : "Trade Inquiry";
+    const toLabel = composeTo === "FO" ? "FO Clarification Request" : "Trade Inquiry";
     setComposeSubject(`${newTradeRef} — ${toLabel}`);
-    if (desk === "CONFIRMATION" && (composeTo.includes("operations@") || composeTo === "COUNTERPARTY")) {
+    // Generate pre-draft
+    if (desk === "CONFIRMATION" && composeTo === "COUNTERPARTY") {
       const trade = composeTrades.find(t => t.tradeRef === newTradeRef);
       if (trade) {
         setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
@@ -656,9 +505,9 @@ function CommunicationComponent() {
 
   const handleComposeToChange = (newTo) => {
     setComposeTo(newTo);
-    const toLabel = newTo.includes("fo-") || newTo === "FO" ? "FO Clarification Request" : "Trade Inquiry";
+    const toLabel = newTo === "FO" ? "FO Clarification Request" : "Trade Inquiry";
     setComposeSubject(`${composeTrade} — ${toLabel}`);
-    if (desk === "CONFIRMATION" && (newTo.includes("operations@") || newTo === "COUNTERPARTY")) {
+    if (desk === "CONFIRMATION" && newTo === "COUNTERPARTY") {
       const trade = composeTrades.find(t => t.tradeRef === composeTrade);
       if (trade) {
         setComposeBody(`Dear Counterparty,\n\nPlease verify our trade details for the below transaction:\n\n--------------------------------------------------\nTrade Reference : ${trade.tradeRef}\nCounterparty    : ${trade.counterparty}\nTrade Date      : ${new Date(trade.tradeDate).toLocaleDateString()}\nValue Date      : ${new Date(trade.valueDate).toLocaleDateString()}\nCurrency        : ${trade.currency}\nAmount          : ${formatAmount(trade.amount)}\nBuy/Sell        : ${trade.direction}\n--------------------------------------------------\n\nKindly confirm if the details match your records.\n\nRegards,\nConfirmation Desk`);
@@ -670,23 +519,7 @@ function CommunicationComponent() {
 
   const sendCompose = () => {
     if (!composeTrade) return toast.error("Select a trade");
-    if (!composeTo) return toast.error("Please select a recipient email in the To: field");
     if (!composeBody.trim()) return toast.error("Email body cannot be empty");
-
-    if (expectedRecipientData && expectedRecipientData.expectedEmail) {
-      const selectedEmail = String(composeTo).toLowerCase().trim();
-      const targetEmail = String(expectedRecipientData.expectedEmail).toLowerCase().trim();
-      if (selectedEmail !== targetEmail && selectedEmail !== "fo" && selectedEmail !== "counterparty") {
-        setWarningModalData({
-          open: true,
-          title: expectedRecipientData.warningTitle || "Email Redirection Warning",
-          message: expectedRecipientData.warningMessage,
-          expectedEmail: targetEmail,
-          submittedEmail: selectedEmail
-        });
-        return;
-      }
-    }
 
     const composeAction = searchParams.get("composeAction");
 
@@ -723,43 +556,16 @@ function CommunicationComponent() {
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: composeTrade, sender: userId, message: composeBody, desk, recipient: composeTo, channel })
-    })
-    .then(res => res.json())
-    .then((data) => {
+      body: JSON.stringify({ tradeRef: composeTrade, sender: userId, message: composeBody, desk })
+    }).then(() => {
       setIsSendingCompose(false);
-      if (!data.success && (data.validationError || data.errorType === "EMAIL_REDIRECTION_WARNING")) {
-        setWarningModalData({
-          open: true,
-          title: data.title || "Email Redirection Warning",
-          message: data.message,
-          expectedEmail: data.expectedEmail,
-          submittedEmail: composeTo
-        });
-        return;
-      }
-      if (!data.success) {
-        return toast.error(data.error || "Failed to send message");
-      }
-      toast.success("Email dispatched securely");
       setComposeModalOpen(false);
-      
-      if (!data.success) {
-        setPopupState({ type: "feedback", isError: true, title: "⚠️ Action Denied", message: data.error || "Action failed" });
-      } else if (data.warning) {
-        setPopupState({ type: "feedback", isError: false, title: "⚠️ Warning", message: data.warning });
-      }
-      
       setSelectedTradeRef(composeTrade);
       selectedTradeRefRef.current = composeTrade;
       const folder = currentFolderRef.current;
       if (folder === "inbox") loadPersonalInbox(desk, userId, channel);
       else if (folder === "group" && channel !== "FO") loadGroupInbox(desk);
       setTimeout(() => loadConversation(composeTrade, channel, null, true), 500);
-    })
-    .catch(() => {
-      setIsSendingCompose(false);
-      toast.error("Network error during transmission");
     });
   };
 
@@ -790,27 +596,25 @@ function CommunicationComponent() {
   // ========================================
   if (!userId) return null;
 
-  const userName = userId.split('@')[0].charAt(0).toUpperCase() + userId.split('@')[0].slice(1);
-
   return (
     <div style={{fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", background:"#f3f2f1", color:"#323130", overflow:"hidden", height:"100vh"}}>
       {/* ========== HEADER ========== */}
       <div className="header">
         <div className="header-left">
-          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB Operations Mailbox"}</div>
+          <div className="header-logo">{channel === "SYSTEM" ? "🖥️ SGB System Mailbox" : channel === "FO" ? "💬 SGB FO Chat" : "✉ SGB OpsMail"}</div>
         </div>
         <div className="header-right">
           <div className="header-user">
-            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userName}`}
+            {channel === "SYSTEM" ? `${desk || ""} Desk | System Notifications` : channel === "FO" ? `${desk} Desk | FO Internal Channel` : `${desk || ""} Desk | Welcome, ${userId}`}
           </div>
           <div className="header-date">{todayDate}</div>
-          <button className="btn secondary" onClick={closeMailbox}>✕ Close</button>
+          <button className="btn-close-tab" onClick={closeMailbox}>✕ Close</button>
         </div>
       </div>
 
       {/* ========== MAIN 3-PANEL LAYOUT ========== */}
       <div className="main">
-        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} inboxData={inboxData} desk={desk} userId={userId} />
+        <FolderNav channel={channel} currentFolder={currentFolder} switchFolder={switchFolder} />
         
         <InboxList
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}
@@ -865,36 +669,8 @@ function CommunicationComponent() {
         composeTrade={composeTrade} handleComposeTradeChange={handleComposeTradeChange}
         composeTrades={composeTrades} formatAmount={formatAmount} composeSubject={composeSubject}
         setComposeSubject={setComposeSubject} composeBody={composeBody} setComposeBody={setComposeBody}
-        sendCompose={sendCompose} isSendingCompose={isSendingCompose} recipientOptions={recipientOptions}
+        sendCompose={sendCompose} isSendingCompose={isSendingCompose}
       />
-
-      <EmailRedirectionWarningModal
-        open={warningModalData.open}
-        title={warningModalData.title}
-        message={warningModalData.message}
-        expectedEmail={warningModalData.expectedEmail}
-        submittedEmail={warningModalData.submittedEmail}
-        onClose={() => setWarningModalData({ open: false })}
-      />
-
-      {popupState.type === "feedback" && (
-        <div className="popup" style={{ display: 'block', maxWidth: '400px' }}>
-          <button style={{ position: 'absolute', top: '15px', right: '15px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }} onClick={() => setPopupState({ type: null })}>✕</button>
-          <h3 style={{ marginBottom: '15px', color: popupState.isError ? '#dc2626' : '#f59e0b', paddingRight: '20px' }}>
-            {popupState.title || (popupState.isError ? '⚠️ Action Denied' : '⚠️ Warning')}
-          </h3>
-          <div style={{ color: '#475569', fontSize: '14px', marginBottom: '20px', lineHeight: '1.5' }}>
-            {popupState.message}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn primary" onClick={() => setPopupState({ type: null })}>Understood</button>
-          </div>
-        </div>
-      )}
-      
-      {popupState.type && (
-        <div className="overlay" onClick={() => setPopupState({ type: null })} />
-      )}
     </div>
   );
 }

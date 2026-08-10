@@ -20,6 +20,7 @@ export const WorkstationCard: React.FC<WorkstationCardProps> = ({ workstation, o
     green: { text: 'text-green-600', iconBg: 'bg-green-50' },
     cyan: { text: 'text-cyan-600', iconBg: 'bg-cyan-50' },
     amber: { text: 'text-amber-600', iconBg: 'bg-amber-50' },
+    indigo: { text: 'text-indigo-600', iconBg: 'bg-indigo-50' },
   };
 
   const colors = colorMap[workstation.accentColor] || colorMap.blue;

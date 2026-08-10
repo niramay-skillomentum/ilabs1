@@ -6,7 +6,6 @@ import { io } from "socket.io-client";
 import { loadUserId, getToken, authHeaders } from "../../lib/auth";
 import toast from "react-hot-toast";
 import "./page.css";
-import { GuidedTourProvider, useGuidedTour, stccTourSteps } from "../../components/guided-tour";
 
 // ============ Helpers ============
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "";
@@ -35,9 +34,6 @@ function ElectronicSettlementComponent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const { startTour, isActive, nextStep } = useGuidedTour();
-  const autoStarted = useRef(false);
-
   const [userId, setUserId] = useState(null);
   const [trades, setTrades] = useState([]);
   const [counts, setCounts] = useState({ MATCHED: 0, UNMATCHED: 0, PENDING: 0, SETTLED: 0 });
@@ -65,9 +61,6 @@ function ElectronicSettlementComponent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
 
-  // Cut-off tracking
-  const [cutoffsReached, setCutoffsReached] = useState([]);
-
   const socketRef = useRef(null);
 
   // ============ Data Fetching ============
@@ -89,13 +82,6 @@ function ElectronicSettlementComponent() {
 
   // ============ Init ============
   useEffect(() => {
-    if (!isLoading && !localStorage.getItem("guidedTour.stcc.completed") && !autoStarted.current) {
-      autoStarted.current = true;
-      setTimeout(() => startTour("stcc", stccTourSteps), 1000);
-    }
-  }, [isLoading, startTour]);
-
-  useEffect(() => {
     const uid = loadUserId();
     if (!uid || !getToken()) {
       toast.error("Session expired. Login again.");
@@ -113,12 +99,6 @@ function ElectronicSettlementComponent() {
 
     socket.on("trade_update", () => {
       fetchTrades();
-    });
-
-    socket.on("clock_tick", (payload) => {
-      if (payload && payload.cutoffsReached) {
-        setCutoffsReached(payload.cutoffsReached);
-      }
     });
 
     return () => socket.disconnect();
@@ -264,14 +244,7 @@ function ElectronicSettlementComponent() {
             <div className="stcc-logo-divider"></div>
             <span className="stcc-logo-subtitle">INSTITUTIONAL TRADE PROCESSING</span>
           </div>
-          <div className="stcc-header-icons" style={{ display: "flex", gap: "10px" }}>
-            <button
-              onClick={() => startTour("stcc", stccTourSteps)}
-              className="stcc-back-btn"
-              style={{ background: "#f8fafc", color: "#0f172a", borderColor: "#cbd5e1" }}
-            >
-              ❔ Restart Tour
-            </button>
+          <div className="stcc-header-icons">
             <button onClick={() => window.close()} className="stcc-back-btn">
               ← Back to Workstation
             </button>
@@ -388,20 +361,16 @@ function ElectronicSettlementComponent() {
             ) : (
               <>
                 <button
-                  id="tour-stcc-settle"
                   className="stcc-action-btn settle"
-                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling || cutoffsReached.includes(selectedTrade?.currency)}
+                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "MATCHED" || isSettling}
                   onClick={handleSettle}
-                  title={cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency}` : ''}
                 >
                   {isSettling ? "Settling..." : "⬆ Settle"}
                 </button>
                 <button
-                  id="tour-stcc-edit"
                   className="stcc-action-btn"
-                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED" || cutoffsReached.includes(selectedTrade?.currency)}
+                  disabled={!selectedTrade || !selectedTrade.isOwned || selectedTrade.electronicStatus !== "UNMATCHED"}
                   onClick={handleOpenComparison}
-                  title={cutoffsReached.includes(selectedTrade?.currency) ? `⏰ Cut-off missed for ${selectedTrade?.currency}` : ''}
                 >
                   ✎ Edit / Compare
                 </button>
@@ -586,10 +555,8 @@ function ElectronicSettlementComponent() {
 
 export default function ElectronicSettlementPage() {
   return (
-    <GuidedTourProvider>
-      <Suspense fallback={<div className="stcc-loading"><div className="stcc-loading-spinner"></div>Loading...</div>}>
-        <ElectronicSettlementComponent />
-      </Suspense>
-    </GuidedTourProvider>
+    <Suspense fallback={<div className="stcc-loading"><div className="stcc-loading-spinner"></div>Loading...</div>}>
+      <ElectronicSettlementComponent />
+    </Suspense>
   );
 }

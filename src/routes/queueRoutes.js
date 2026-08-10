@@ -17,10 +17,10 @@ router.post("/generate", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Invalid desk specified. Must be MO, CONFIRMATION, or SETTLEMENT" });
     }
 
-    const result = await queueComposer.buildQueue(desk, userId);
-
-    simulationClock.setSessionStart(result.sessionStart, userId);
+    simulationClock.reset();
     simulationClock.start();
+
+    const result = await queueComposer.buildQueue(desk, userId);
 
     res.json({
       success: true,
@@ -68,9 +68,6 @@ router.get("/my", authenticateToken, async (req, res) => {
 
     // Touch session to track activity
     await queueComposer.touchSession(userId);
-
-    simulationClock.setSessionStart(activeQueue.sessionStart, userId);
-    simulationClock.start();
 
     res.json({
       success: true,

@@ -55,10 +55,10 @@ export default function ReplyModal({
           )}
         </div>
         <div className="compose-footer">
-          <button className="btn primary" onClick={sendReply} disabled={isSendingReply}>
+          <button className="btn-send" onClick={sendReply} disabled={isSendingReply}>
             {isSendingReply ? "Sending..." : "Send"}
           </button>
-          <button className="btn secondary" onClick={() => setReplyModalOpen(false)} disabled={isSendingReply}>Discard</button>
+          <button className="btn-discard" onClick={() => setReplyModalOpen(false)} disabled={isSendingReply}>Discard</button>
         </div>
       </div>
     </>

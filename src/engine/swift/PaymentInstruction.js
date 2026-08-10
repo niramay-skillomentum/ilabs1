@@ -25,7 +25,7 @@ function build(trade, ourBank, counterpartySSI) {
   const direction = resolveDirection(trade.direction);
 
   const hashBase = crypto.createHash('md5').update(trade.tradeRef).digest('hex').toUpperCase();
-  const settledDate = simulationClock.getTime();
+  const settledDate = simulationClock.getCurrentTime();
 
   // Base payment economics (always from trade)
   const instruction = {

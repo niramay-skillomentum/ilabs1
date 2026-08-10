@@ -6,20 +6,6 @@ const { authenticateToken } = require("../middleware/auth");
 const scoringEngine = require("../engine/scoringEngine");
 const LifecycleEngine = require("../engine/lifecycle");
 const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
-const cutoffEngine = require("../engine/cutoff");
-const cutoffEnforcer = require("../engine/cutoffEnforcer");
-const learningEngine = require("../engine/learningEngine");
-
-// Helper: Send a response enriched with a learning payload.
-async function sendLearningResponse(res, statusCode, errorMessage, { userId, tradeRef, desk, action, ruleCode, extraFields } = {}) {
-  let learning = null;
-  try {
-    learning = await learningEngine.processFailure({ userId, tradeRef, desk, action, ruleCode, errorMessage });
-  } catch (err) {
-    console.warn("[SettlementRoutes] Learning engine error (non-blocking):", err.message);
-  }
-  return res.status(statusCode).json({ success: false, error: errorMessage, learning: learning || undefined, ...extraFields });
-}
 
 // ======================================
 // SETTLEMENT WORKFLOW ENGINE ROUTES
@@ -42,19 +28,7 @@ router.post("/amend", authenticateToken, async (req, res) => {
     if (!trade) return res.status(404).json({ success: false, error: "Trade not found in session" });
 
     if (!["SETTLEMENT_BREAK", "REJECTED_REVERIFY"].includes(trade.currentStatus)) {
-      return sendLearningResponse(res, 400, "Amendment can only be requested from a raised break or after a failed verification.", {
-        userId, tradeRef, desk: "SETTLEMENT", action: "SETTLEMENT_AMEND", ruleCode: "SETTLEMENT_WRONG_STATUS_FOR_AMEND"
-      });
-    }
-
-    // Cut-off enforcement
-    if (cutoffEngine.isCutOffBreached(trade.currency)) {
-      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
-      return sendLearningResponse(res, 400, `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Amendment not allowed.`, {
-        userId, tradeRef, desk: "SETTLEMENT", action: "SETTLEMENT_AMEND", ruleCode: "SETTLEMENT_CUTOFF_AMEND_BLOCKED",
-        extraFields: { cutoffBreached: true }
-      });
+      return res.status(400).json({ success: false, error: "Amendment can only be requested from a raised break or after a failed verification." });
     }
 
     // If user selected a specific SSI ID, amend settlement details from that SSI
@@ -120,16 +94,7 @@ router.post("/send-for-approval", authenticateToken, async (req, res) => {
     if (!trade) return res.status(404).json({ success: false, error: "Trade not found in session" });
 
     if (trade.currentStatus !== "AMENDED") {
-      return sendLearningResponse(res, 400, "Trade must be AMENDED before it can be sent for approval.", {
-        userId, tradeRef, desk: "SETTLEMENT", action: "SEND_FOR_APPROVAL", ruleCode: "SETTLEMENT_NOT_AMENDED"
-      });
-    }
-
-    // Cut-off enforcement
-    if (cutoffEngine.isCutOffBreached(trade.currency)) {
-      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
-      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Approval not allowed.`, cutoffBreached: true });
+      return res.status(400).json({ success: false, error: "Trade must be AMENDED before it can be sent for approval." });
     }
 
     await systemWorkflowEngine.scheduleVerification(trade, userId, "SETTLEMENT");
@@ -150,16 +115,7 @@ router.post("/settle", authenticateToken, async (req, res) => {
     if (!trade) return res.status(404).json({ success: false, error: "Trade not found in session" });
 
     if (trade.currentStatus !== "APPROVED") {
-      return sendLearningResponse(res, 400, "Trade must be APPROVED before settlement.", {
-        userId, tradeRef, desk: "SETTLEMENT", action: "SETTLE", ruleCode: "SETTLEMENT_NOT_APPROVED"
-      });
-    }
-
-    // Cut-off enforcement
-    if (cutoffEngine.isCutOffBreached(trade.currency)) {
-      await cutoffEnforcer.handleMissedCutoff(trade, userId, false);
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(trade.currency);
-      return res.status(400).json({ success: false, error: `Settlement cut-off for ${trade.currency} (${cutoffTime}) has been missed. Settlement not allowed.`, cutoffBreached: true });
+      return res.status(400).json({ success: false, error: "Trade must be APPROVED before settlement." });
     }
 
     const plain = trade.toObject();

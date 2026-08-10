@@ -1,23 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadFullName, authHeaders } from '../../lib/auth';
-import { GuidedTourProvider, useGuidedTour, gcmsTourSteps } from "../../components/guided-tour";
 
-function GCMSContent() {
+export default function GCMSPage() {
   const router = useRouter();
   const [userName, setUserName] = useState("SIM_OPS_01");
-
-  const { startTour, isActive, nextStep } = useGuidedTour();
-  const autoStarted = useRef(false);
-
-  useEffect(() => {
-    if (!localStorage.getItem("guidedTour.gcms.completed") && !autoStarted.current) {
-      autoStarted.current = true;
-      setTimeout(() => startTour("gcms", gcmsTourSteps), 1000);
-    }
-  }, [startTour]);
   
   const [processedData, setProcessedData] = useState([]);
   const [activeRowId, setActiveRowId] = useState(null);
@@ -69,7 +58,8 @@ function GCMSContent() {
         .gcms-env-badge { background: #dc2626; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; letter-spacing: 0.5px; }
         
         .gcms-toolbar { background: #ffffff; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-
+        .btn-back { background: transparent; border: 1px solid #cbd5e1; padding: 4px 12px; border-radius: 4px; cursor: pointer; color: #475569; font-weight: 600; font-size: 12px; }
+        .btn-back:hover { background: #f1f5f9; }
         
         .gcms-body { display: flex; flex: 1; overflow: hidden; }
         
@@ -93,7 +83,9 @@ function GCMSContent() {
         .filter-input { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; font-family: inherit; }
         .filter-input:focus { outline: none; border-color: #0ea5e9; }
         .filter-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px 16px; }
-
+        .btn-clear { background: white; border: 1px solid #cbd5e1; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; }
+        .btn-search { background: #0ea5e9; border: 1px solid #0284c7; padding: 6px 20px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .btn-search:hover { background: #0284c7; }
         
         .grid-container { flex: 1; overflow: auto; background: #fff; border-top: 1px solid #cbd5e1; }
         .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -124,16 +116,7 @@ function GCMSContent() {
       </div>
 
       <div className="gcms-toolbar">
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <button id="tour-gcms-back-btn" className="btn secondary" onClick={() => router.push('/reconciliation-desk')}>← Back to Dashboard</button>
-          <button
-            className="btn"
-            style={{ background: "#f8fafc", color: "#0f172a", border: "1px solid #cbd5e1", padding: "4px 12px", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}
-            onClick={() => startTour("gcms", gcmsTourSteps)}
-          >
-            ❔ Restart Tour
-          </button>
-        </div>
+        <button className="btn-back" onClick={() => router.push('/reconciliation-desk')}>← Back to Dashboard</button>
         <div>Module: SWIFT Message Center</div>
       </div>
 
@@ -154,7 +137,7 @@ function GCMSContent() {
 
         <div className="gcms-main">
           {/* ZONE 1: FILTER */}
-          <div id="tour-gcms-filters" className="gcms-panel">
+          <div className="gcms-panel">
             <div className="panel-header">Search Criteria</div>
             <div className="filter-grid">
               <div className="filter-group">
@@ -195,13 +178,13 @@ function GCMSContent() {
               </div>
             </div>
             <div className="filter-actions">
-              <button className="btn secondary">CLEAR</button>
-              <button className="btn primary">EXECUTE QUERY</button>
+              <button className="btn-clear">CLEAR</button>
+              <button className="btn-search">EXECUTE QUERY</button>
             </div>
           </div>
 
           {/* ZONE 2 & 3 CONTAINER */}
-          <div id="tour-gcms-ledger" className="gcms-panel" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+          <div className="gcms-panel" style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
             <div className="panel-header" style={{display: 'flex', justifyContent: 'space-between'}}>
               <span>Message Ledger</span>
               <span style={{color: '#64748b', fontSize: 11}}>Viewing 1-{processedData.length} of {processedData.length} Records</span>
@@ -241,8 +224,10 @@ function GCMSContent() {
                       <td>
                         {activeRowId === tx.id && (
                           <button 
-                            className="btn primary"
-                            style={{ padding: '2px 8px', fontSize: '11px' }}
+                            style={{
+                              background: '#3b82f6', color: 'white', border: 'none', 
+                              padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedTx(tx);
@@ -261,14 +246,13 @@ function GCMSContent() {
 
             {/* ZONE 3: INSPECTOR */}
             {isInspectorOpen && (
-              <div id="tour-gcms-inspector" className="inspector-panel">
+              <div className="inspector-panel">
                 <div className="inspector-header">
                   <span>SWIFT PAYEE INSPECTOR</span>
                   <div>
                     <span style={{marginRight: '16px'}}>Selected: {selectedTx?.id || "None"}</span>
                     <button 
-                      className="btn secondary"
-                      style={{ padding: '2px 8px', fontSize: '11px' }}
+                      style={{background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '11px'}}
                       onClick={() => setIsInspectorOpen(false)}
                     >
                       CLOSE
@@ -293,13 +277,5 @@ function GCMSContent() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function GCMSPage() {
-  return (
-    <GuidedTourProvider>
-      <GCMSContent />
-    </GuidedTourProvider>
   );
 }

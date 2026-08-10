@@ -27,6 +27,7 @@ async function connectDB() {
   } catch (err) {
     console.warn("⚠️ MongoDB connection failed:", err.message);
     console.warn("⚠️ Running in memory-only mode (data will not persist)");
+    mongoose.set('bufferCommands', false);
     isConnected = false;
   }
 }

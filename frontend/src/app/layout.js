@@ -1,7 +1,5 @@
 import { Inter } from "next/font/google";
 import { Toaster } from "react-hot-toast";
-import { LearningProvider } from "../components/learning/LearningProvider";
-import "../components/learning/LearningCard.css";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "SGB Operations Simulator | Skillomentum",
+  title: "SGB Operations Simulator | Niramay Skillomentum",
   description: "Financial operations training simulator for post-trade lifecycle management across MO, Confirmation, and Settlement desks.",
 };
 
@@ -21,12 +19,9 @@ export default function RootLayout({ children }) {
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
-        <LearningProvider>
-          {children}
-        </LearningProvider>
+        {children}
         <Toaster position="top-center" />
       </body>
     </html>
   );
 }
-

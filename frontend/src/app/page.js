@@ -72,129 +72,104 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row font-sans">
-      {/* Left Side (50% Width) - Login Section */}
-      <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 px-4 py-8 relative">
-        {/* Header / Logo Area */}
-        <div className="mb-10 text-center">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white tracking-tight drop-shadow-md">
-            Skillomentum's Investment Banking Operations
-          </h1>
-          <p className="text-blue-200 mt-2 text-sm md:text-base font-medium tracking-wide">
-            Operations Simulator
-          </p>
-        </div>
-
-        {/* Login Card */}
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-8 md:p-10 transform transition-all hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
-          <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">
-            {isLoginMode ? "Welcome Back" : "Create Account"}
-          </h2>
-          
-          {errorMsg && (
-            <div className="mb-6 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm text-center font-medium animate-pulse">
-              {errorMsg}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {!isLoginMode && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Full Name</label>
-                <input 
-                  type="text" 
-                  placeholder="John Doe" 
-                  required 
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
-                />
-              </div>
-            )}
-            
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
-              <input 
-                type="email" 
-                placeholder="name@example.com" 
-                required 
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                required 
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
-              />
-            </div>
-            
-            <button 
-              type="submit"
-              disabled={isLoading}
-              className={`w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transform transition-all duration-200 ${isLoading ? 'opacity-80 cursor-not-allowed' : 'hover:-translate-y-0.5 active:translate-y-0'}`}
-            >
-              {isLoading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Processing...
-                </>
-              ) : (
-                isLoginMode ? "Sign In" : "Register"
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8 text-center">
-            <button 
-              type="button"
-              onClick={() => {
-                setIsLoginMode(!isLoginMode);
-                setErrorMsg("");
-              }}
-              className="text-sm font-semibold text-slate-500 hover:text-blue-600 transition-colors duration-200"
-            >
-              {isLoginMode ? "Need an account? Register here" : "Already have an account? Sign in"}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-8 text-slate-400 text-xs font-medium absolute bottom-4">
-          © {new Date().getFullYear()} Skillomentum. All rights reserved.
-        </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 font-sans px-4">
+      
+      {/* Header / Logo Area */}
+      <div className="mb-10 text-center">
+        <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white tracking-tight drop-shadow-md">
+          Skillomentum Global Bank
+        </h1>
+        <p className="text-blue-200 mt-2 text-sm md:text-base font-medium tracking-wide">
+          Operations Simulator
+        </p>
       </div>
 
-      {/* Right Side (50% Width) - Split into two 50% height sections */}
-      <div className="hidden md:flex w-full md:w-1/2 flex-col h-screen">
-        {/* Top Right Section */}
-        <div className="h-1/2 w-full bg-slate-50 flex flex-col items-center justify-center p-8 border-b border-slate-200">
-          <div className="max-w-md text-center">
-            <h2 className="text-3xl font-bold text-slate-800 mb-4">Operations Dashboard</h2>
-            <p className="text-slate-600 text-lg">
-              Experience a realistic simulation of a modern investment banking operations desk. Manage trades, exceptions, and lifecycle events.
-            </p>
-          </div>
-        </div>
+      {/* Login Card */}
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-8 md:p-10 transform transition-all hover:shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+        <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">
+          {isLoginMode ? "Welcome Back" : "Create Account"}
+        </h2>
         
-        {/* Bottom Right Section */}
-        <div className="h-1/2 w-full bg-blue-50 flex flex-col items-center justify-center p-8">
-          <div className="max-w-md text-center">
-            <h2 className="text-3xl font-bold text-blue-900 mb-4">Real-time Analytics</h2>
-            <p className="text-blue-700 text-lg">
-              Monitor key performance indicators, settlement rates, and risk metrics in real-time as you process the day's activity.
-            </p>
+        {errorMsg && (
+          <div className="mb-6 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm text-center font-medium animate-pulse">
+            {errorMsg}
           </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {!isLoginMode && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Full Name</label>
+              <input 
+                type="text" 
+                placeholder="John Doe" 
+                required 
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
+              />
+            </div>
+          )}
+          
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
+            <input 
+              type="email" 
+              placeholder="name@example.com" 
+              required 
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              required 
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 shadow-sm"
+            />
+          </div>
+          
+          <button 
+            type="submit"
+            disabled={isLoading}
+            className={`w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transform transition-all duration-200 ${isLoading ? 'opacity-80 cursor-not-allowed' : 'hover:-translate-y-0.5 active:translate-y-0'}`}
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </>
+            ) : (
+              isLoginMode ? "Sign In" : "Register"
+            )}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center">
+          <button 
+            type="button"
+            onClick={() => {
+              setIsLoginMode(!isLoginMode);
+              setErrorMsg("");
+            }}
+            className="text-sm font-semibold text-slate-500 hover:text-blue-600 transition-colors duration-200"
+          >
+            {isLoginMode ? "Need an account? Register here" : "Already have an account? Sign in"}
+          </button>
         </div>
+      </div>
+      
+      <div className="mt-8 text-slate-400 text-xs font-medium">
+        © {new Date().getFullYear()} Niramay Skillomentum. All rights reserved.
       </div>
     </div>
   );

@@ -19,8 +19,6 @@ const SystemJob = require("../models/SystemJob");
 const SystemMail = require("../models/SystemMail");
 const LifecycleEngine = require("./lifecycle");
 const auditEngine = require("./auditEngine");
-const cutoffEngine = require("./cutoff");
-const simulationClock = require("./clock");
 
 // Configurable delays (ms) to simulate backend processing time
 const AMENDMENT_DELAY_MS = parseInt(process.env.SYSTEM_AMENDMENT_DELAY_MS, 10) || 8000;
@@ -208,15 +206,15 @@ async function processAmendment(job) {
   await SystemMail.create({
     userId: job.userId,
     tradeRef: trade.tradeRef,
-    from: "Static Data Team",
+    from: "System",
     subject: `Trade Amended Successfully — ${trade.tradeRef}`,
     body,
     action: "AMENDED"
   });
 
   await auditEngine.recordEvent(
-    trade.tradeRef, "Static Data Team", "SETTLEMENT_AMENDED",
-    `PENDING_AMENDMENT → AMENDED | Static Data Team applied requested amendment`,
+    trade.tradeRef, "System", "SETTLEMENT_AMENDED",
+    `PENDING_AMENDMENT → AMENDED | System applied requested amendment`,
     true
   );
 
@@ -240,53 +238,7 @@ async function processVerification(job) {
   const errors = validateTrade(trade);
 
   if (errors.length === 0) {
-    // ======================================
-    // CUT-OFF CHECK BEFORE SETTLING
-    // Even if verification passes, reject if cut-off has been breached
-    // ======================================
-    if (cutoffEngine.isCutOffBreached(trade.currency)) {
-      const currency = trade.currency;
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(currency);
-      const region = cutoffEngine.getRegionForCurrency(currency);
-      const simTime = simulationClock.getFormattedTime();
-
-      applyTransition(trade, "SETTLEMENT_BREAK");
-      trade.cutoffMissedReason = "Missed Value Date";
-      trade.cutoffMissedAtAge = trade.age;
-      trade.verificationErrors = [];
-      await trade.save();
-
-      const auditDetails =
-        `Missed Value Date — Settlement cut-off for ${currency} (${cutoffTime}, ${region}) ` +
-        `was breached at simulated time ${simTime}. Verification passed but trade moved to SETTLEMENT_BREAK.`;
-
-      await auditEngine.recordEvent(
-        trade.tradeRef, "Static Data Team", "CUTOFF_MISSED",
-        auditDetails,
-        true
-      );
-
-      await SystemMail.create({
-        userId: job.userId,
-        tradeRef: trade.tradeRef,
-        from: "Static Data Team",
-        subject: `Settlement Cut-Off Missed — ${trade.tradeRef}`,
-        body:
-          `Verification was successful for trade ${trade.tradeRef}, however the ` +
-          `settlement cut-off for ${currency} (${cutoffTime}, ${region}) has been missed.\n\n` +
-          `The trade has been moved to SETTLEMENT_BREAK with reason: Missed Value Date.\n\n` +
-          `The trade will need to be worked on the next trade age via counterparty liaison.`,
-        action: "CUTOFF_MISSED"
-      });
-
-      emit("trade_update", job.userId, { tradeRef: trade.tradeRef, currentStatus: "SETTLEMENT_BREAK" });
-      emit("new_system_mail", job.userId, { tradeRef: trade.tradeRef, action: "CUTOFF_MISSED" });
-
-      console.log(`[SystemVerificationBot] Trade ${trade.tradeRef} passed verification but ${currency} cut-off breached — moved to SETTLEMENT_BREAK`);
-      return;
-    }
-
-    // All parameters match and cut-off not breached — settle the trade directly
+    // All parameters match — settle the trade directly
     applyTransition(trade, "SETTLED");
     trade.verificationErrors = [];
     await trade.save();
@@ -294,7 +246,7 @@ async function processVerification(job) {
     await SystemMail.create({
       userId: job.userId,
       tradeRef: trade.tradeRef,
-      from: "Static Data Team",
+      from: "System",
       subject: `Trade Settled — ${trade.tradeRef}`,
       body:
         `Verification successful for trade ${trade.tradeRef}.\n\n` +
@@ -305,7 +257,7 @@ async function processVerification(job) {
     });
 
     await auditEngine.recordEvent(
-      trade.tradeRef, "Static Data Team", "SETTLEMENT_VERIFICATION_PASSED",
+      trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_PASSED",
       "PENDING_APPROVAL → SETTLED | Automated verification passed — trade settled",
       true
     );
@@ -328,7 +280,7 @@ async function processVerification(job) {
       // Session expired — unassign to general pool
       trade.assignedTo = null;
       await auditEngine.recordEvent(
-        trade.tradeRef, "Static Data Team", "SETTLEMENT_UNASSIGNED",
+        trade.tradeRef, "System", "SETTLEMENT_UNASSIGNED",
         "Session expired — trade returned to general pool with SETTLEMENT_PENDING",
         true
       );
@@ -340,7 +292,7 @@ async function processVerification(job) {
     await SystemMail.create({
       userId: job.userId,
       tradeRef: trade.tradeRef,
-      from: "Static Data Team",
+      from: "System",
       subject: `Settlement Rejected — ${trade.tradeRef}`,
       body:
         `Automated verification failed for trade ${trade.tradeRef}.\n\n` +
@@ -377,7 +329,7 @@ async function processVerification(job) {
     }
 
     await auditEngine.recordEvent(
-      trade.tradeRef, "Static Data Team", "SETTLEMENT_VERIFICATION_FAILED",
+      trade.tradeRef, "System", "SETTLEMENT_VERIFICATION_FAILED",
       `PENDING_APPROVAL → SETTLEMENT_PENDING | ${errors.length} issue(s): ${errors.join("; ")}`,
       true
     );

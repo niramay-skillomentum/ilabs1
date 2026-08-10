@@ -12,7 +12,6 @@ const ConversationSchema = new mongoose.Schema({
   tradeRef: { type: String, required: true, unique: true, index: true },
   status: { type: String, default: "OPEN" },
   desks: [{ type: String }],
-  readBy: [{ type: String }],
   messages: [MessageSchema]
 
 }, { timestamps: true });

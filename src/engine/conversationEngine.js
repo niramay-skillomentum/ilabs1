@@ -37,7 +37,6 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
 
   const updateDoc = {
     $setOnInsert: { tradeRef, status: "OPEN" },
-    $set: { readBy: [sender] },
     $push: {
       messages: {
         $each: [{
@@ -95,22 +94,6 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
     } catch (err) {
       console.log("Socket emit failed", err.message);
     }
-  }
-
-  // OPI: Track user-sent emails for mail analysis (fire-and-forget)
-  // The frontend sends sender as the userId (e.g., "faraz1"), not "USER".
-  // Any sender that is not a system sender (FO, COUNTERPARTY, SYSTEM) is a human user.
-  const SYSTEM_SENDERS = ["FO", "COUNTERPARTY", "SYSTEM", "CPTY", "Counterparty"];
-  if (!SYSTEM_SENDERS.includes(sender)) {
-    try {
-      const ownerDoc = await Trade.findOne({ tradeRef }).select("assignedTo").lean();
-      require("./performance/sessionCollector").collect("MAIL_SENT", {
-        tradeRef, userId: ownerDoc?.assignedTo || "UNKNOWN",
-        category: "COMMUNICATION",
-        metadata: { subject: subject || `Trade ${tradeRef}`, bodyLength: sanitizedBody.length },
-        payload: { body: sanitizedBody, subject }
-      });
-    } catch (e) { /* OPI not loaded — silent */ }
   }
 
   return cached;

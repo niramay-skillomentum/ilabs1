@@ -102,10 +102,10 @@ export default function SendSSIModal({
           </div>
         </div>
         <div className="compose-footer" style={{ justifyContent: 'flex-end', gap: '8px', padding: '16px' }}>
-          <button className="btn primary" disabled={isSendingReply} onClick={handleSubmit}>
+          <button className="btn-send" style={{ backgroundColor: '#0078d4', color: 'white' }} disabled={isSendingReply} onClick={handleSubmit}>
             {isSendingReply ? "Sending..." : "Send Instructions"}
           </button>
-          <button className="btn secondary" onClick={() => setIsOpen(false)}>Cancel</button>
+          <button className="btn-discard" onClick={() => setIsOpen(false)}>Cancel</button>
         </div>
       </div>
     </>

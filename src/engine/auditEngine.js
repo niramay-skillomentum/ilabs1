@@ -34,13 +34,6 @@ async function recordEvent(tradeRef, actor, action, details = "", isAutomated = 
     }
   }
 
-  // OPI: Forward to session collector (fire-and-forget)
-  try {
-    require("./performance/sessionCollector").collect("AUDIT_RECORDED", {
-      tradeRef, userId: actor, metadata: { action, details: typeof details === "object" ? JSON.stringify(details) : details, isAutomated: !!isAutomated }
-    });
-  } catch (e) { /* OPI not loaded — silent */ }
-
   return event;
 }
 

@@ -11,56 +11,6 @@ const amendmentEngine = require("../engine/amendmentEngine");
 const { authenticateToken } = require("../middleware/auth");
 const { getIo } = require("../engine/socketEngine");
 const systemWorkflowEngine = require("../engine/systemWorkflowEngine");
-const cutoffEngine = require("../engine/cutoff");
-const cutoffEnforcer = require("../engine/cutoffEnforcer");
-const simulationClock = require("../engine/clock");
-const truthEngine = require("../engine/truthEngine");
-const learningEngine = require("../engine/learningEngine");
-const sessionCollector = require("../engine/performance/sessionCollector");
-
-// ── OPI Event Mapping ──
-// Maps trade actions to the PerformanceEvent types that the
-// workflowAnalyzer / decisionAnalyzer expects.
-const ACTION_TO_OPI_EVENTS = {
-  MO_VALIDATE_PASS: ["VALIDATE_TRADE"],
-  MO_RAISE_BREAK: ["BREAK_RAISED"],
-  MO_SEND_TO_FO: ["FO_CONTACTED"],
-  CONFIRM_TRADE: ["VALIDATE_TRADE"],
-  CONFIRM_RAISE_BREAK: ["BREAK_RAISED"],
-  CONFIRM_SEND_TO_CPTY: ["MAIL_SENT"],
-  CONFIRM_REJECT_CLAIM: ["DECISION_MADE"],
-  CONFIRM_REQUEST_EVIDENCE: ["DECISION_MADE"],
-  CONFIRM_ESCALATE_TO_FO: ["FO_ESCALATED"],
-  CONFIRM_APPROVE_AMENDMENT: ["AMENDMENT_APPLIED"],
-  CONFIRM_RESEND: ["MAIL_SENT"],
-  SETTLEMENT_APPROVE: ["TRADE_APPROVED"],
-  SETTLEMENT_RAISE_BREAK: ["BREAK_RAISED"],
-  SETTLEMENT_MAIL_CPTY: ["MAIL_SENT"],
-  SETTLEMENT_SEND_BACK_TO_MO: ["DECISION_MADE"]
-};
-
-// Helper: Send a 400 response enriched with a learning payload.
-// Existing error string is preserved; learning data is added alongside.
-async function sendLearningResponse(res, statusCode, errorMessage, { userId, tradeRef, desk, action, ruleCode, extraFields } = {}) {
-  let learning = null;
-  try {
-    learning = await learningEngine.processFailure({
-      userId,
-      tradeRef,
-      desk,
-      action,
-      ruleCode,
-      errorMessage
-    });
-  } catch (err) {
-    console.warn("[TradeRoutes] Learning engine error (non-blocking):", err.message);
-  }
-  return res.status(statusCode).json({
-    error: errorMessage,
-    learning: learning || undefined,
-    ...extraFields
-  });
-}
 
 // ======================================
 // GET ALL TRADES (DB-BACKED)
@@ -72,7 +22,19 @@ router.get("/all", authenticateToken, async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
     const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
 
-    const trades = await Trade.find({})
+    // Optional filters: ?desk=CONFIRMATION & ?assignedOnly=true & ?statusPattern=BREAK
+    const query = {};
+    if (req.query.desk) {
+      query.nextDesk = req.query.desk.toUpperCase();
+    }
+    if (req.query.assignedOnly === 'true') {
+      query.assignedTo = req.user.userId;
+    }
+    if (req.query.statusPattern) {
+      query.currentStatus = { $regex: req.query.statusPattern, $options: 'i' };
+    }
+
+    const trades = await Trade.find(query)
       .select('tradeRef tradeDate valueDate currentStatus nextDesk amount currency counterparty direction entity foRegion product tradeType settlementType age truths pendingAmendments')
       .sort({ _id: -1 })
       .skip(skip)
@@ -105,14 +67,12 @@ router.post("/action", authenticateToken, async (req, res) => {
     });
 
     if (!sessionTrade) {
-      return sendLearningResponse(res, 404, "Trade not found in session", {
-        userId, tradeRef: tradeFromBody.tradeRef, desk: tradeFromBody.nextDesk, action, ruleCode: "TRADE_NOT_IN_SESSION"
-      });
+      return res.status(404).json({ error: "Trade not found in session" });
     }
 
-    if (action !== "MO_VALIDATE_PASS" && action !== "CONFIRM_TRADE" && (!comment || comment.trim() === "")) {
-      return sendLearningResponse(res, 400, "Comment is mandatory", {
-        userId, tradeRef: tradeFromBody.tradeRef, desk: tradeFromBody.nextDesk, action, ruleCode: "MISSING_COMMENT"
+    if (!comment || comment.trim() === "") {
+      return res.status(400).json({
+        error: "Comment is mandatory"
       });
     }
 
@@ -136,65 +96,13 @@ router.post("/action", authenticateToken, async (req, res) => {
       CONFIRM_APPROVE_AMENDMENT: ["CONFIRMATION_BREAK"],
       CONFIRM_RESEND: ["CONFIRMATION_PENDING"],
 
-      SETTLEMENT_APPROVE: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY", "AMENDED"],
-      SETTLEMENT_RAISE_BREAK: ["SETTLEMENT_PENDING", "LIASING_WITH_CPTY"],
+      SETTLEMENT_APPROVE: ["LIASING_WITH_CPTY", "AMENDED"],
+      SETTLEMENT_RAISE_BREAK: ["LIASING_WITH_CPTY"],
       SETTLEMENT_MAIL_CPTY: ["SETTLEMENT_PENDING"]
     };
 
-    // ======================================
-    // MISSED VALUE DATE RESTRICTION
-    // If trade has a missed cut-off, only allow SETTLEMENT_MAIL_CPTY
-    // from SETTLEMENT_BREAK, and ONLY if the trade age is greater than the age it missed the cut-off.
-    // ======================================
-    if (sessionTrade.cutoffMissedReason === "Missed Value Date"
-        && sessionTrade.currentStatus === "SETTLEMENT_BREAK") {
-      if (action !== "SETTLEMENT_MAIL_CPTY") {
-        return sendLearningResponse(res, 400, "Trade has a missed value date break. You must liaise with the counterparty first.", {
-          userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_MAIL_CPTY_REQUIRED"
-        });
-      }
-      if (sessionTrade.age <= sessionTrade.cutoffMissedAtAge) {
-        return sendLearningResponse(res, 400, "Trade missed cut-off today. It is frozen and cannot be processed further until the next simulated day.", {
-          userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_MISSED_VALUE_DATE"
-        });
-      }
-      // Allow SETTLEMENT_MAIL_CPTY to proceed from SETTLEMENT_BREAK (special override)
-    } else if (!allowedActions[action] || !allowedActions[action].includes(currentStatus)) {
-      return sendLearningResponse(res, 400, "Invalid action for current state", {
-        userId, tradeRef: sessionTrade.tradeRef, desk: sessionTrade.nextDesk, action, ruleCode: "INVALID_STATE_TRANSITION"
-      });
-    }
-
-    // ======================================
-    // CUT-OFF TIME ENFORCEMENT
-    // Block settlement actions if currency cut-off has been breached
-    // (but don't block SETTLEMENT_MAIL_CPTY if trade already has a missed value date
-    //  and we are on the NEXT day — the user is performing the required liaison)
-    // ======================================
-    const CUTOFF_BLOCKED_ACTIONS = ["SETTLEMENT_MAIL_CPTY", "SETTLEMENT_APPROVE"];
-    const isAlreadyMissedValueDate = sessionTrade.cutoffMissedReason === "Missed Value Date";
-    const isNextDay = sessionTrade.age > sessionTrade.cutoffMissedAtAge;
-    
-    const shouldBlockForCutoff = CUTOFF_BLOCKED_ACTIONS.includes(action)
-      && cutoffEngine.isCutOffBreached(sessionTrade.currency)
-      && !(action === "SETTLEMENT_MAIL_CPTY" && isAlreadyMissedValueDate && isNextDay);
-
-    if (shouldBlockForCutoff) {
-      const currency = sessionTrade.currency;
-      const cutoffTime = cutoffEngine.getCutoffTimeForCurrency(currency);
-      const region = cutoffEngine.getRegionForCurrency(currency);
-
-      // Auto-transition to SETTLEMENT_BREAK with missed value date
-      await cutoffEnforcer.handleMissedCutoff(sessionTrade, userId, false);
-
-      // Refresh queue for response
-      const activeQueue = await queueComposer.getActiveQueue(userId);
-      const trades = activeQueue ? activeQueue.trades : [];
-
-      return sendLearningResponse(res, 400, `Settlement cut-off for ${currency} (${cutoffTime}, ${region}) has been missed. Trade moved to Settlement Break.`, {
-        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_CUTOFF_BREACHED",
-        extraFields: { cutoffBreached: true, trades }
-      });
+    if (!allowedActions[action] || !allowedActions[action].includes(currentStatus)) {
+      return res.status(400).json({ error: "Invalid action for current state" });
     }
 
     if (
@@ -202,9 +110,7 @@ router.post("/action", authenticateToken, async (req, res) => {
       currentStatus === "PENDING_FO_RESPONSE" &&
       !sessionTrade.foResponseReceived
     ) {
-      return sendLearningResponse(res, 400, "Await FO response before validating", {
-        userId, tradeRef: sessionTrade.tradeRef, desk: "MO", action, ruleCode: "MO_VALIDATE_AWAITING_FO"
-      });
+      return res.status(400).json({ error: "Await FO response before validating" });
     }
 
     if (
@@ -213,36 +119,11 @@ router.post("/action", authenticateToken, async (req, res) => {
       sessionTrade.settlementType === "BILATERAL" &&
       !sessionTrade.cptySSIAcknowledged
     ) {
-      return sendLearningResponse(res, 400, "Cannot approve. Counterparty has not acknowledged the SSI.", {
-        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_CPTY_NOT_ACKNOWLEDGED"
-      });
-    }
-
-    // ── Settlement Pending: Block approve and break with learning ──
-    if (action === "SETTLEMENT_APPROVE" && currentStatus === "SETTLEMENT_PENDING") {
-      return sendLearningResponse(res, 400, "You cannot approve a trade directly from Settlement Pending. You must first contact the counterparty to verify their settlement instructions.", {
-        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_APPROVE_FROM_PENDING"
-      });
-    }
-
-    if (action === "SETTLEMENT_RAISE_BREAK" && currentStatus === "SETTLEMENT_PENDING") {
-      return sendLearningResponse(res, 400, "A Settlement Break cannot be raised directly from Settlement Pending. You must first contact the counterparty to verify settlement instructions.", {
-        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_BREAK_FROM_PENDING"
-      });
-    }
-
-    // ── Settlement Mail CPTY: Block if cpty has already mailed ──
-    if (action === "SETTLEMENT_MAIL_CPTY" && sessionTrade.cptyResponseReceived) {
-      return sendLearningResponse(res, 400, "The counterparty has already sent you their settlement details for this trade. You should always check the Mailbox first before reaching out.", {
-        userId, tradeRef: sessionTrade.tradeRef, desk: "SETTLEMENT", action, ruleCode: "SETTLEMENT_CPTY_ALREADY_MAILED"
-      });
+      return res.status(400).json({ error: "Cannot approve. Counterparty has not acknowledged the SSI." });
     }
 
     let nextStatus;
     let nextDesk;
-    let validateWarning = null;
-    let actionError = null;
-    let learning = null;
 
     switch (action) {
 
@@ -250,8 +131,8 @@ router.post("/action", authenticateToken, async (req, res) => {
         // Ensure conversation is resolved before applying amendments
         if (sessionTrade.pendingAmendments && sessionTrade.pendingAmendments.length > 0) {
           if (!sessionTrade.conversation || sessionTrade.conversation.status !== "RESOLVED") {
-            return sendLearningResponse(res, 400, "Resolve conversation before validating amendments", {
-              userId, tradeRef: sessionTrade.tradeRef, desk: "MO", action, ruleCode: "MO_CONVERSATION_NOT_RESOLVED"
+            return res.status(400).json({
+              error: "Resolve conversation before validating amendments"
             });
           }
         }
@@ -261,48 +142,17 @@ router.post("/action", authenticateToken, async (req, res) => {
 
         // Apply accepted amendments
         if (sessionTrade.pendingAmendments) {
-          amendmentEngine.applyAllAccepted(sessionTrade, userId);
-        }
-
-        // MO Simulator Logic: Verify if trade is actually clean
-        const validateMismatches = truthEngine.getMismatchFields(sessionTrade, "mo");
-        if (validateMismatches.length > 0) {
-          validateWarning = "Warning: This trade contains discrepancies that were overlooked during validation.";
-          try {
-            learning = await learningEngine.processFailure({
-              userId, tradeRef: sessionTrade.tradeRef, desk: "MO", action, ruleCode: "MO_VALIDATE_WITH_MISMATCHES", errorMessage: validateWarning
-            });
-          } catch (e) {
-            console.warn("[TradeRoutes] Learning engine error (non-blocking):", e.message);
-          }
+          sessionTrade.pendingAmendments.forEach(a => {
+            if (a.status === "ACCEPTED") {
+              sessionTrade[a.field] = a.newValue;
+            }
+          });
+          sessionTrade.pendingAmendments = [];
         }
 
         break;
 
       case "MO_RAISE_BREAK":
-        // MO Simulator Logic: Verify selected discrepancies
-        const actualMismatches = truthEngine.getMismatchFields(sessionTrade, "mo");
-        const selectedDiscrepancies = req.body.selectedDiscrepancies || [];
-        
-        if (actualMismatches.length === 0) {
-          return sendLearningResponse(res, 400, "Action Denied: A break cannot be raised as the trade contains no discrepancies.", {
-            userId, tradeRef: sessionTrade.tradeRef, desk: "MO", action, ruleCode: "MO_BREAK_NO_DISCREPANCY"
-          });
-        } else {
-          const wrongSelections = selectedDiscrepancies.filter(d => !actualMismatches.includes(d));
-          const missingSelections = actualMismatches.filter(d => !selectedDiscrepancies.includes(d));
-          if (wrongSelections.length > 0 || missingSelections.length > 0) {
-            actionError = "The selected discrepancies do not match the system records.";
-            try {
-              learning = await learningEngine.processFailure({
-                userId, tradeRef: sessionTrade.tradeRef, desk: "MO", action, ruleCode: "MO_WRONG_DISCREPANCIES", errorMessage: actionError
-              });
-            } catch (e) {
-              console.warn("[TradeRoutes] Learning engine error (non-blocking):", e.message);
-            }
-          }
-        }
-
         nextStatus = "MO_BREAK_OPEN";
         nextDesk = "MO";
         break;
@@ -314,26 +164,6 @@ router.post("/action", authenticateToken, async (req, res) => {
         break;
 
       case "CONFIRM_TRADE":
-        const confirmCptyCount = sessionTrade.cptyContactCount || 0;
-        if (confirmCptyCount === 0) {
-            return sendLearningResponse(res, 400, "You must attempt to confirm the trade details with the Counterparty prior to proceeding.", {
-              userId, tradeRef: sessionTrade.tradeRef, desk: "CONFIRMATION", action, ruleCode: "CONFIRM_WITHOUT_CPTY_CONTACT"
-            });
-        }
-
-        const confirmMismatches = truthEngine.getMismatchFields(sessionTrade, "universal");
-        if (confirmMismatches.length > 0) {
-            validateWarning = "Warning: The trade contained discrepancies which were overlooked during confirmation. The trade has been automatically amended to match the true economic details and moved to settlement.";
-            
-            const universalTruths = sessionTrade.truths?.universal || {};
-            if (confirmMismatches.includes("amount")) sessionTrade.amount = universalTruths.amount;
-            if (confirmMismatches.includes("valueDate")) sessionTrade.valueDate = universalTruths.valueDate;
-            if (confirmMismatches.includes("currency")) sessionTrade.currency = universalTruths.currency;
-            if (confirmMismatches.includes("counterparty")) sessionTrade.counterparty = universalTruths.counterparty;
-            if (confirmMismatches.includes("settlementMode")) sessionTrade.settlementMode = universalTruths.settlementMode;
-            if (confirmMismatches.includes("buySell")) sessionTrade.buySell = universalTruths.buySell;
-        }
-
         nextStatus = "SETTLEMENT_PENDING";
         nextDesk = "SETTLEMENT";
         break;
@@ -342,9 +172,7 @@ router.post("/action", authenticateToken, async (req, res) => {
         const cptyCount = sessionTrade.cptyContactCount || 0;
         const foCount = sessionTrade.foContactCount || 0;
         if (cptyCount !== 1 || foCount > 0) {
-            return sendLearningResponse(res, 400, "You must attempt to confirm the trade details with the Counterparty prior to proceeding.", {
-              userId, tradeRef: sessionTrade.tradeRef, desk: "CONFIRMATION", action, ruleCode: "CONFIRM_BREAK_WITHOUT_CPTY"
-            });
+            return res.status(400).json({ error: "Confirmation Break can only be raised once, after first counterparty contact." });
         }
         nextStatus = "CONFIRMATION_BREAK";
         nextDesk = "CONFIRMATION";
@@ -356,7 +184,8 @@ router.post("/action", authenticateToken, async (req, res) => {
         nextDesk = "CONFIRMATION";
         
         // If FO supports us AND booking matches universal truth, pushing back makes CPTY concede
-        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngine.getMismatchFields(sessionTrade, "universal").length === 0) {
+        const truthEngineForReject = require("../engine/truthEngine");
+        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngineForReject.getMismatchFields(sessionTrade, "universal").length === 0) {
           if (sessionTrade.truths && sessionTrade.truths.confirmation) {
             sessionTrade.truths.confirmation.amount = sessionTrade.amount;
             sessionTrade.truths.confirmation.valueDate = sessionTrade.valueDate;
@@ -372,7 +201,8 @@ router.post("/action", authenticateToken, async (req, res) => {
         nextDesk = "CONFIRMATION";
 
         // If FO supports us AND booking matches universal truth, requesting evidence makes CPTY double check and concede
-        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngine.getMismatchFields(sessionTrade, "universal").length === 0) {
+        const truthEngineForEvidence = require("../engine/truthEngine");
+        if (sessionTrade.foEscalation && sessionTrade.foEscalation.status === "FO_SUPPORTS_US" && truthEngineForEvidence.getMismatchFields(sessionTrade, "universal").length === 0) {
           if (sessionTrade.truths && sessionTrade.truths.confirmation) {
             sessionTrade.truths.confirmation.amount = sessionTrade.amount;
             sessionTrade.truths.confirmation.valueDate = sessionTrade.valueDate;
@@ -521,21 +351,6 @@ router.post("/action", authenticateToken, async (req, res) => {
             comment || "User sent trade for approval"
           ).catch(e => console.warn("DB audit:", e.message));
           
-          // OPI: Emit approval event
-          try {
-            sessionCollector.collect("TRADE_APPROVED", {
-              tradeRef: sessionTrade.tradeRef, userId, desk: "SETTLEMENT",
-              category: "WORKFLOW",
-              metadata: { action, previousStatus: currentStatus, newStatus: updatedTrade.currentStatus, comment: comment || null }
-            });
-            if (comment && comment.trim()) {
-              sessionCollector.collect("COMMENT_ADDED", {
-                tradeRef: sessionTrade.tradeRef, userId, desk: "SETTLEMENT",
-                category: "WORKFLOW", metadata: { action, comment }
-              });
-            }
-          } catch (opiErr) { /* OPI non-blocking */ }
-          
           const activeQueue = await queueComposer.getActiveQueue(userId);
           const trades = activeQueue ? activeQueue.trades : [];
           res.json({ success: true, queueSize: trades.length, trades });
@@ -558,12 +373,6 @@ router.post("/action", authenticateToken, async (req, res) => {
       case "SETTLEMENT_MAIL_CPTY":
         nextStatus = "LIASING_WITH_CPTY";
         nextDesk = "SETTLEMENT";
-
-        // Clear missed value date reason when user liaises with counterparty
-        if (sessionTrade.cutoffMissedReason === "Missed Value Date") {
-          sessionTrade.cutoffMissedReason = null;
-          // Note: cutoffMissedAtAge is kept for historical reference
-        }
 
         await conversationEngine.createMessage(
           sessionTrade.tradeRef,
@@ -607,10 +416,7 @@ router.post("/action", authenticateToken, async (req, res) => {
     res.json({
       success: true,
       queueSize: trades.length,
-      trades: trades,
-      warning: validateWarning || undefined,
-      actionError: actionError || undefined,
-      learning: learning || undefined
+      trades: trades
     });
 
     // Broadcast WebSocket event
@@ -632,40 +438,12 @@ router.post("/action", authenticateToken, async (req, res) => {
       comment || "Action taken on trade"
     ).catch(e => console.warn("DB audit:", e.message));
 
-    // ── OPI: Emit performance events (fire-and-forget) ──
-    try {
-      const opiEvents = ACTION_TO_OPI_EVENTS[action] || [];
-      for (const eventType of opiEvents) {
-        sessionCollector.collect(eventType, {
-          tradeRef: sessionTrade.tradeRef,
-          userId,
-          desk: nextDesk || sessionTrade.nextDesk,
-          category: "WORKFLOW",
-          metadata: {
-            action,
-            previousStatus: currentStatus,
-            newStatus: updatedTrade.currentStatus,
-            comment: comment || null
-          }
-        });
-      }
-      // Always emit COMMENT_ADDED when a comment is present
-      if (comment && comment.trim()) {
-        sessionCollector.collect("COMMENT_ADDED", {
-          tradeRef: sessionTrade.tradeRef,
-          userId,
-          desk: nextDesk || sessionTrade.nextDesk,
-          category: "WORKFLOW",
-          metadata: { action, comment }
-        });
-      }
-    } catch (opiErr) { /* OPI non-blocking */ }
-
   } catch (err) {
     console.error("Trade action error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 // ======================================
 // PORTFOLIO SUMMARY (DB-BACKED)
 // Aggregates all trades into a portfolio view

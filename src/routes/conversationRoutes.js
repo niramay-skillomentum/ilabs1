@@ -7,62 +7,12 @@ const communicationEngine = require("../engine/communicationEngine");
 const aiParser = require("../engine/aiParser");
 const auditEngine = require("../engine/auditEngine");
 const LifecycleEngine = require("../engine/lifecycle");
-const { resolveMailStatus } = require("../engine/mailStatusResolver");
-const mailRoutingEngine = require("../engine/mailRoutingEngine");
 const { authenticateToken } = require("../middleware/auth");
-const amendmentEngine = require("../engine/amendmentEngine");
-
-// ======================================
-// GET /api/conversation/expected-recipient
-// Retrieves configured operations email or regional FO mailbox
-// ======================================
-router.get("/expected-recipient", authenticateToken, async (req, res) => {
-  try {
-    const { desk, tradeRef, counterparty, workstationRegion, channel } = req.query;
-    const result = await mailRoutingEngine.getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion, channel });
-    res.json(result);
-  } catch (err) {
-    console.error("Expected recipient calculation error:", err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 router.post("/send", authenticateToken, async (req, res) => {
-  const { tradeRef, sender, message, desk, recipient, channel } = req.body;
-
-  if (recipient && recipient !== "FO" && recipient !== "COUNTERPARTY") {
-    const validation = await mailRoutingEngine.validateRecipient({
-      desk,
-      tradeRef,
-      recipientEmail: recipient,
-      channel
-    });
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: "Recipient email validation failed",
-        validationError: true,
-        errorType: validation.errorType,
-        title: validation.title,
-        message: validation.message,
-        expectedEmail: validation.expectedEmail
-      });
-    }
-  }
+  const { tradeRef, sender, message, desk } = req.body;
 
   const subject = `Trade ${tradeRef} - Break Investigation`;
-  
-  let actionWarning = null;
-
-  if (desk === "CONFIRMATION" || desk === "SETTLEMENT") {
-    const existingConversation = await conversationEngine.getConversation(tradeRef);
-    if (existingConversation && existingConversation.messages && existingConversation.messages.length > 0) {
-      const lastMessage = existingConversation.messages[existingConversation.messages.length - 1];
-      if (lastMessage.sender === "Counterparty") {
-        actionWarning = "Warning: The counterparty has already sent an email regarding this trade. Please check your mailbox before sending new correspondence.";
-      }
-    }
-  }
 
   await conversationEngine.createMessage(
     tradeRef,
@@ -77,10 +27,7 @@ router.post("/send", authenticateToken, async (req, res) => {
   const parsed = aiParser.parseEmail(message);
 
   // Find trade in DB
-  const trade = await Trade.findOne({ tradeRef });
-  if (!trade) {
-    return res.status(404).json({ error: "Trade not found" });
-  }
+  const trade = await Trade.findOne({ tradeRef, assignedTo: { $ne: null } });
 
   let auditDetails = "";
   if (trade && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE")) {
@@ -164,58 +111,7 @@ router.post("/send", authenticateToken, async (req, res) => {
     auditDetails
   ).catch(e => console.warn("DB audit:", e.message));
 
-  // OPI: Track mail sent for report communication analysis (fire-and-forget)
-  try {
-    const sessionCollector = require("../engine/performance/sessionCollector");
-    const isFO = recipient === "FO" || (trade && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE"));
-    sessionCollector.collect(isFO ? "FO_CONTACTED" : "MAIL_SENT", {
-      tradeRef,
-      userId: sender,
-      category: "COMMUNICATION",
-      metadata: { subject: subject || `Trade ${tradeRef}`, bodyLength: (message || "").length, desk: desk || "UNKNOWN", recipient: recipient || "UNKNOWN" },
-      payload: { body: message, subject: subject || `Trade ${tradeRef}` }
-    });
-  } catch (opiErr) { /* OPI non-blocking */ }
-
-  res.json({ success: true, warning: actionWarning || undefined });
-});
-
-router.post("/read", authenticateToken, async (req, res) => {
-  const userId = req.user.email || req.user.userId;
-  const { tradeRef } = req.body;
-  if (!tradeRef) return res.status(400).json({ error: "tradeRef required" });
-
-  try {
-    const Conversation = require("../models/Conversation");
-    const convo = await Conversation.findOneAndUpdate(
-      { tradeRef },
-      { $addToSet: { readBy: userId } },
-      { returnDocument: 'after' }
-    );
-
-    // OPI: Track mail read (fire-and-forget)
-    try {
-      if (convo && convo.messages) {
-        const hasFO = convo.messages.some(m => m.sender === "FO");
-        const hasCPTY = convo.messages.some(m => m.sender === "Counterparty");
-        
-        if (hasFO) {
-          require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
-            tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "FO" }
-          });
-        }
-        if (hasCPTY) {
-          require("../engine/performance/sessionCollector").collect("CPTY_MAIL_READ", {
-            tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "CPTY" }
-          });
-        }
-      }
-    } catch (opiErr) { /* OPI non-blocking */ }
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  res.json({ success: true });
 });
 
 router.post("/resolve", authenticateToken, async (req, res) => {
@@ -253,7 +149,12 @@ router.post("/resolve", authenticateToken, async (req, res) => {
 
   // Apply accepted amendments
   if (trade.pendingAmendments) {
-    amendmentEngine.applyAllAccepted(trade, userId);
+    trade.pendingAmendments.forEach(a => {
+      if (a.status === "ACCEPTED") {
+        trade[a.field] = a.newValue;
+      }
+    });
+    trade.pendingAmendments = [];
   }
 
   // Transition to MO_PENDING
@@ -284,16 +185,6 @@ router.post("/resolve", authenticateToken, async (req, res) => {
     "BREAK_RESOLVED",
     "User resolved the break and applied pending amendments"
   ).catch(e => console.warn("DB audit:", e.message));
-
-  // OPI: Track amendment applied + resolve (fire-and-forget)
-  try {
-    const sessionCollector = require("../engine/performance/sessionCollector");
-    sessionCollector.collect("AMENDMENT_APPLIED", {
-      tradeRef: trade.tradeRef, userId,
-      category: "WORKFLOW",
-      metadata: { action: "RESOLVE_AND_RETURN", newStatus: trade.currentStatus }
-    });
-  } catch (opiErr) { /* OPI non-blocking */ }
 });
 
 router.get("/shared", authenticateToken, async (req, res) => {
@@ -351,13 +242,9 @@ router.get("/shared", authenticateToken, async (req, res) => {
         };
       }
 
-      // Attach computed mail status (desk-scoped for group inbox)
-      trade.mailStatus = resolveMailStatus(trade, desk);
-
       finalResults.push({
         trade,
         conversation: {
-          readBy: item.conversation.readBy || [],
           subject: item.conversation.messages[0]?.subject || item.conversation.subject || `Trade ${item.tradeRef}`,
           status: item.conversation.status,
           messages: item.conversation.messages.map(m => ({
@@ -391,8 +278,7 @@ router.get("/personal", authenticateToken, async (req, res) => {
   try {
     const Conversation = require("../models/Conversation");
     
-    // Cross-desk personal inbox: fetch ALL conversations the user is involved in
-    // regardless of desk. No desk filter applied.
+    // Also fetch conversations for trades currently or historically assigned to this user
     const assignedTrades = await Trade.find({ 
       $or: [
         { assignedTo: userId },
@@ -429,13 +315,9 @@ router.get("/personal", authenticateToken, async (req, res) => {
         };
       }
 
-      // Attach computed mail status (no desk filter — resolver infers it)
-      trade.mailStatus = resolveMailStatus(trade, null);
-
       results.push({
         trade,
         conversation: {
-          readBy: conv.readBy || [],
           subject: conv.messages[0]?.subject || `Trade ${conv.tradeRef}`,
           status: conv.status,
           messages: conv.messages.map(m => ({

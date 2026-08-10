@@ -80,7 +80,7 @@ function SsiDatabaseComponent() {
       {/* TOP BAR */}
       <div style={{ height:"48px", background:"#0B1F3A", color:"white", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 16px", fontSize:"14px", flexShrink:0 }}>
         <div style={{ fontWeight:600 }}>Global SSI Database (Static Data)</div>
-        <div>{desk} Operations | Welcome, {userId}</div>
+        <div>{desk} Desk | Welcome, {userId}</div>
       </div>
 
       {/* MAIN */}
@@ -117,10 +117,9 @@ function SsiDatabaseComponent() {
           </div>
           
           <button 
-            className="btn primary"
             onClick={handleSearch}
             disabled={isLoading}
-            style={{ padding: "12px 16px", width: "100%", fontSize: "14px" }}
+            style={{ padding: "12px 16px", background: "#0B1F3A", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold", fontSize: "14px", width: "100%" }}
           >
             {isLoading ? "Searching..." : "Search SSI Database"}
           </button>

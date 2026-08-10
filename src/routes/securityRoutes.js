@@ -127,13 +127,14 @@ router.get("/:identifier", async (req, res) => {
     const secByUnderlyer = await Security.findOne({ underlyer: new RegExp(`^${identifier}$`, "i") }).lean();
     if (secByUnderlyer) return res.json({ success: true, data: secByUnderlyer });
 
-    // Try by companyName exact match
-    const secByCompany = await Security.findOne({ companyName: new RegExp(`^${identifier}$`, "i") }).lean();
+    // Fallback: try by companyName or partial underlyer match
+    const secByCompany = await Security.findOne({ 
+      $or: [
+        { companyName: new RegExp(identifier, "i") },
+        { underlyer: new RegExp(identifier, "i") }
+      ]
+    }).lean();
     if (secByCompany) return res.json({ success: true, data: secByCompany });
-    
-    // Fallback: partial match on companyName
-    const secPartial = await Security.findOne({ companyName: new RegExp(identifier, "i") }).lean();
-    if (secPartial) return res.json({ success: true, data: secPartial });
 
     // Not found
     res.status(404).json({ success: false, error: "Security not found" });

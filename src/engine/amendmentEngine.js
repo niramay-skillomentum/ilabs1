@@ -164,23 +164,6 @@ function applyAmendment(trade, amendment, userId) {
     trade[amendment.field] = amendment.newValue;
   }
 
-  // Handle counterpartyGroup linked update
-  if (amendment.field === "counterparty") {
-    let newGroup = amendment.newValue; // Fallback
-    if (trade.truths && trade.truths.universal && trade.truths.universal.counterparty === amendment.newValue) {
-      newGroup = trade.truths.universal.counterpartyGroup || newGroup;
-    } else if (trade.truths && trade.truths.mo && trade.truths.mo.counterparty === amendment.newValue) {
-      newGroup = trade.truths.mo.counterpartyGroup || newGroup;
-    }
-    
-    if (trade.booking) {
-      trade.booking.counterpartyGroup = newGroup;
-    }
-    if (trade.counterpartyGroup !== undefined) {
-      trade.counterpartyGroup = newGroup;
-    }
-  }
-
   // Record in history
   if (!trade.amendmentHistory) {
     trade.amendmentHistory = [];

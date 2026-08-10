@@ -100,15 +100,6 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
       if (saveTrade) await saveTrade(trade);
       // Emit after trade save so UI gets fresh cptyResponseReceived
       emitNewEmail(reply.tradeRef, trade.assignedTo);
-
-      // OPI: Track CPTY response received (fire-and-forget)
-      try {
-        require("./performance/sessionCollector").collect("CPTY_RESPONSE_RECEIVED", {
-          tradeRef: reply.tradeRef, userId: trade.assignedTo,
-          category: "COMMUNICATION",
-          metadata: { source: "COUNTERPARTY", hasFinalReply: true }
-        });
-      } catch (opiErr) { /* OPI non-blocking */ }
     }
 
     let finalBody = cptyResponse.followUpBody;
@@ -169,15 +160,6 @@ async function handleCptyReply(reply, conversationEngine, getTradeByRef, saveTra
           if (saveTrade) await saveTrade(trade);
           // Emit after trade save so UI gets fresh cptyResponseReceived
           emitNewEmail(reply.tradeRef, trade.assignedTo);
-
-          // OPI: Track CPTY response received (fire-and-forget)
-          try {
-            require("./performance/sessionCollector").collect("CPTY_RESPONSE_RECEIVED", {
-              tradeRef: reply.tradeRef, userId: trade.assignedTo,
-              category: "COMMUNICATION",
-              metadata: { source: "COUNTERPARTY", category: aiResponse.category }
-            });
-          } catch (opiErr) { /* OPI non-blocking */ }
         }
 
         await conversationEngine.createMessage(
@@ -306,15 +288,6 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
     // Emit websocket AFTER trade is saved so UI gets fresh foResponseReceived
     emitNewEmail(reply.tradeRef, trade.assignedTo);
 
-    // OPI: Track FO response received (fire-and-forget)
-    try {
-      require("./performance/sessionCollector").collect("FO_RESPONSE_RECEIVED", {
-        tradeRef: reply.tradeRef, userId: trade.assignedTo,
-        category: "COMMUNICATION",
-        metadata: { source: "FO", hasFinalReply: true }
-      });
-    } catch (opiErr) { /* OPI non-blocking */ }
-
     console.log("FO FINAL REPLY SENT:", reply.tradeRef);
 
   } else {
@@ -340,8 +313,6 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
       if (foResponse.action === "HOLDING_MESSAGE") {
          scheduleFOFinalReply(reply.tradeRef, trade, foResponse);
       } else {
-         trade.foResponseReceived = true;
-
          const cleanCategories = [
            "ERROR_CHECK_NO_ISSUES", "AMOUNT_CORRECT", "VALUE_DATE_CORRECT",
            "CURRENCY_CORRECT", "COUNTERPARTY_CORRECT", "CLEAN_TRADE"
@@ -352,6 +323,7 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
          ];
 
          if (cleanCategories.includes(foResponse.category)) {
+             trade.foResponseReceived = true;
              if (trade.currentStatus === "PENDING_FO_RESPONSE") {
                  trade.currentStatus = "MO_PENDING";
              } else if (trade.currentStatus === "LIASING_WITH_FO") {
@@ -359,6 +331,7 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
                  if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_US";
              }
          } else if (breakCategories.includes(foResponse.category)) {
+             trade.foResponseReceived = true;
              if (trade.foEscalation) trade.foEscalation.status = "FO_SUPPORTS_CPTY";
 
              if (trade.currentStatus === "CONFIRMATION_BREAK") {
@@ -404,15 +377,6 @@ async function handleFoReply(reply, conversationEngine, getTradeByRef, saveTrade
 
          // Emit websocket AFTER trade is saved so UI gets fresh foResponseReceived
          emitNewEmail(reply.tradeRef, trade.assignedTo);
-
-         // OPI: Track FO response received (fire-and-forget)
-         try {
-           require("./performance/sessionCollector").collect("FO_RESPONSE_RECEIVED", {
-             tradeRef: reply.tradeRef, userId: trade.assignedTo,
-             category: "COMMUNICATION",
-             metadata: { source: "FO", category: foResponse.category }
-           });
-         } catch (opiErr) { /* OPI non-blocking */ }
 
          console.log("FO REPLY SENT:", reply.tradeRef);
       }

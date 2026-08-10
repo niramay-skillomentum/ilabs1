@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const Trade = require("../models/Trade");
 const foInternalChannel = require("../engine/foInternalChannel");
-const mailRoutingEngine = require("../engine/mailRoutingEngine");
 const { authenticateToken } = require("../middleware/auth");
 
 // ======================================
@@ -25,7 +24,6 @@ router.get("/list", authenticateToken, async (req, res) => {
       return {
         trade: t,
         conversation: {
-          readBy: c.readBy || [],
           messages: c.messages.map(m => ({
             sender: m.senderRole === "FO" ? "FO" : (m.sender || "Unknown User"),
             body: m.message,
@@ -53,27 +51,8 @@ router.get("/:tradeRef", authenticateToken, async (req, res) => {
 
 router.post("/send", authenticateToken, express.json(), async (req, res) => {
   try {
-    const { tradeRef, message, recipient } = req.body;
+    const { tradeRef, message } = req.body;
     if (!tradeRef || !message) return res.status(400).json({ error: "Missing fields" });
-
-    if (recipient && recipient !== "FO" && recipient !== "COUNTERPARTY") {
-      const validation = await mailRoutingEngine.validateRecipient({
-        desk: "MO",
-        tradeRef,
-        recipientEmail: recipient
-      });
-      if (!validation.valid) {
-        return res.status(400).json({
-          success: false,
-          error: "Recipient email validation failed",
-          validationError: true,
-          errorType: validation.errorType,
-          title: validation.title,
-          message: validation.message,
-          expectedEmail: validation.expectedEmail
-        });
-      }
-    }
 
     const trade = await Trade.findOne({ tradeRef });
     if (!trade) return res.status(404).json({ error: "Trade not found" });
