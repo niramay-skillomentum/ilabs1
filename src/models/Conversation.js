@@ -9,9 +9,9 @@ const MessageSchema = new mongoose.Schema({
 
 const ConversationSchema = new mongoose.Schema({
 
-  tradeRef: { type: String, required: true, unique: true, index: true },
+  tradeRef: { type: String, required: true, index: true },
+  desk: { type: String, required: true, default: "GENERAL" },
   status: { type: String, default: "OPEN" },
-  desks: [{ type: String }],
   readBy: [{ type: String }],
   messages: [MessageSchema]
 
@@ -19,5 +19,6 @@ const ConversationSchema = new mongoose.Schema({
 
 // Personal-inbox query: Conversation.find({ "messages.sender": userId })
 ConversationSchema.index({ "messages.sender": 1 });
+ConversationSchema.index({ tradeRef: 1, desk: 1 }, { unique: true });
 
 module.exports = mongoose.model("Conversation", ConversationSchema);
