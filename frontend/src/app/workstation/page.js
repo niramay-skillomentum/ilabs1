@@ -777,7 +777,7 @@ function WorkstationComponent() {
     const auditArray = Array.isArray(trail) ? trail : [];
     setAuditData({
       xml: data.xmlAudit || null,
-      trail: auditArray.filter(a => a.action !== "SYSTEM_GENERATED")
+      trail: auditArray.filter(a => a.action !== "SYSTEM_GENERATED" && !a.action.startsWith("LEARNING_"))
     });
     setPopupState({ type: "audit" });
   };
