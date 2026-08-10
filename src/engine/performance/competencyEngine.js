@@ -63,27 +63,21 @@ function calculateCompetencies({
   // 7. Time Management: Based on avg time per trade vs benchmark
   const timeManagement = calculateTimeManagement(timelineAnalysis);
 
-  // 8. Settlement Knowledge: Decision accuracy on settlement scenarios
-  const settlementKnowledge = desk === "SETTLEMENT" ? decisionQuality : 0;
-
-  // 9. Confirmation Knowledge: Decision accuracy on confirmation scenarios
-  const confirmationKnowledge = desk === "CONFIRMATION" ? decisionQuality : 0;
-
-  // 10. Reconciliation Knowledge: Decision accuracy on reconciliation scenarios
-  const reconciliationKnowledge = desk === "RECONCILIATION" ? decisionQuality : 0;
-
-  return {
+  const result = {
     workflowDiscipline: clamp(workflowDiscipline),
     operationalAccuracy: clamp(operationalAccuracy),
     decisionQuality: clamp(decisionQuality),
     attentionToDetail: clamp(attentionToDetail),
     communication: clamp(communication),
     escalationJudgment: clamp(escalationJudgment),
-    timeManagement: clamp(timeManagement),
-    settlementKnowledge: clamp(settlementKnowledge),
-    confirmationKnowledge: clamp(confirmationKnowledge),
-    reconciliationKnowledge: clamp(reconciliationKnowledge)
+    timeManagement: clamp(timeManagement)
   };
+
+  if (desk === "SETTLEMENT") result.settlementKnowledge = clamp(decisionQuality);
+  if (desk === "CONFIRMATION") result.confirmationKnowledge = clamp(decisionQuality);
+  if (desk === "RECONCILIATION") result.reconciliationKnowledge = clamp(decisionQuality);
+
+  return result;
 }
 
 /**

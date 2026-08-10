@@ -221,8 +221,8 @@ const EVENT_TO_STEP = {
   "BREAK_RESOLVED": "RESOLVE_BREAK",
 
   // FO / CPTY Response events
-  "FO_RESPONSE_RECEIVED": "REVIEW_FO_RESPONSE",
-  "CPTY_RESPONSE_RECEIVED": "REVIEW_CPTY_RESPONSE",
+  "FO_MAIL_READ": "REVIEW_FO_RESPONSE",
+  "CPTY_MAIL_READ": "REVIEW_CPTY_RESPONSE",
 
   // Identify mismatch (from MO_RAISE_BREAK selecting discrepancies)
   "IDENTIFY_MISMATCH": "IDENTIFY_MISMATCH",
@@ -320,6 +320,14 @@ function extractActualWorkflow(events) {
     if (!step && event.metadata?.action) {
       step = EVENT_TO_STEP[event.metadata.action];
     }
+    
+    // Add special handling for CPTY_MAIL_READ to fulfill READ_CPTY_MAIL as well
+    if (event.eventType === "CPTY_MAIL_READ") {
+      if (!seen.has("READ_CPTY_MAIL")) {
+        steps.push("READ_CPTY_MAIL");
+        seen.add("READ_CPTY_MAIL");
+      }
+    }
 
     // Also check for status transitions that map to steps
     if (!step && event.metadata?.action) {
@@ -352,9 +360,15 @@ function extractActualWorkflow(events) {
  */
 function analyzeTrade(trade, tradeEvents, desk) {
   let initialStatus = trade.currentStatus;
-  const firstActionEvent = tradeEvents.find(e => e.metadata && e.metadata.previousStatus);
-  if (firstActionEvent) {
-    initialStatus = firstActionEvent.metadata.previousStatus;
+  
+  const openedEvent = tradeEvents.find(e => e.eventType === "TRADE_OPENED" && e.metadata && e.metadata.status);
+  if (openedEvent) {
+    initialStatus = openedEvent.metadata.status;
+  } else {
+    const firstActionEvent = tradeEvents.find(e => e.metadata && e.metadata.previousStatus);
+    if (firstActionEvent) {
+      initialStatus = firstActionEvent.metadata.previousStatus;
+    }
   }
 
   const isBreak = determineIsBreak(trade, desk, true);

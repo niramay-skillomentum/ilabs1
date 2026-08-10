@@ -167,11 +167,12 @@ router.post("/send", authenticateToken, async (req, res) => {
   // OPI: Track mail sent for report communication analysis (fire-and-forget)
   try {
     const sessionCollector = require("../engine/performance/sessionCollector");
-    sessionCollector.collect("MAIL_SENT", {
+    const isFO = recipient === "FO" || (trade && (trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE"));
+    sessionCollector.collect(isFO ? "FO_CONTACTED" : "MAIL_SENT", {
       tradeRef,
       userId: sender,
       category: "COMMUNICATION",
-      metadata: { subject: subject || `Trade ${tradeRef}`, bodyLength: (message || "").length, desk: desk || "UNKNOWN" },
+      metadata: { subject: subject || `Trade ${tradeRef}`, bodyLength: (message || "").length, desk: desk || "UNKNOWN", recipient: recipient || "UNKNOWN" },
       payload: { body: message, subject: subject || `Trade ${tradeRef}` }
     });
   } catch (opiErr) { /* OPI non-blocking */ }
@@ -186,16 +187,29 @@ router.post("/read", authenticateToken, async (req, res) => {
 
   try {
     const Conversation = require("../models/Conversation");
-    await Conversation.updateOne(
+    const convo = await Conversation.findOneAndUpdate(
       { tradeRef },
-      { $addToSet: { readBy: userId } }
+      { $addToSet: { readBy: userId } },
+      { returnDocument: 'after' }
     );
 
     // OPI: Track mail read (fire-and-forget)
     try {
-      require("../engine/performance/sessionCollector").collect("MAIL_READ", {
-        tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL" }
-      });
+      if (convo && convo.messages) {
+        const hasFO = convo.messages.some(m => m.sender === "FO");
+        const hasCPTY = convo.messages.some(m => m.sender === "Counterparty");
+        
+        if (hasFO) {
+          require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
+            tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "FO" }
+          });
+        }
+        if (hasCPTY) {
+          require("../engine/performance/sessionCollector").collect("CPTY_MAIL_READ", {
+            tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "CPTY" }
+          });
+        }
+      }
     } catch (opiErr) { /* OPI non-blocking */ }
 
     res.json({ success: true });

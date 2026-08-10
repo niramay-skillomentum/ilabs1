@@ -138,7 +138,7 @@ async function generateReport(sessionId) {
   // ── Step 10: Run Benchmark Engine ──
   console.log("[OPI] Computing benchmarks...");
   const completionRate = trades.length > 0
-    ? Math.round((trades.filter(t => ["SETTLED", "CLOSED", "RECON_CLEARED"].includes(t.currentStatus)).length / trades.length) * 100)
+    ? Math.round((trades.filter(t => isTradeCompleted(t, session.desk)).length / trades.length) * 100)
     : 0;
 
   const benchmarkComparison = benchmarkEngine.compareToBenchmarks({
@@ -185,7 +185,7 @@ async function generateReport(sessionId) {
   // ── Step 14: Session KPIs ──
   const sessionKPIs = {
     totalTrades: trades.length,
-    tradesCompleted: trades.filter(t => ["SETTLED", "CLOSED", "RECON_CLEARED"].includes(t.currentStatus)).length,
+    tradesCompleted: trades.filter(t => isTradeCompleted(t, session.desk)).length,
     cleanTrades: trades.filter(t => !workflowAnalyzer.determineIsBreak(t, session.desk)).length,
     breakTrades: trades.filter(t => workflowAnalyzer.determineIsBreak(t, session.desk)).length,
     correctDecisions: decisionAnalysis.correctDecisions,
@@ -469,6 +469,26 @@ Limit total response to 1000 words. Reference specific evidence.`;
 // ======================================
 // HELPER FUNCTIONS
 // ======================================
+
+/**
+ * Determine if a trade was successfully completed by the user based on their desk.
+ */
+function isTradeCompleted(trade, desk) {
+  if (["SETTLED", "CLOSED", "RECON_CLEARED"].includes(trade.currentStatus)) return true;
+  
+  if (desk === "MO") {
+    if (["CONFIRMATION_PENDING", "SETTLEMENT_PENDING"].includes(trade.currentStatus)) return true;
+    if (trade.currentStatus === "PENDING_FO_RESPONSE" && !trade.foResponseReceived) return true;
+    return false;
+  }
+  
+  if (desk === "CONFIRMATION") {
+    if (["SETTLEMENT_PENDING", "LIASING_WITH_FO"].includes(trade.currentStatus)) return true;
+    return false;
+  }
+  
+  return false;
+}
 
 /**
  * Build per-trade analysis objects for the report.
