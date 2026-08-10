@@ -666,5 +666,145 @@ router.post("/action", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ======================================
+// PORTFOLIO SUMMARY (DB-BACKED)
+// Aggregates all trades into a portfolio view
+// ======================================
+router.get("/portfolio", authenticateToken, async (req, res) => {
+  try {
+    const query = {};
+    if (req.query.desk) {
+      query.nextDesk = req.query.desk.toUpperCase();
+    }
+    if (req.query.assignedOnly === 'true') {
+      query.assignedTo = req.user.userId;
+    }
+
+    // Fetch all trades from DB matching the filter
+    const trades = await Trade.find(query)
+      .select('tradeRef currentStatus amount currency counterparty direction underlyer product productType tradeType settlementType valueDate tradeDate')
+      .lean();
+
+    // Summary stats
+    const totalTrades = trades.length;
+    const settledStatuses = ['SETTLED', 'CLOSED', 'RECON_CLEARED'];
+    const settledTrades = trades.filter(t => settledStatuses.includes(t.currentStatus)).length;
+    const pendingTrades = totalTrades - settledTrades;
+
+    // Group by underlyer to build holdings
+    const holdingsMap = {};
+    for (const t of trades) {
+      const key = t.underlyer || t.product || 'UNKNOWN';
+      if (!holdingsMap[key]) {
+        holdingsMap[key] = {
+          security: key,
+          isin: '',
+          currency: t.currency || 'USD',
+          product: t.product || '-',
+          productType: t.productType || '-',
+          buyQty: 0,
+          sellQty: 0,
+          totalValue: 0,
+          tradeCount: 0,
+          settledCount: 0,
+          latestStatus: t.currentStatus
+        };
+      }
+      const h = holdingsMap[key];
+      h.tradeCount++;
+      if (t.direction === 'BUY') {
+        h.buyQty++;
+        h.totalValue += (t.amount || 0);
+      } else {
+        h.sellQty++;
+        h.totalValue -= (t.amount || 0);
+      }
+      if (settledStatuses.includes(t.currentStatus)) {
+        h.settledCount++;
+      }
+      // Keep latest status
+      h.latestStatus = t.currentStatus;
+    }
+
+    // Enrich with ISIN from Security collection
+    const Security = require("../models/Security");
+    const underlyers = Object.keys(holdingsMap);
+    const securities = await Security.find({
+      $or: [
+        { underlyer: { $in: underlyers } },
+        { companyName: { $in: underlyers } }
+      ]
+    }).select('underlyer companyName isin').lean();
+
+    const isinMap = {};
+    for (const sec of securities) {
+      if (sec.isin) {
+        if (sec.underlyer) isinMap[sec.underlyer] = sec.isin;
+        if (sec.companyName) isinMap[sec.companyName] = sec.isin;
+      }
+    }
+
+    // Build holdings array
+    const holdings = Object.values(holdingsMap).map(h => {
+      const netQty = h.buyQty - h.sellQty;
+      const avgPrice = netQty !== 0 ? Math.abs(h.totalValue / netQty) : 0;
+      const marketValue = Math.abs(h.totalValue);
+      // Determine status
+      let status = 'Active';
+      if (h.settledCount === h.tradeCount) status = 'Settled';
+      else if (h.settledCount > 0) status = 'Partial';
+
+      return {
+        security: h.security,
+        isin: isinMap[h.security] || '-',
+        currency: h.currency,
+        product: h.product,
+        productType: h.productType,
+        quantity: Math.abs(netQty),
+        direction: netQty >= 0 ? 'LONG' : 'SHORT',
+        avgPrice: parseFloat(avgPrice.toFixed(4)),
+        marketValue: parseFloat(marketValue.toFixed(2)),
+        tradeCount: h.tradeCount,
+        status
+      };
+    });
+
+    // Sort by market value descending
+    holdings.sort((a, b) => b.marketValue - a.marketValue);
+
+    // Calculate total holdings value
+    const totalHoldings = holdings.reduce((sum, h) => sum + h.marketValue, 0);
+
+    res.json({
+      success: true,
+      summary: {
+        totalHoldings: parseFloat(totalHoldings.toFixed(2)),
+        totalTrades,
+        settledTrades,
+        pendingTrades
+      },
+      holdings
+    });
+  } catch (err) {
+    console.error("Portfolio error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ======================================
+// GET TRADE BY REF (DB-BACKED)
+// ======================================
+router.get("/:tradeRef", async (req, res) => {
+  try {
+    const trade = await Trade.findOne({ tradeRef: req.params.tradeRef }).lean();
+    if (!trade) {
+      return res.status(404).json({ error: "Trade not found" });
+    }
+    const allowedTransitions = LifecycleEngine.getAllowedTransitions(trade.currentStatus);
+    res.json({ success: true, trade, allowedTransitions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;
