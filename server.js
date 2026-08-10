@@ -130,6 +130,15 @@ function getAllowedOrigins() {
   if (raw) return raw.split(",").map(o => o.trim()).filter(Boolean);
   return ["http://localhost:3000", "https://ilabs-skillomentum.vercel.app"];
 }
+
+// Handle Chrome Private Network Access (PNA) preflight
+app.use((req, res, next) => {
+  if (req.headers["access-control-request-private-network"]) {
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
+  }
+  next();
+});
+
 app.use(cors({ origin: getAllowedOrigins(), credentials: true }));
 
 // gzip responses — trade/queue JSON payloads compress well (big bandwidth win).
