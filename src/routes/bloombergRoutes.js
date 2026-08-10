@@ -18,7 +18,7 @@ const Security = require("../models/Security");
 // ======================================
 // GET /trades — All trades in the system (no desk/user filter)
 // ======================================
-router.get("/trades", authenticateToken, async (req, res) => {
+router.get("/trades", async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 1), 1000);
     const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
@@ -55,7 +55,7 @@ router.get("/trades", authenticateToken, async (req, res) => {
 // ======================================
 // GET /trades/stats — Global trade statistics
 // ======================================
-router.get("/trades/stats", authenticateToken, async (req, res) => {
+router.get("/trades/stats", async (req, res) => {
   try {
     const [
       totalTrades,
@@ -111,7 +111,7 @@ router.get("/trades/stats", authenticateToken, async (req, res) => {
 // ======================================
 // GET /portfolio — Global portfolio (all trades, no desk filter)
 // ======================================
-router.get("/portfolio", authenticateToken, async (req, res) => {
+router.get("/portfolio", async (req, res) => {
   try {
     const trades = await Trade.find()
       .select("tradeRef currentStatus amount currency counterparty direction underlyer product productType tradeType settlementType valueDate tradeDate nextDesk entity")
@@ -217,7 +217,7 @@ router.get("/portfolio", authenticateToken, async (req, res) => {
 // ======================================
 // GET /audit/:tradeRef — Audit trail for any trade
 // ======================================
-router.get("/audit/:tradeRef", authenticateToken, async (req, res) => {
+router.get("/audit/:tradeRef", async (req, res) => {
   try {
     const { tradeRef } = req.params;
     const auditEngine = require("../engine/auditEngine");
@@ -241,7 +241,7 @@ router.get("/audit/:tradeRef", authenticateToken, async (req, res) => {
 // ======================================
 // GET /swift/all — All generated SWIFT messages
 // ======================================
-router.get("/swift/all", authenticateToken, async (req, res) => {
+router.get("/swift/all", async (req, res) => {
   try {
     const messages = await SwiftMessage.find()
       .sort({ generatedAt: -1 })
@@ -278,7 +278,7 @@ router.get("/swift/all", authenticateToken, async (req, res) => {
 // ======================================
 // GET /swift/:tradeRef — SWIFT messages for a specific trade
 // ======================================
-router.get("/swift/:tradeRef", authenticateToken, async (req, res) => {
+router.get("/swift/:tradeRef", async (req, res) => {
   try {
     const { tradeRef } = req.params;
     const messages = await SwiftMessage.find({ tradeRef })
@@ -320,7 +320,7 @@ router.get("/swift/:tradeRef", authenticateToken, async (req, res) => {
 // ======================================
 // GET /reconciliation/items — All reconciliation items
 // ======================================
-router.get("/reconciliation/items", authenticateToken, async (req, res) => {
+router.get("/reconciliation/items", async (req, res) => {
   try {
     const filters = {};
     if (req.query.status) filters.status = req.query.status;
@@ -348,7 +348,7 @@ router.get("/reconciliation/items", authenticateToken, async (req, res) => {
 // ======================================
 // GET /reconciliation/stats — Recon statistics
 // ======================================
-router.get("/reconciliation/stats", authenticateToken, async (req, res) => {
+router.get("/reconciliation/stats", async (req, res) => {
   try {
     const [
       total,
@@ -387,7 +387,7 @@ router.get("/reconciliation/stats", authenticateToken, async (req, res) => {
 // ======================================
 // GET /counterparties — All counterparties
 // ======================================
-router.get("/counterparties", authenticateToken, async (req, res) => {
+router.get("/counterparties", async (req, res) => {
   try {
     const counterparties = await Counterparty.find()
       .sort({ counterpartyName: 1 })
