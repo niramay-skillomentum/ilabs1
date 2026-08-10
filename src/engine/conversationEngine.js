@@ -35,10 +35,8 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
     }
   });
 
-  const searchDesk = desk || "GENERAL";
-
   const updateDoc = {
-    $setOnInsert: { tradeRef, desk: searchDesk, status: "OPEN" },
+    $setOnInsert: { tradeRef, status: "OPEN" },
     $set: { readBy: [sender] },
     $push: {
       messages: {
@@ -53,16 +51,19 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
     }
   };
 
+  if (desk) {
+    updateDoc.$addToSet = { desks: desk };
+  }
+
   // Update MongoDB
   const conversation = await Conversation.findOneAndUpdate(
-    { tradeRef, desk: searchDesk },
+    { tradeRef },
     updateDoc,
     { upsert: true, returnDocument: 'after' }
   );
 
   // Update cache
-  const cacheKey = `${tradeRef}_${searchDesk}`;
-  cache.set(cacheKey, {
+  cache.set(tradeRef, {
     subject: subject || conversation.messages[0]?.subject || `Trade ${tradeRef}`,
     status: conversation.status,
     messages: conversation.messages.map(m => ({
@@ -73,7 +74,7 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
     }))
   });
 
-  const cached = cache.get(cacheKey);
+  const cached = cache.get(tradeRef);
 
   if (!skipEmit) {
     try {
@@ -119,10 +120,10 @@ async function createMessage(tradeRef, sender, body, subject, desk, skipEmit = f
 /**
  * Get full conversation
  */
-async function getConversation(tradeRef, desk) {
-  const searchDesk = desk || "GENERAL";
+async function getConversation(tradeRef) {
+
   // Fetch from DB (bypassing local memory cache for distributed worker compatibility)
-  const doc = await Conversation.findOne({ tradeRef, desk: searchDesk }).lean();
+  const doc = await Conversation.findOne({ tradeRef }).lean();
 
   if (!doc) {
     return {
@@ -165,7 +166,7 @@ async function getAllConversations({ limit = 200, skip = 0 } = {}) {
   const result = {};
 
   docs.forEach(doc => {
-    result[`${doc.tradeRef}_${doc.desk}`] = {
+    result[doc.tradeRef] = {
       subject: doc.messages[0]?.subject || `Trade ${doc.tradeRef}`,
       status: doc.status,
       messages: doc.messages.map(m => ({
@@ -184,18 +185,16 @@ async function getAllConversations({ limit = 200, skip = 0 } = {}) {
 /**
  * Resolve a conversation
  */
-async function resolveConversation(tradeRef, desk) {
-  const searchDesk = desk || "GENERAL";
+async function resolveConversation(tradeRef) {
   await Conversation.findOneAndUpdate(
-    { tradeRef, desk: searchDesk },
+    { tradeRef },
     { status: "RESOLVED" }
   );
 
-  const cacheKey = `${tradeRef}_${searchDesk}`;
-  const cachedConvo = cache.get(cacheKey);
+  const cachedConvo = cache.get(tradeRef);
   if (cachedConvo) {
     cachedConvo.status = "RESOLVED";
-    cache.set(cacheKey, cachedConvo);
+    cache.set(tradeRef, cachedConvo);
   }
 }
 
