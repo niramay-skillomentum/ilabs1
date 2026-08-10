@@ -12,7 +12,7 @@ const ssiRepository = require("../engine/ssiRepository");
 // ======================================
 
 // Single-ID search (for traceability lookups from trade details)
-router.get("/search", authenticateToken, async (req, res) => {
+router.get("/search", async (req, res) => {
   const ssiId = req.query.id;
   if (!ssiId) {
     return res.status(400).json({ success: false, error: "SSI ID is required" });
@@ -33,7 +33,7 @@ router.get("/search", authenticateToken, async (req, res) => {
 
 // Dual-code search (Alert Code + Acronym Code)
 // This is the primary search used by the SSI Database page.
-router.get("/search-codes", authenticateToken, async (req, res) => {
+router.get("/search-codes", async (req, res) => {
   const { alertCode, acronymCode } = req.query;
 
   if (!alertCode || !acronymCode) {
@@ -58,7 +58,7 @@ router.get("/search-codes", authenticateToken, async (req, res) => {
 
 // Reference data traceability lookup
 // Returns the master SSI record for a given MongoDB reference ID
-router.get("/reference/:refId", authenticateToken, async (req, res) => {
+router.get("/reference/:refId", async (req, res) => {
   try {
     const ssi = await ssiRepository.findByRefId(req.params.refId);
     if (!ssi) {
@@ -73,7 +73,7 @@ router.get("/reference/:refId", authenticateToken, async (req, res) => {
 
 // SSI Group lookup — returns all SSI IDs for a counterparty group.
 // Used by the settlement break dropdown so the user can select an SSI ID.
-router.get("/group", authenticateToken, async (req, res) => {
+router.get("/group", async (req, res) => {
   const { groupName, currency } = req.query;
 
   if (!groupName) {
@@ -91,7 +91,7 @@ router.get("/group", authenticateToken, async (req, res) => {
 
 // Entity lookup — returns the entity's own SSI based on entity name and currency.
 // Used for SELL trades where the entity is the beneficiary.
-router.get("/entity", authenticateToken, async (req, res) => {
+router.get("/entity", async (req, res) => {
   const { entityName, currency } = req.query;
   if (!entityName || !currency) {
     return res.status(400).json({ success: false, error: "entityName and currency are required" });
@@ -119,6 +119,36 @@ router.get("/entity", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("[SSI Entity Lookup] Error:", err.message);
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Fuzzy identifier lookup
+router.get("/:identifier", async (req, res) => {
+  try {
+    const identifier = req.params.identifier;
+    const SSIReference = require("../models/SSIReference");
+    
+    // Exact ssiId match
+    let ssi = await SSIReference.findOne({ ssiId: identifier }).lean();
+    
+    // Partial counterparty name match
+    if (!ssi) {
+      ssi = await SSIReference.findOne({
+        $or: [
+          { groupCounterPartyName: new RegExp(identifier, "i") },
+          { counterPartyName: new RegExp(identifier, "i") }
+        ]
+      }).lean();
+    }
+    
+    if (ssi) {
+      return res.json({ success: true, data: ssi });
+    }
+    
+    res.status(404).json({ success: false, error: "SSI not found" });
+  } catch (error) {
+    console.error("Error fetching SSI:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch SSI" });
   }
 });
 
