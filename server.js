@@ -156,6 +156,7 @@ app.use("/api/reconciliation", require("./src/routes/reconciliationRoutes"));
 app.use("/api/user-profile", require("./src/routes/userProfileRoutes"));
 app.use("/api/learning", require("./src/routes/learningRoutes"));
 app.use("/api/performance", require("./src/routes/performanceRoutes"));
+app.use("/api/bloomberg", require("./src/routes/bloombergRoutes"));
 
 // ======================================
 // EXPORTS & SERVER START

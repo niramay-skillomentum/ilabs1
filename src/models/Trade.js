@@ -10,6 +10,9 @@ const TradeSchema = new mongoose.Schema({
 
   currentStatus: { type: String, default: "MO_PENDING" },
   nextDesk: { type: String, index: true },
+  
+  assignedTo: { type: String, default: null, index: true },
+  assignedHistory: [{ type: String }],
 
   amount: { type: Number },
   currency: { type: String },
