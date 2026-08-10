@@ -18,8 +18,8 @@ const amendmentEngine = require("../engine/amendmentEngine");
 // ======================================
 router.get("/expected-recipient", authenticateToken, async (req, res) => {
   try {
-    const { desk, tradeRef, counterparty, workstationRegion } = req.query;
-    const result = await mailRoutingEngine.getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion });
+    const { desk, tradeRef, counterparty, workstationRegion, channel } = req.query;
+    const result = await mailRoutingEngine.getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion, channel });
     res.json(result);
   } catch (err) {
     console.error("Expected recipient calculation error:", err.message);
@@ -28,13 +28,14 @@ router.get("/expected-recipient", authenticateToken, async (req, res) => {
 });
 
 router.post("/send", authenticateToken, async (req, res) => {
-  const { tradeRef, sender, message, desk, recipient } = req.body;
+  const { tradeRef, sender, message, desk, recipient, channel } = req.body;
 
   if (recipient && recipient !== "FO" && recipient !== "COUNTERPARTY") {
     const validation = await mailRoutingEngine.validateRecipient({
       desk,
       tradeRef,
-      recipientEmail: recipient
+      recipientEmail: recipient,
+      channel
     });
     if (!validation.valid) {
       return res.status(400).json({

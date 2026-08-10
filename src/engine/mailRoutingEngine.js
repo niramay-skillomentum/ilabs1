@@ -168,12 +168,13 @@ async function getAllAvailableRecipients(expectedEmail, expectedName, isMo) {
 /**
  * Retrieves expected recipient based on desk, trade reference, counterparty, and workstation region
  */
-async function getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion }) {
+async function getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion, channel }) {
   let cptyName = counterparty;
   let reg = workstationRegion;
 
-  if (tradeRef && (!cptyName || !reg)) {
+  if (tradeRef) {
     try {
+      const Trade = require("../models/Trade");
       const trade = await Trade.findOne({ tradeRef }).lean();
       if (trade) {
         if (!cptyName) cptyName = trade.counterparty || trade.booking?.counterparty || "CITI";
@@ -188,7 +189,7 @@ async function getExpectedRecipient({ desk, tradeRef, counterparty, workstationR
   if (!cptyName) cptyName = "CITI";
   if (!reg) reg = "AMER";
 
-  const isMo = desk === "MO";
+  const isMo = desk === "MO" || channel === "FO";
   const expectedEmail = isMo ? getFoRegionalEmail(reg) : getCptyOperationsEmail(cptyName);
   const warning = isMo ? WARNING_STRINGS.MO : WARNING_STRINGS.CPTY;
   const allRecipients = await getAllAvailableRecipients(expectedEmail, cptyName, isMo);
@@ -209,8 +210,8 @@ async function getExpectedRecipient({ desk, tradeRef, counterparty, workstationR
 /**
  * Performs strict server-side validation between submitted To email and expected email
  */
-async function validateRecipient({ desk, tradeRef, recipientEmail, counterparty, workstationRegion }) {
-  const expectedData = await getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion });
+async function validateRecipient({ desk, tradeRef, recipientEmail, counterparty, workstationRegion, channel }) {
+  const expectedData = await getExpectedRecipient({ desk, tradeRef, counterparty, workstationRegion, channel });
   
   const submitted = String(recipientEmail || "").trim().toLowerCase();
   const expected = String(expectedData.expectedEmail || "").trim().toLowerCase();

@@ -56,10 +56,11 @@ function CommunicationComponent() {
   const [expectedRecipientData, setExpectedRecipientData] = useState(null);
   const [recipientOptions, setRecipientOptions] = useState([]);
 
-  const fetchExpectedRecipient = useCallback((ref, dsk) => {
+  const fetchExpectedRecipient = useCallback((ref, dsk, ch) => {
     if (!dsk) return;
     const tradeParam = ref ? `&tradeRef=${encodeURIComponent(ref)}` : "";
-    fetch(`/api/conversation/expected-recipient?desk=${encodeURIComponent(dsk)}${tradeParam}`, {
+    const channelParam = ch ? `&channel=${encodeURIComponent(ch)}` : "";
+    fetch(`/api/conversation/expected-recipient?desk=${encodeURIComponent(dsk)}${tradeParam}${channelParam}`, {
       headers: authHeaders()
     })
       .then(res => res.json())
@@ -310,7 +311,7 @@ function CommunicationComponent() {
             setComposeTrade(composeForTrade);
             setComposeTo("");
             setComposeToDisabled(false);
-            fetchExpectedRecipient(composeForTrade, dsk);
+            fetchExpectedRecipient(composeForTrade, dsk, ch);
             // Generate subject + body
             const toLabel = (composeToRecipient || "FO") === "FO" ? "FO Clarification Request" : "Trade Inquiry";
             setComposeSubject(`${composeForTrade} — ${toLabel}`);
@@ -590,7 +591,7 @@ function CommunicationComponent() {
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk })
+      body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk, channel })
     }).then(res => res.json()).then((data) => {
       setIsSendingReply(false);
       setReplyModalOpen(false);
@@ -624,7 +625,7 @@ function CommunicationComponent() {
           if (data.trades.length > 0) {
             const firstRef = data.trades[0].tradeRef;
             setComposeTrade(firstRef);
-            fetchExpectedRecipient(firstRef, desk);
+            fetchExpectedRecipient(firstRef, desk, channel);
             const toVal = desk === "CONFIRMATION" ? "COUNTERPARTY" : "FO";
             const toLabel = toVal === "FO" ? "FO Clarification Request" : "Trade Inquiry";
             setComposeSubject(`${firstRef} — ${toLabel}`);
@@ -640,7 +641,7 @@ function CommunicationComponent() {
 
   const handleComposeTradeChange = (newTradeRef) => {
     setComposeTrade(newTradeRef);
-    fetchExpectedRecipient(newTradeRef, desk);
+    fetchExpectedRecipient(newTradeRef, desk, channel);
     const toLabel = composeTo.includes("fo-") || composeTo === "FO" ? "FO Clarification Request" : "Trade Inquiry";
     setComposeSubject(`${newTradeRef} — ${toLabel}`);
     if (desk === "CONFIRMATION" && (composeTo.includes("operations@") || composeTo === "COUNTERPARTY")) {
@@ -722,7 +723,7 @@ function CommunicationComponent() {
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: composeTrade, sender: userId, message: composeBody, desk, recipient: composeTo })
+      body: JSON.stringify({ tradeRef: composeTrade, sender: userId, message: composeBody, desk, recipient: composeTo, channel })
     })
     .then(res => res.json())
     .then((data) => {

@@ -51,7 +51,12 @@ try {
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const FREE_MODELS = [
-  "nvidia/nemotron-3-ultra-550b-a55b:free"
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "google/gemini-2.0-flash-lite-preview-02-05:free",
+  "mistralai/mistral-7b-instruct:free",
+  "google/gemma-2-9b-it:free",
+  "meta-llama/llama-3.1-8b-instruct:free"
 ];
 
 const AI_TIMEOUT_MS = 120000; // 120-second timeout for the large model
