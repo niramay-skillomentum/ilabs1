@@ -358,6 +358,7 @@ router.get("/shared", authenticateToken, async (req, res) => {
       finalResults.push({
         trade,
         conversation: {
+          desk: item.conversation.desk,
           readBy: item.conversation.readBy || [],
           subject: item.conversation.messages[0]?.subject || item.conversation.subject || `Trade ${item.tradeRef}`,
           status: item.conversation.status,
@@ -436,6 +437,7 @@ router.get("/personal", authenticateToken, async (req, res) => {
       results.push({
         trade,
         conversation: {
+          desk: conv.desk,
           readBy: conv.readBy || [],
           subject: conv.messages[0]?.subject || `Trade ${conv.tradeRef}`,
           status: conv.status,
@@ -466,6 +468,8 @@ router.get("/personal", authenticateToken, async (req, res) => {
 router.get("/:tradeRef", authenticateToken, async (req, res) => {
   const { tradeRef } = req.params;
   const desk = req.query.desk;
+
+  console.log(`FETCHING CONVERSATION: tradeRef=${tradeRef}, desk=${desk}`);
 
   const conversation = await conversationEngine.getConversation(tradeRef, desk);
 
