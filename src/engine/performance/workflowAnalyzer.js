@@ -241,22 +241,36 @@ function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
   }
 
   if (desk === "CONFIRMATION") {
-    if (!isBreak) return deskWorkflows.CLEAN;
+    let baseWorkflow = deskWorkflows.CLEAN;
     
-    // Determine if FO or CPTY made the mistake by comparing truths
-    const confirmTruth = trade.truths?.confirmation || {};
-    const universalTruth = trade.truths?.universal || trade.truths?.fo || {};
-    let isCptyRight = true;
-    for (const key of ["amount", "valueDate", "currency"]) {
-      if (confirmTruth[key] !== undefined && universalTruth[key] !== undefined) {
-        if (key === "valueDate") {
-          if (new Date(confirmTruth[key]).getTime() !== new Date(universalTruth[key]).getTime()) isCptyRight = false;
-        } else {
-          if (confirmTruth[key] !== universalTruth[key]) isCptyRight = false;
+    if (isBreak) {
+      // Determine if FO or CPTY made the mistake by comparing truths
+      const confirmTruth = trade.truths?.confirmation || {};
+      const universalTruth = trade.truths?.universal || trade.truths?.fo || {};
+      let isCptyRight = true;
+      for (const key of ["amount", "valueDate", "currency"]) {
+        if (confirmTruth[key] !== undefined && universalTruth[key] !== undefined) {
+          if (key === "valueDate") {
+            if (new Date(confirmTruth[key]).getTime() !== new Date(universalTruth[key]).getTime()) isCptyRight = false;
+          } else {
+            if (confirmTruth[key] !== universalTruth[key]) isCptyRight = false;
+          }
         }
       }
+      baseWorkflow = isCptyRight ? deskWorkflows.FO_MISTAKE : deskWorkflows.CPTY_MISTAKE;
     }
-    return isCptyRight ? deskWorkflows.FO_MISTAKE : deskWorkflows.CPTY_MISTAKE;
+    
+    let expected = [...baseWorkflow];
+    
+    // OTC trades (BILATERAL) require checking economics manually before contacting counterparties
+    if (trade.settlementType === "BILATERAL") {
+      const viewAuditIndex = expected.indexOf("VIEW_AUDIT");
+      if (viewAuditIndex !== -1) {
+        expected.splice(viewAuditIndex + 1, 0, "CHECK_ECONOMICS");
+      }
+    }
+    
+    return expected;
   }
 
   // MO: Handle sub-scenarios based on current status
