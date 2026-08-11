@@ -296,8 +296,11 @@ function determineIsBreak(trade, desk, evaluateOriginal = false) {
       if (tradeToEvaluate.amendmentHistory && tradeToEvaluate.amendmentHistory.length > 0) {
         const history = [...tradeToEvaluate.amendmentHistory].reverse();
         for (const am of history) {
-          if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
-          if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+          // Only rewind amendments that were applied by the desk currently being evaluated
+          if (!am.desk || am.desk.toUpperCase() === desk.toUpperCase()) {
+            if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
+            if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+          }
         }
       }
     }
