@@ -198,7 +198,10 @@ router.post("/read", authenticateToken, async (req, res) => {
     try {
       if (convo && convo.messages) {
         const hasFO = convo.messages.some(m => m.sender === "FO");
-        const hasCPTY = convo.messages.some(m => m.sender === "Counterparty" || m.sender === "CPTY");
+        const hasCPTY = convo.messages.some(m => {
+          const s = (m.sender || "").toUpperCase();
+          return s === "COUNTERPARTY" || s === "CPTY";
+        });
         
         if (hasFO) {
           require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
