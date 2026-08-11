@@ -122,6 +122,30 @@ async function checkAndEnforceCutoffs() {
         cutoffMissedReason: { $eq: null }
       });
 
+      let queueUpdated = false;
+      const statuses = cutoffEngine.getAllCutoffStatuses(userId);
+
+      // 1. Emit warnings for regions <= 5 mins away
+      for (const [currency, status] of Object.entries(statuses)) {
+        if (!status.breached && status.minutesLeft > 0 && status.minutesLeft <= 5) {
+          const region = status.region;
+          if (queue.notifiedRegions && !queue.notifiedRegions.includes(region)) {
+            queue.notifiedRegions.push(region);
+            queueUpdated = true;
+            
+            emit("cutoff_warning", userId, {
+              message: `${region} cut-off in ${Math.ceil(status.minutesLeft)} minutes`
+            });
+            console.log(`[CutoffEnforcer] Warning emitted to user ${userId} for ${region}`);
+          }
+        }
+      }
+
+      if (queueUpdated) {
+        await queue.save();
+      }
+
+      // 2. Enforce actual breaches
       for (const trade of trades) {
         try {
           if (cutoffEngine.isCutOffBreached(trade.currency, userId)) {

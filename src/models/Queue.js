@@ -10,6 +10,7 @@ const QueueSchema = new mongoose.Schema({
   sessionStart: { type: Date, default: Date.now },
   sessionExpiry: { type: Date },  // sessionStart + 3 hours
   isActive: { type: Boolean, default: true, index: true },
+  notifiedRegions: [{ type: String }],
 
   lastActivity: { type: Date, default: Date.now }
 

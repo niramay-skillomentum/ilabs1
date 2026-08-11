@@ -375,6 +375,12 @@ function WorkstationComponent() {
       }
     });
 
+    socket.on("cutoff_warning", (payload) => {
+      if (payload && payload.message) {
+        toast(payload.message, { icon: "⚠️", duration: 6000 });
+      }
+    });
+
     // new_email may attach amendments / response flags the client can't derive
     // from the payload, so a (debounced) reconciling refresh is still warranted.
     socket.on("new_email", () => {
