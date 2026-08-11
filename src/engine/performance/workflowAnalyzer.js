@@ -47,40 +47,32 @@ const EXPECTED_WORKFLOWS = {
   // ── CONFIRMATION DESK ──
   CONFIRMATION: {
     CLEAN: [
-      "OPEN_TRADE",
       "VIEW_AUDIT",
-      "CHECK_ECONOMICS",
-      "VALIDATE_TRADE",
-      "ADD_COMMENT",
-      "FORWARD_TO_SETTLEMENT"
-    ],
-    BREAK: [
-      "OPEN_TRADE",
-      "VIEW_AUDIT",
-      "CHECK_ECONOMICS",
-      "IDENTIFY_MISMATCH",
-      "RAISE_BREAK",
-      "ADD_COMMENT",
       "CONTACT_CPTY",
       "REVIEW_CPTY_RESPONSE",
-      "APPLY_AMENDMENT",
-      "VALIDATE_TRADE",
-      "FORWARD_TO_SETTLEMENT"
+      "VALIDATE_TRADE"
     ],
-    BREAK_WITH_FO: [
-      "OPEN_TRADE",
+    CPTY_MISTAKE: [
       "VIEW_AUDIT",
-      "CHECK_ECONOMICS",
-      "IDENTIFY_MISMATCH",
-      "RAISE_BREAK",
-      "ADD_COMMENT",
       "CONTACT_CPTY",
       "REVIEW_CPTY_RESPONSE",
       "ESCALATE_TO_FO",
       "REVIEW_FO_RESPONSE",
-      "APPLY_AMENDMENT",
-      "VALIDATE_TRADE",
-      "FORWARD_TO_SETTLEMENT"
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
+      "VALIDATE_TRADE"
+    ],
+    FO_MISTAKE: [
+      "VIEW_AUDIT",
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
+      "ESCALATE_TO_FO",
+      "REVIEW_FO_RESPONSE",
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
+      "ESCALATE_TO_FO",
+      "REVIEW_FO_RESPONSE",
+      "VALIDATE_TRADE"
     ]
   },
 
@@ -249,9 +241,22 @@ function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
   }
 
   if (desk === "CONFIRMATION") {
-    if (isBreak && trade.foEscalation?.status) return deskWorkflows.BREAK_WITH_FO;
-    if (isBreak) return deskWorkflows.BREAK;
-    return deskWorkflows.CLEAN;
+    if (!isBreak) return deskWorkflows.CLEAN;
+    
+    // Determine if FO or CPTY made the mistake by comparing truths
+    const confirmTruth = trade.truths?.confirmation || {};
+    const universalTruth = trade.truths?.universal || trade.truths?.fo || {};
+    let isCptyRight = true;
+    for (const key of ["amount", "valueDate", "currency"]) {
+      if (confirmTruth[key] !== undefined && universalTruth[key] !== undefined) {
+        if (key === "valueDate") {
+          if (new Date(confirmTruth[key]).getTime() !== new Date(universalTruth[key]).getTime()) isCptyRight = false;
+        } else {
+          if (confirmTruth[key] !== universalTruth[key]) isCptyRight = false;
+        }
+      }
+    }
+    return isCptyRight ? deskWorkflows.FO_MISTAKE : deskWorkflows.CPTY_MISTAKE;
   }
 
   // MO: Handle sub-scenarios based on current status
