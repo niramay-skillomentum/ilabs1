@@ -262,14 +262,6 @@ function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
     
     let expected = [...baseWorkflow];
     
-    // OTC trades (BILATERAL) require checking economics manually before contacting counterparties
-    if (trade.settlementType === "BILATERAL") {
-      const viewAuditIndex = expected.indexOf("VIEW_AUDIT");
-      if (viewAuditIndex !== -1) {
-        expected.splice(viewAuditIndex + 1, 0, "CHECK_ECONOMICS");
-      }
-    }
-    
     return expected;
   }
 
