@@ -252,7 +252,13 @@ function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
     
     if (isBreak) {
       // Determine if FO or CPTY made the mistake by comparing truths
-      const confirmTruth = trade.truths?.confirmation || {};
+      let confirmTruth = trade.truths?.confirmation || {};
+      
+      // Since truths.confirmation can be mutated when a CPTY concedes, rely on expectedEconomics if it exists
+      if (trade.confirmationScenario && trade.confirmationScenario.expectedEconomics) {
+        confirmTruth = trade.confirmationScenario.expectedEconomics;
+      }
+      
       const universalTruth = trade.truths?.universal || trade.truths?.fo || {};
       let isCptyRight = true;
       for (const key of ["amount", "valueDate", "currency"]) {
@@ -309,6 +315,12 @@ function determineIsBreak(trade, desk, evaluateOriginal = false) {
       return truthEngine.getMismatchFields(tradeToEvaluate, "mo").length > 0;
     }
     if (desk === "CONFIRMATION") {
+      if (evaluateOriginal && tradeToEvaluate.confirmationScenario && tradeToEvaluate.confirmationScenario.expectedEconomics) {
+        const exp = tradeToEvaluate.confirmationScenario.expectedEconomics;
+        if (exp.amount && exp.amount !== tradeToEvaluate.amount) return true;
+        if (exp.valueDate && new Date(exp.valueDate).getTime() !== new Date(tradeToEvaluate.valueDate).getTime()) return true;
+        if (exp.currency && exp.currency !== tradeToEvaluate.currency) return true;
+      }
       return truthEngine.getConfirmationMismatches(tradeToEvaluate).length > 0;
     }
     if (desk === "SETTLEMENT") {
