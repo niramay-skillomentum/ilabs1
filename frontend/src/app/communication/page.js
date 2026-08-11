@@ -26,6 +26,7 @@ function CommunicationComponent() {
   const [desk, setDesk] = useState(null);
   const [channel, setChannel] = useState(null);
   const [selectedTradeRef, setSelectedTradeRef] = useState(null);
+  const [selectedDesk, setSelectedDesk] = useState(null);
   const [currentFolder, setCurrentFolder] = useState("inbox");
   const [inboxData, setInboxData] = useState([]);
   const [currentTrade, setCurrentTrade] = useState(null);
@@ -114,6 +115,7 @@ function CommunicationComponent() {
   const socketRef = useRef(null);
   const inboxDataRef = useRef([]);
   const selectedTradeRefRef = useRef(null);
+  const selectedDeskRef = useRef(null);
   const currentFolderRef = useRef("inbox");
   const lastRenderedInboxDataStr = useRef("");
 
@@ -199,7 +201,7 @@ function CommunicationComponent() {
   // ========================================
   // LOAD CONVERSATION
   // ========================================
-  const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll) => {
+  const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll, specificDesk) => {
     setSelectedTradeRef(tradeRef);
     selectedTradeRefRef.current = tradeRef;
     
@@ -207,8 +209,10 @@ function CommunicationComponent() {
     
     // Determine the actual desk from inbox item
     const data = currentInboxData || inboxDataRef.current;
-    const inboxItem = data.find(i => i.trade.tradeRef === tradeRef);
-    const targetDesk = inboxItem?.conversation?.desk || desk || "GENERAL";
+    const inboxItem = data.find(i => i.trade.tradeRef === tradeRef && (!specificDesk || i.conversation?.desk === specificDesk));
+    const targetDesk = specificDesk || inboxItem?.conversation?.desk || desk || "GENERAL";
+    setSelectedDesk(targetDesk);
+    selectedDeskRef.current = targetDesk;
     console.log("loadConversation targetDesk:", targetDesk, "inboxItem desk:", inboxItem?.conversation?.desk, "state desk:", desk);
 
     // API call to persist read state across sessions
@@ -379,8 +383,9 @@ function CommunicationComponent() {
 
       refreshPromise.then(() => {
         const currentSel = selectedTradeRefRef.current;
+        const currentDesk = selectedDeskRef.current;
         if (currentSel === data.tradeRef) {
-          loadConversation(currentSel, ch, null, false);
+          loadConversation(currentSel, ch, null, false, currentDesk);
         }
       });
     });
@@ -395,8 +400,9 @@ function CommunicationComponent() {
 
       refreshPromise.then(() => {
         const currentSel = selectedTradeRefRef.current;
+        const currentDesk = selectedDeskRef.current;
         if (currentSel === data.tradeRef) {
-          loadConversation(currentSel, ch, null, false);
+          loadConversation(currentSel, ch, null, false, currentDesk);
         }
       });
     });
@@ -406,7 +412,8 @@ function CommunicationComponent() {
       if (ch !== "SYSTEM") return;
       loadSystemInbox().then(() => {
         const currentSel = selectedTradeRefRef.current;
-        if (currentSel) loadConversation(currentSel, ch, null, false);
+        const currentDesk = selectedDeskRef.current;
+        if (currentSel) loadConversation(currentSel, ch, null, false, currentDesk);
       });
     });
 
@@ -430,8 +437,9 @@ function CommunicationComponent() {
 
       refreshPromise.then(() => {
         const currentSel = selectedTradeRefRef.current;
+        const currentDesk = selectedDeskRef.current;
         if (currentSel && !replyModalOpen) {
-          loadConversation(currentSel, ch, null, false);
+          loadConversation(currentSel, ch, null, false, currentDesk);
         }
       });
     }, 5000);
@@ -824,8 +832,8 @@ function CommunicationComponent() {
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}
           isLoading={isLoading} currentFolder={currentFolder} filteredInbox={filteredInbox}
           userId={userId} formatDate={formatDate} getStatusBadge={getStatusBadge}
-          selectedTradeRef={selectedTradeRef} channel={channel} loadConversation={loadConversation}
-          openNewCompose={openNewCompose}
+          selectedTradeRef={selectedTradeRef} selectedDesk={selectedDesk} channel={channel}
+          loadConversation={loadConversation} openNewCompose={openNewCompose}
         />
 
         <MessageThread

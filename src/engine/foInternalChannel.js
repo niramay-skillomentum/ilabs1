@@ -141,13 +141,12 @@ async function handleFoInternalReply(reply, saveTrade) {
 
     if (foPosition === "FO_ADMITS_MISTAKE") {
         const amendmentEngine = require("./amendmentEngine");
-        const universalMismatches = truthEngine.getMismatchFields(trade, "universal");
-        const targetTruth = trade.truths?.universal;
-        if (universalMismatches.length > 0 && targetTruth) {
-             universalMismatches.forEach(m => {
+        const targetTruth = trade.truths?.[targetDeskTruth];
+        if (moMismatches.length > 0 && targetTruth) {
+             moMismatches.forEach(m => {
                  let field = typeof m === "string" ? m : m.field;
                  let correctValue = targetTruth[field];
-                 const amendment = amendmentEngine.createAmendment(trade, field, correctValue, "MO", "FO_INTERNAL");
+                 const amendment = amendmentEngine.createAmendment(trade, field, correctValue, reply.deskContext, "FO_INTERNAL");
                  if (amendment) {
                      amendment.status = "ACCEPTED";
                      amendmentEngine.attachAmendments(trade, [amendment]);

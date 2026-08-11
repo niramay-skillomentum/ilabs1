@@ -3,7 +3,7 @@ import { getDeskBadge } from "./utils";
 
 export default function InboxList({
   searchQuery, setSearchQuery, folderTitle, isLoading, currentFolder,
-  filteredInbox, userId, formatDate, getStatusBadge, selectedTradeRef,
+  filteredInbox, userId, formatDate, getStatusBadge, selectedTradeRef, selectedDesk,
   channel, loadConversation, openNewCompose
 }) {
   const [visibleCount, setVisibleCount] = useState(20);
@@ -76,9 +76,9 @@ export default function InboxList({
                   ? !item.conversation.read 
                   : (item.lastMsg.sender !== userId && !(item.conversation.readBy || []).includes(userId));
                 return (
-                  <div key={item.trade.tradeRef}
-                    className={`email-item ${selectedTradeRef === item.trade.tradeRef ? "selected" : ""} ${isUnread ? "unread" : ""}`}
-                    onClick={() => loadConversation(item.trade.tradeRef, channel, null, true)}>
+                  <div key={`${item.trade.tradeRef}-${item.conversation?.desk || "GENERAL"}`}
+                    className={`email-item ${selectedTradeRef === item.trade.tradeRef && selectedDesk === item.conversation?.desk ? "selected" : ""} ${isUnread ? "unread" : ""}`}
+                    onClick={() => loadConversation(item.trade.tradeRef, channel, null, true, item.conversation?.desk)}>
                     <div className="email-item-main">
                       <div className="email-sender">{senderInfo.name}</div>
                       <div className="email-subject-row">
