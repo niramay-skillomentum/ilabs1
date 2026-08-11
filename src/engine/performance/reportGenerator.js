@@ -540,8 +540,15 @@ function buildTradeAnalyses(trades, workflowAnalysis, allDecisions, mailEvaluati
 function buildActionComparison(wfResult) {
   if (!wfResult.expectedWorkflow) return [];
 
+  // Clone actualWorkflow so we can consume matched items
+  const actualRemaining = [...(wfResult.actualWorkflow || [])];
+
   return wfResult.expectedWorkflow.map(step => {
-    const performed = (wfResult.actualWorkflow || []).includes(step);
+    const foundIdx = actualRemaining.indexOf(step);
+    const performed = foundIdx !== -1;
+    if (performed) {
+       actualRemaining.splice(foundIdx, 1);
+    }
     return {
       expectedAction: step,
       userPerformed: performed,

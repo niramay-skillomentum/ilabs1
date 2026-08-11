@@ -47,40 +47,34 @@ const EXPECTED_WORKFLOWS = {
   // ── CONFIRMATION DESK ──
   CONFIRMATION: {
     CLEAN: [
-      "OPEN_TRADE",
       "VIEW_AUDIT",
-      "CHECK_ECONOMICS",
-      "VALIDATE_TRADE",
-      "ADD_COMMENT",
-      "FORWARD_TO_SETTLEMENT"
-    ],
-    BREAK: [
-      "OPEN_TRADE",
-      "VIEW_AUDIT",
-      "CHECK_ECONOMICS",
-      "IDENTIFY_MISMATCH",
-      "RAISE_BREAK",
-      "ADD_COMMENT",
       "CONTACT_CPTY",
       "REVIEW_CPTY_RESPONSE",
-      "APPLY_AMENDMENT",
-      "VALIDATE_TRADE",
-      "FORWARD_TO_SETTLEMENT"
+      "VALIDATE_TRADE"
     ],
-    BREAK_WITH_FO: [
-      "OPEN_TRADE",
+    CPTY_MISTAKE: [
       "VIEW_AUDIT",
-      "CHECK_ECONOMICS",
-      "IDENTIFY_MISMATCH",
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
       "RAISE_BREAK",
-      "ADD_COMMENT",
+      "ESCALATE_TO_FO",
+      "REVIEW_FO_RESPONSE",
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
+      "VALIDATE_TRADE"
+    ],
+    FO_MISTAKE: [
+      "VIEW_AUDIT",
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
+      "RAISE_BREAK",
+      "ESCALATE_TO_FO",
+      "REVIEW_FO_RESPONSE",
       "CONTACT_CPTY",
       "REVIEW_CPTY_RESPONSE",
       "ESCALATE_TO_FO",
       "REVIEW_FO_RESPONSE",
-      "APPLY_AMENDMENT",
-      "VALIDATE_TRADE",
-      "FORWARD_TO_SETTLEMENT"
+      "VALIDATE_TRADE"
     ]
   },
 
@@ -196,16 +190,21 @@ const EVENT_TO_STEP = {
   "SSI_VERIFIED": "VERIFY_SSI",
   "SSI_SENT": "SEND_SSI_TO_CPTY",
 
-  // Settlement
-  "TRADE_SETTLED": "TRADE_SETTLED",
-  "TRADE_CLOSED": "TRADE_CLOSED",
-
   // Comments
   "COMMENT_ADDED": "ADD_COMMENT",
 
   // Booking
   "BOOKING_CHECKED": "CHECK_BOOKING",
   "ECONOMICS_CHECKED": "CHECK_ECONOMICS",
+
+  // Explicit mappings from Backend Actions to Workflow Steps
+  CONFIRM_ESCALATE_TO_FO: "ESCALATE_TO_FO",
+  CONFIRM_RAISE_BREAK: "RAISE_BREAK",
+  CONFIRM_TRADE: "VALIDATE_TRADE",
+
+  // Settlement
+  "TRADE_SETTLED": "TRADE_SETTLED",
+  "TRADE_CLOSED": "TRADE_CLOSED",
 
   // Learning
   "LEARNING_EVENT": null,
@@ -249,9 +248,28 @@ function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
   }
 
   if (desk === "CONFIRMATION") {
-    if (isBreak && trade.foEscalation?.status) return deskWorkflows.BREAK_WITH_FO;
-    if (isBreak) return deskWorkflows.BREAK;
-    return deskWorkflows.CLEAN;
+    let baseWorkflow = deskWorkflows.CLEAN;
+    
+    if (isBreak) {
+      // Determine if FO or CPTY made the mistake by comparing truths
+      const confirmTruth = trade.truths?.confirmation || {};
+      const universalTruth = trade.truths?.universal || trade.truths?.fo || {};
+      let isCptyRight = true;
+      for (const key of ["amount", "valueDate", "currency"]) {
+        if (confirmTruth[key] !== undefined && universalTruth[key] !== undefined) {
+          if (key === "valueDate") {
+            if (new Date(confirmTruth[key]).getTime() !== new Date(universalTruth[key]).getTime()) isCptyRight = false;
+          } else {
+            if (confirmTruth[key] !== universalTruth[key]) isCptyRight = false;
+          }
+        }
+      }
+      baseWorkflow = isCptyRight ? deskWorkflows.FO_MISTAKE : deskWorkflows.CPTY_MISTAKE;
+    }
+    
+    let expected = [...baseWorkflow];
+    
+    return expected;
   }
 
   // MO: Handle sub-scenarios based on current status
@@ -278,8 +296,11 @@ function determineIsBreak(trade, desk, evaluateOriginal = false) {
       if (tradeToEvaluate.amendmentHistory && tradeToEvaluate.amendmentHistory.length > 0) {
         const history = [...tradeToEvaluate.amendmentHistory].reverse();
         for (const am of history) {
-          if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
-          if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+          // Only rewind amendments that were applied by the desk currently being evaluated
+          if (!am.desk || am.desk.toUpperCase() === desk.toUpperCase()) {
+            if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
+            if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+          }
         }
       }
     }
@@ -311,7 +332,6 @@ function determineIsBreak(trade, desk, evaluateOriginal = false) {
  */
 function extractActualWorkflow(events) {
   const steps = [];
-  const seen = new Set();
 
   for (const event of events) {
     // Try mapping by eventType first, then by metadata.action
@@ -323,10 +343,7 @@ function extractActualWorkflow(events) {
     
     // Add special handling for CPTY_MAIL_READ to fulfill READ_CPTY_MAIL as well
     if (event.eventType === "CPTY_MAIL_READ") {
-      if (!seen.has("READ_CPTY_MAIL")) {
-        steps.push("READ_CPTY_MAIL");
-        seen.add("READ_CPTY_MAIL");
-      }
+      steps.push("READ_CPTY_MAIL");
     }
 
     // Also check for status transitions that map to steps
@@ -341,9 +358,8 @@ function extractActualWorkflow(events) {
     }
 
     // Skip null mappings (internal events) and duplicates
-    if (step && !seen.has(step)) {
+    if (step) {
       steps.push(step);
-      seen.add(step);
     }
   }
 

@@ -26,6 +26,7 @@ function CommunicationComponent() {
   const [desk, setDesk] = useState(null);
   const [channel, setChannel] = useState(null);
   const [selectedTradeRef, setSelectedTradeRef] = useState(null);
+  const [selectedDesk, setSelectedDesk] = useState(null);
   const [currentFolder, setCurrentFolder] = useState("inbox");
   const [inboxData, setInboxData] = useState([]);
   const [currentTrade, setCurrentTrade] = useState(null);
@@ -114,6 +115,7 @@ function CommunicationComponent() {
   const socketRef = useRef(null);
   const inboxDataRef = useRef([]);
   const selectedTradeRefRef = useRef(null);
+  const selectedDeskRef = useRef(null);
   const currentFolderRef = useRef("inbox");
   const lastRenderedInboxDataStr = useRef("");
 
@@ -199,12 +201,20 @@ function CommunicationComponent() {
   // ========================================
   // LOAD CONVERSATION
   // ========================================
-  const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll) => {
+  const loadConversation = useCallback((tradeRef, ch, currentInboxData, forceScroll, specificDesk) => {
     setSelectedTradeRef(tradeRef);
     selectedTradeRefRef.current = tradeRef;
     
     const uid = loadUserId();
     
+    // Determine the actual desk from inbox item
+    const data = currentInboxData || inboxDataRef.current;
+    const inboxItem = data.find(i => i.trade.tradeRef === tradeRef && (!specificDesk || i.conversation?.desk === specificDesk));
+    const targetDesk = specificDesk || inboxItem?.conversation?.desk || desk || "GENERAL";
+    setSelectedDesk(targetDesk);
+    selectedDeskRef.current = targetDesk;
+    console.log("loadConversation targetDesk:", targetDesk, "inboxItem desk:", inboxItem?.conversation?.desk, "state desk:", desk);
+
     // API call to persist read state across sessions
     if (ch === "SYSTEM" || currentFolderRef.current === "system") {
       fetch("/api/system-mailbox/read", {
@@ -216,12 +226,11 @@ function CommunicationComponent() {
       });
     } else {
       fetch("/api/conversation/read", {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef })
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ tradeRef, desk: targetDesk })
       });
     }
 
     // Optimistic UI Update
-    const data = currentInboxData || inboxDataRef.current;
     const newData = data.map(item => {
       if (item.trade.tradeRef === tradeRef) {
         if (ch === "SYSTEM" || currentFolderRef.current === "system") {
@@ -238,7 +247,6 @@ function CommunicationComponent() {
     setInboxData(newData);
     inboxDataRef.current = newData;
 
-    const inboxItem = newData.find(i => i.trade.tradeRef === tradeRef);
     if (inboxItem) setCurrentTrade(inboxItem.trade);
 
     // System mailbox messages are already loaded with the inbox list — no per-thread fetch.
@@ -248,7 +256,7 @@ function CommunicationComponent() {
       return;
     }
 
-    const endpoint = ch === "FO" ? `/api/fo-channel/${tradeRef}` : `/api/conversation/${tradeRef}`;
+    const endpoint = ch === "FO" ? `/api/fo-channel/${tradeRef}` : `/api/conversation/${tradeRef}?desk=${encodeURIComponent(targetDesk)}`;
     fetch(endpoint, { headers: { "Authorization": "Bearer " + getToken() } })
       .then(res => res.json())
       .then(convData => {
@@ -375,8 +383,9 @@ function CommunicationComponent() {
 
       refreshPromise.then(() => {
         const currentSel = selectedTradeRefRef.current;
+        const currentDesk = selectedDeskRef.current;
         if (currentSel === data.tradeRef) {
-          loadConversation(currentSel, ch, null, false);
+          loadConversation(currentSel, ch, null, false, currentDesk);
         }
       });
     });
@@ -391,8 +400,9 @@ function CommunicationComponent() {
 
       refreshPromise.then(() => {
         const currentSel = selectedTradeRefRef.current;
+        const currentDesk = selectedDeskRef.current;
         if (currentSel === data.tradeRef) {
-          loadConversation(currentSel, ch, null, false);
+          loadConversation(currentSel, ch, null, false, currentDesk);
         }
       });
     });
@@ -402,7 +412,8 @@ function CommunicationComponent() {
       if (ch !== "SYSTEM") return;
       loadSystemInbox().then(() => {
         const currentSel = selectedTradeRefRef.current;
-        if (currentSel) loadConversation(currentSel, ch, null, false);
+        const currentDesk = selectedDeskRef.current;
+        if (currentSel) loadConversation(currentSel, ch, null, false, currentDesk);
       });
     });
 
@@ -426,8 +437,9 @@ function CommunicationComponent() {
 
       refreshPromise.then(() => {
         const currentSel = selectedTradeRefRef.current;
+        const currentDesk = selectedDeskRef.current;
         if (currentSel && !replyModalOpen) {
-          loadConversation(currentSel, ch, null, false);
+          loadConversation(currentSel, ch, null, false, currentDesk);
         }
       });
     }, 5000);
@@ -555,10 +567,12 @@ function CommunicationComponent() {
   const resolveConversation = () => {
     if (!selectedTradeRef) return toast.error("No trade selected");
     setIsResolving(true);
+    const inboxItem = inboxDataRef.current.find(i => i.trade.tradeRef === selectedTradeRef);
+    const targetDesk = inboxItem?.conversation?.desk || desk || "GENERAL";
     fetch("/api/conversation/resolve", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: selectedTradeRef, userId })
+      body: JSON.stringify({ tradeRef: selectedTradeRef, userId, desk: targetDesk })
     })
     .then(res => res.json())
     .then(data => {
@@ -587,11 +601,13 @@ function CommunicationComponent() {
     if (!replyBody.trim()) return toast.error("Email content cannot be empty");
     if (!selectedTradeRef) return toast.error("No trade selected");
     setIsSendingReply(true);
+    const inboxItem = inboxDataRef.current.find(i => i.trade.tradeRef === selectedTradeRef);
+    const targetDesk = inboxItem?.conversation?.desk || desk || "GENERAL";
     const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
     fetch(endpoint, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk, channel })
+      body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: replyBody, desk: targetDesk, channel })
     }).then(res => res.json()).then((data) => {
       setIsSendingReply(false);
       setReplyModalOpen(false);
@@ -816,8 +832,8 @@ function CommunicationComponent() {
           searchQuery={searchQuery} setSearchQuery={setSearchQuery} folderTitle={folderTitle}
           isLoading={isLoading} currentFolder={currentFolder} filteredInbox={filteredInbox}
           userId={userId} formatDate={formatDate} getStatusBadge={getStatusBadge}
-          selectedTradeRef={selectedTradeRef} channel={channel} loadConversation={loadConversation}
-          openNewCompose={openNewCompose}
+          selectedTradeRef={selectedTradeRef} selectedDesk={selectedDesk} channel={channel}
+          loadConversation={loadConversation} openNewCompose={openNewCompose}
         />
 
         <MessageThread
@@ -835,12 +851,14 @@ function CommunicationComponent() {
           setReplyBody(body);
           // Wait a tick for state to update then send
           setTimeout(() => {
+            const inboxItem = inboxDataRef.current.find(i => i.trade.tradeRef === selectedTradeRef);
+            const targetDesk = inboxItem?.conversation?.desk || desk || "GENERAL";
             const endpoint = channel === "FO" ? "/api/fo-channel/send" : "/api/conversation/send";
             setIsSendingReply(true);
             fetch(endpoint, {
               method: "POST",
               headers: authHeaders(),
-              body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: body, desk })
+              body: JSON.stringify({ tradeRef: selectedTradeRef, sender: userId, message: body, desk: targetDesk })
             }).then(() => {
               setIsSendingReply(false);
               setSendSSIModalOpen(false);

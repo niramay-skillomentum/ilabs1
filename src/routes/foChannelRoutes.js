@@ -51,6 +51,33 @@ router.get("/:tradeRef", authenticateToken, async (req, res) => {
   }
 });
 
+router.post("/read", authenticateToken, async (req, res) => {
+  try {
+    const { tradeRef } = req.body;
+    const userId = req.user.email || req.user.userId;
+    
+    const FOCommunication = require("../models/FOCommunication");
+    const channel = await FOCommunication.findOneAndUpdate(
+      { tradeRef },
+      { $addToSet: { readBy: userId } },
+      { returnDocument: 'after' }
+    );
+    
+    // OPI: Track mail read (fire-and-forget)
+    try {
+      if (channel && channel.messages && channel.messages.some(m => m.senderRole === "FO" || m.sender === "FO")) {
+        require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
+          tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "FO" }
+        });
+      }
+    } catch (opiErr) { /* OPI non-blocking */ }
+    
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post("/send", authenticateToken, express.json(), async (req, res) => {
   try {
     const { tradeRef, message, recipient } = req.body;

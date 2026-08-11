@@ -97,7 +97,8 @@ router.post("/send", authenticateToken, async (req, res) => {
     communicationEngine.scheduleFOReply(
       tradeRef,
       trade,
-      message
+      message,
+      desk
     );
     auditDetails = "Sent mail to FO";
 
@@ -182,13 +183,13 @@ router.post("/send", authenticateToken, async (req, res) => {
 
 router.post("/read", authenticateToken, async (req, res) => {
   const userId = req.user.email || req.user.userId;
-  const { tradeRef } = req.body;
+  const { tradeRef, desk } = req.body;
   if (!tradeRef) return res.status(400).json({ error: "tradeRef required" });
 
   try {
     const Conversation = require("../models/Conversation");
     const convo = await Conversation.findOneAndUpdate(
-      { tradeRef },
+      { tradeRef, desk: desk || "GENERAL" },
       { $addToSet: { readBy: userId } },
       { returnDocument: 'after' }
     );
@@ -197,7 +198,10 @@ router.post("/read", authenticateToken, async (req, res) => {
     try {
       if (convo && convo.messages) {
         const hasFO = convo.messages.some(m => m.sender === "FO");
-        const hasCPTY = convo.messages.some(m => m.sender === "Counterparty");
+        const hasCPTY = convo.messages.some(m => {
+          const s = (m.sender || "").toUpperCase();
+          return s === "COUNTERPARTY" || s === "CPTY";
+        });
         
         if (hasFO) {
           require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
@@ -219,7 +223,7 @@ router.post("/read", authenticateToken, async (req, res) => {
 });
 
 router.post("/resolve", authenticateToken, async (req, res) => {
-  const { tradeRef } = req.body;
+  const { tradeRef, desk } = req.body;
   const userId = req.user.userId;
 
   // Find trade in DB assigned to any user
@@ -242,7 +246,7 @@ router.post("/resolve", authenticateToken, async (req, res) => {
   trade.conversation.resolvedAt = new Date();
 
   // Resolve in DB
-  conversationEngine.resolveConversation(tradeRef).catch(e => console.warn("DB resolve:", e.message));
+  conversationEngine.resolveConversation(tradeRef, desk).catch(e => console.warn("DB resolve:", e.message));
 
   // Accept all pending amendments
   if (trade.pendingAmendments) {
@@ -306,7 +310,7 @@ router.get("/shared", authenticateToken, async (req, res) => {
 
     // Fetch conversations from DB where this desk ever participated
     if (desk) {
-      const dbConversations = await Conversation.find({ desks: desk }).lean();
+      const dbConversations = await Conversation.find({ desk: desk }).lean();
       for (const conv of dbConversations) {
         if (processedTradeRefs.has(conv.tradeRef)) continue;
         if (conv.messages && conv.messages.length > 0) {
@@ -322,7 +326,7 @@ router.get("/shared", authenticateToken, async (req, res) => {
       for (const q of activeQueues) {
         for (const tradeRef of q.trades) {
           if (processedTradeRefs.has(tradeRef)) continue;
-          const conv = await conversationEngine.getConversation(tradeRef);
+          const conv = await conversationEngine.getConversation(tradeRef, desk);
           if (conv && conv.messages && conv.messages.length > 0) {
             results.push({ tradeRef, conversation: conv });
             processedTradeRefs.add(tradeRef);
@@ -357,6 +361,7 @@ router.get("/shared", authenticateToken, async (req, res) => {
       finalResults.push({
         trade,
         conversation: {
+          desk: item.conversation.desk,
           readBy: item.conversation.readBy || [],
           subject: item.conversation.messages[0]?.subject || item.conversation.subject || `Trade ${item.tradeRef}`,
           status: item.conversation.status,
@@ -435,6 +440,7 @@ router.get("/personal", authenticateToken, async (req, res) => {
       results.push({
         trade,
         conversation: {
+          desk: conv.desk,
           readBy: conv.readBy || [],
           subject: conv.messages[0]?.subject || `Trade ${conv.tradeRef}`,
           status: conv.status,
@@ -464,8 +470,11 @@ router.get("/personal", authenticateToken, async (req, res) => {
 
 router.get("/:tradeRef", authenticateToken, async (req, res) => {
   const { tradeRef } = req.params;
+  const desk = req.query.desk;
 
-  const conversation = await conversationEngine.getConversation(tradeRef);
+  console.log(`FETCHING CONVERSATION: tradeRef=${tradeRef}, desk=${desk}`);
+
+  const conversation = await conversationEngine.getConversation(tradeRef, desk);
 
   if (!conversation) {
     return res.json({
