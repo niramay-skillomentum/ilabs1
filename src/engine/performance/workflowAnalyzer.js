@@ -190,16 +190,21 @@ const EVENT_TO_STEP = {
   "SSI_VERIFIED": "VERIFY_SSI",
   "SSI_SENT": "SEND_SSI_TO_CPTY",
 
-  // Settlement
-  "TRADE_SETTLED": "TRADE_SETTLED",
-  "TRADE_CLOSED": "TRADE_CLOSED",
-
   // Comments
   "COMMENT_ADDED": "ADD_COMMENT",
 
   // Booking
   "BOOKING_CHECKED": "CHECK_BOOKING",
   "ECONOMICS_CHECKED": "CHECK_ECONOMICS",
+
+  // Explicit mappings from Backend Actions to Workflow Steps
+  CONFIRM_ESCALATE_TO_FO: "ESCALATE_TO_FO",
+  CONFIRM_RAISE_BREAK: "RAISE_BREAK",
+  CONFIRM_TRADE: "VALIDATE_TRADE",
+
+  // Settlement
+  "TRADE_SETTLED": "TRADE_SETTLED",
+  "TRADE_CLOSED": "TRADE_CLOSED",
 
   // Learning
   "LEARNING_EVENT": null,
@@ -324,7 +329,6 @@ function determineIsBreak(trade, desk, evaluateOriginal = false) {
  */
 function extractActualWorkflow(events) {
   const steps = [];
-  const seen = new Set();
 
   for (const event of events) {
     // Try mapping by eventType first, then by metadata.action
@@ -336,10 +340,7 @@ function extractActualWorkflow(events) {
     
     // Add special handling for CPTY_MAIL_READ to fulfill READ_CPTY_MAIL as well
     if (event.eventType === "CPTY_MAIL_READ") {
-      if (!seen.has("READ_CPTY_MAIL")) {
-        steps.push("READ_CPTY_MAIL");
-        seen.add("READ_CPTY_MAIL");
-      }
+      steps.push("READ_CPTY_MAIL");
     }
 
     // Also check for status transitions that map to steps
@@ -354,9 +355,8 @@ function extractActualWorkflow(events) {
     }
 
     // Skip null mappings (internal events) and duplicates
-    if (step && !seen.has(step)) {
+    if (step) {
       steps.push(step);
-      seen.add(step);
     }
   }
 
