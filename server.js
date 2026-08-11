@@ -89,13 +89,14 @@ function startBackgroundProcessors() {
   // FO INTERNAL CHANNEL PROCESSOR
   guardedInterval("fo-internal", () => foInternalChannel.processFOInternalReplies(
     async (trade) => {
-      await Trade.updateOne({ tradeRef: trade.tradeRef }, {
-        $set: {
-          foEscalation: trade.foEscalation,
-          foResponseReceived: true,
-          currentStatus: trade.currentStatus
-        }
-      });
+      trade.foResponseReceived = true;
+      if (trade.markModified) {
+        trade.markModified("booking");
+        trade.markModified("foEscalation");
+        trade.markModified("amendmentHistory");
+        trade.markModified("pendingAmendments");
+      }
+      await trade.save();
     }
   ), POLL_MS);
 
