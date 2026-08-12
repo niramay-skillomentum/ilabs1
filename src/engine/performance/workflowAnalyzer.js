@@ -57,6 +57,10 @@ const EXPECTED_WORKFLOWS = {
       "CONTACT_CPTY",
       "REVIEW_CPTY_RESPONSE",
       "RAISE_BREAK",
+      "CONTACT_FO",
+      "REVIEW_FO_RESPONSE",
+      "CONTACT_CPTY",
+      "REVIEW_CPTY_RESPONSE",
       "VALIDATE_TRADE"
     ],
     FO_MISTAKE: [
@@ -68,6 +72,8 @@ const EXPECTED_WORKFLOWS = {
       "REVIEW_FO_RESPONSE",
       "CONTACT_CPTY",
       "REVIEW_CPTY_RESPONSE",
+      "CONTACT_FO",
+      "REVIEW_FO_RESPONSE",
       "VALIDATE_TRADE"
     ]
   },
@@ -268,10 +274,6 @@ function getExpectedWorkflow(trade, desk, initialStatus, isBreak) {
     }
     
     let expected = [...baseWorkflow];
-    
-    if (initialStatus === "CONFIRMATION_BREAK") {
-      expected = expected.filter(step => step !== "RAISE_BREAK");
-    }
     
     return expected;
   }
