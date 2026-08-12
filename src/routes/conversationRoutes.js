@@ -115,9 +115,9 @@ router.post("/send", authenticateToken, async (req, res) => {
   } else {
     // Schedule CPTY reply (for confirmation/settlement desk communication)
 
-    // Check for CPTY concession if booking matches universal truth, FO supports us, and we are manually emailing them
+    // Check for CPTY concession if booking matches universal truth, FO supports us, we are manually emailing them, and we have contacted them at least once before
     const truthEngineMail = require("../engine/truthEngine");
-    if (trade && trade.foEscalation && trade.foEscalation.status === "FO_SUPPORTS_US" && truthEngineMail.getMismatchFields(trade, "universal").length === 0) {
+    if (trade && trade.cptyContactCount > 0 && trade.foEscalation && trade.foEscalation.status === "FO_SUPPORTS_US" && truthEngineMail.getMismatchFields(trade, "universal").length === 0) {
       if (trade.truths && trade.truths.confirmation) {
         trade.truths.confirmation.amount = trade.amount;
         trade.truths.confirmation.valueDate = trade.valueDate;

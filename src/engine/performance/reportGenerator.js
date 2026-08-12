@@ -621,8 +621,20 @@ function determineScenario(trade, desk) {
       return "BREAK";
     }
     if (desk === "CONFIRMATION") {
-      const mismatches = truthEngine.getConfirmationMismatches(tradeToEvaluate);
-      return mismatches[0]?.field?.toUpperCase() + "_MISMATCH" || "BREAK";
+      let mismatchedField = null;
+      if (tradeToEvaluate.confirmationScenario && tradeToEvaluate.confirmationScenario.expectedEconomics) {
+        const exp = tradeToEvaluate.confirmationScenario.expectedEconomics;
+        if (exp.amount && exp.amount !== tradeToEvaluate.amount) mismatchedField = "AMOUNT";
+        else if (exp.valueDate && new Date(exp.valueDate).getTime() !== new Date(tradeToEvaluate.valueDate).getTime()) mismatchedField = "VALUE_DATE";
+        else if (exp.currency && exp.currency !== tradeToEvaluate.currency) mismatchedField = "CURRENCY";
+      }
+      
+      if (!mismatchedField) {
+        const mismatches = truthEngine.getConfirmationMismatches(tradeToEvaluate);
+        mismatchedField = mismatches[0]?.field?.toUpperCase();
+      }
+
+      return mismatchedField ? mismatchedField + "_MISMATCH" : "BREAK";
     }
     if (desk === "SETTLEMENT") {
       return "SSI_MISMATCH";

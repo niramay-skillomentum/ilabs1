@@ -146,7 +146,11 @@ async function handleFoInternalReply(reply, saveTrade) {
              moMismatches.forEach(m => {
                  let field = typeof m === "string" ? m : m.field;
                  let correctValue = targetTruth[field];
-                 const amendment = amendmentEngine.createAmendment(trade, field, correctValue, reply.escalationContext, "FO_INTERNAL");
+                 let context = reply.escalationContext;
+                 if (!context) {
+                     context = trade.currentStatus.startsWith("MO") || trade.currentStatus === "PENDING_FO_RESPONSE" ? "MO" : "CONFIRMATION";
+                 }
+                 const amendment = amendmentEngine.createAmendment(trade, field, correctValue, context, "FO_INTERNAL");
                  if (amendment) {
                      amendment.status = "ACCEPTED";
                      amendmentEngine.attachAmendments(trade, [amendment]);

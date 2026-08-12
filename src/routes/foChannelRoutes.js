@@ -134,6 +134,18 @@ router.post("/send", authenticateToken, express.json(), async (req, res) => {
     await foInternalChannel.openChannel(tradeRef, req.user.userId, deskContext);
     await foInternalChannel.sendMessage(tradeRef, req.user.userId, message, "USER", trade?.assignedTo);
     
+    // Log the action to the performance engine
+    const PerformanceEvent = require("../models/PerformanceEvent");
+    await PerformanceEvent.create({
+      userId: req.user.userId,
+      tradeRef: tradeRef,
+      desk: deskContext,
+      eventType: "ACTION_PERFORMED",
+      metadata: {
+        action: "CONFIRM_ESCALATE_TO_FO" // Maps to CONTACT_FO in the scoring engine
+      }
+    }).catch(e => console.error("PerformanceEvent error:", e));
+
     // Auto schedule an FO reply based on user's new message
     foInternalChannel.scheduleFOInternalReply(tradeRef, trade, message, deskContext);
 
