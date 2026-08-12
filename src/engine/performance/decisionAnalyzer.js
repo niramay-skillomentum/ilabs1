@@ -156,11 +156,13 @@ function getMismatchInfo(trade, desk, action = "") {
     if (a.includes("BREAK")) {
       tradeToEvaluate = JSON.parse(JSON.stringify(trade));
       if (tradeToEvaluate.amendmentHistory && tradeToEvaluate.amendmentHistory.length > 0) {
-        // Revert amendments in reverse chronological order
+        // Revert amendments in reverse chronological order, but ONLY those made by the current desk
         const history = [...tradeToEvaluate.amendmentHistory].reverse();
         for (const am of history) {
-          if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
-          if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+          if (!am.desk || am.desk.toUpperCase() === desk.toUpperCase()) {
+            if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
+            if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+          }
         }
       }
     }
