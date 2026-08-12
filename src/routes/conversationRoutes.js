@@ -191,12 +191,12 @@ router.post("/read", authenticateToken, async (req, res) => {
     const convo = await Conversation.findOneAndUpdate(
       { tradeRef, desk: desk || "GENERAL" },
       { $addToSet: { readBy: userId } },
-      { returnDocument: 'after' }
+      { returnDocument: 'before' }
     );
 
-    // OPI: Track mail read (fire-and-forget)
+    // OPI: Track mail read (fire-and-forget) only if it wasn't already read by this user
     try {
-      if (convo && convo.messages) {
+      if (convo && convo.messages && (!convo.readBy || !convo.readBy.includes(userId))) {
         const hasFO = convo.messages.some(m => m.sender === "FO");
         const hasCPTY = convo.messages.some(m => {
           const s = (m.sender || "").toUpperCase();
