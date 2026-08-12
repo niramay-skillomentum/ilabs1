@@ -594,10 +594,26 @@ function determineScenario(trade, desk) {
   if (trade.cutoffMissedReason) return "CUTOFF_BREAK";
 
   try {
+    const { determineIsBreak } = require("./workflowAnalyzer");
+    const isBreak = determineIsBreak(trade, desk, true);
+    
+    if (!isBreak) return "CLEAN";
+
+    // If it's a break, identify the exact mismatch type using the reverted trade
+    let tradeToEvaluate = JSON.parse(JSON.stringify(trade));
+    if (tradeToEvaluate.amendmentHistory && tradeToEvaluate.amendmentHistory.length > 0) {
+      const history = [...tradeToEvaluate.amendmentHistory].reverse();
+      for (const am of history) {
+        if (!am.desk || am.desk.toUpperCase() === desk.toUpperCase()) {
+          if (tradeToEvaluate.booking && am.field) tradeToEvaluate.booking[am.field] = am.oldValue;
+          if (tradeToEvaluate[am.field] !== undefined) tradeToEvaluate[am.field] = am.oldValue;
+        }
+      }
+    }
+
     const truthEngine = require("../truthEngine");
     if (desk === "MO") {
-      const mismatches = truthEngine.getMismatchFields(trade, "mo");
-      if (mismatches.length === 0) return "CLEAN";
+      const mismatches = truthEngine.getMismatchFields(tradeToEvaluate, "mo");
       if (mismatches.includes("amount")) return "AMOUNT_MISMATCH";
       if (mismatches.includes("valueDate")) return "VALUE_DATE_MISMATCH";
       if (mismatches.includes("currency")) return "CURRENCY_MISMATCH";
@@ -605,13 +621,10 @@ function determineScenario(trade, desk) {
       return "BREAK";
     }
     if (desk === "CONFIRMATION") {
-      const mismatches = truthEngine.getConfirmationMismatches(trade);
-      if (mismatches.length === 0) return "CLEAN";
+      const mismatches = truthEngine.getConfirmationMismatches(tradeToEvaluate);
       return mismatches[0]?.field?.toUpperCase() + "_MISMATCH" || "BREAK";
     }
     if (desk === "SETTLEMENT") {
-      const mismatches = truthEngine.getSettlementMismatches(trade);
-      if (mismatches.length === 0) return "CLEAN";
       return "SSI_MISMATCH";
     }
   } catch (e) {}
