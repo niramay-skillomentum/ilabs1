@@ -123,11 +123,11 @@ async function handleFoInternalReply(reply, saveTrade) {
     if (moMismatches.length === 0) {
       // FO sees no issue with their local truth (Round 1) or Universal truth (Round 2)
       foPosition = "FO_SUPPORTS_US";
-      foResponseText = generateFOSupportsUsResponse(trade, targetDeskTruth, reply.deskContext);
+      foResponseText = generateFOSupportsUsResponse(trade, targetDeskTruth, reply.escalationContext);
     } else {
       // FO sees an issue, they admit mistake and we should generate pending amendments
       foPosition = "FO_ADMITS_MISTAKE";
-      foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth, reply.deskContext);
+      foResponseText = generateFOSupportsCptyResponse(trade, moMismatches, targetDeskTruth, reply.escalationContext);
     }
 
     // Send FO's response on the internal channel (scoped to the trade owner)
@@ -146,7 +146,7 @@ async function handleFoInternalReply(reply, saveTrade) {
              moMismatches.forEach(m => {
                  let field = typeof m === "string" ? m : m.field;
                  let correctValue = targetTruth[field];
-                 const amendment = amendmentEngine.createAmendment(trade, field, correctValue, reply.deskContext, "FO_INTERNAL");
+                 const amendment = amendmentEngine.createAmendment(trade, field, correctValue, reply.escalationContext, "FO_INTERNAL");
                  if (amendment) {
                      amendment.status = "ACCEPTED";
                      amendmentEngine.attachAmendments(trade, [amendment]);
