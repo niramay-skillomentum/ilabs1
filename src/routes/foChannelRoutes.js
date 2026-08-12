@@ -60,15 +60,17 @@ router.post("/read", authenticateToken, async (req, res) => {
     const channel = await FOCommunication.findOneAndUpdate(
       { tradeRef },
       { $addToSet: { readBy: userId } },
-      { returnDocument: 'after' }
+      { returnDocument: 'before' }
     );
     
     // OPI: Track mail read (fire-and-forget)
     try {
-      if (channel && channel.messages && channel.messages.some(m => m.senderRole === "FO" || m.sender === "FO")) {
-        require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
-          tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "FO" }
-        });
+      if (channel && channel.messages && (!channel.readBy || !channel.readBy.includes(userId))) {
+        if (channel.messages.some(m => m.senderRole === "FO" || m.sender === "FO")) {
+          require("../engine/performance/sessionCollector").collect("FO_MAIL_READ", {
+            tradeRef, userId, category: "WORKFLOW", metadata: { action: "READ_MAIL", source: "FO" }
+          });
+        }
       }
     } catch (opiErr) { /* OPI non-blocking */ }
     
